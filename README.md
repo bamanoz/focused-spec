@@ -13,40 +13,9 @@
 - [Development workflow](docs/development/README.md)
 - [Agent evals](docs/development/agent-evals.md)
 
-## Quick start
-
-Requirements: Node.js 24 or newer, plus the language runtimes used by project runners.
+## Installation
 
 ```sh
-./install.sh
-focused-spec validate
-focused-spec run
+npm install --save-dev focused-spec
+npx --yes skills add bamanoz/focused-spec --skill focused-spec
 ```
-
-The installer only installs the CLI package. Install the bundled agent skill separately:
-
-```sh
-npx --yes skills add . \
-  --skill focused-spec \
-  --agent '*' \
-  --copy \
-  --full-depth \
-  --yes
-```
-
-## Example
-
-The polyglot example proves one scenario through both Go and pytest:
-
-```sh
-npm run smoke
-```
-
-## Development checks
-
-```sh
-npm test
-npm run smoke
-```
-
-Durable coding-agent rules live in [AGENTS.md](AGENTS.md).

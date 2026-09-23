@@ -2,9 +2,13 @@
   "name": "focused-spec",
   "version": "0.1.0",
   "description": "Executable evidence for focused behavioral specifications",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bamanoz/focused-spec.git"
+  },
   "type": "module",
   "bin": {
-    "focused-spec": "./dist/cli.js"
+    "focused-spec": "dist/cli.js"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -19,6 +23,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build",
     "typecheck:tests": "tsc -p test/tsconfig.json && tsc -p examples/polyglot/tsconfig.json && tsc -p evals/tsconfig.json",
     "test": "npm run build && npm run typecheck:tests && vitest run",
     "check": "npm test",
