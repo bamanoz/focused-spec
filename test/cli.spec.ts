@@ -280,4 +280,68 @@ describe('focused-spec CLI', () => {
     expect(text.stdout).not.toContain('PASS fixture.current.selected')
     expect(output).not.toHaveProperty('scenarios')
   })
+  it('reports missing malformed and unsupported configuration', async () => {
+    const root = await emptyFixture()
+    await rm(join(root, '.focused-spec/config.yaml'))
+    const missing = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(missing.status).toBe(1)
+    expect(json(missing.stdout)).toMatchObject({ valid: false, violations: [expect.objectContaining({ message: expect.stringContaining('cannot read configuration') })] })
+
+    await put(root, '.focused-spec/config.yaml', 'version: [\n')
+    const malformed = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(malformed.status).toBe(1)
+    expect(json(malformed.stdout)).toMatchObject({ valid: false, violations: [expect.objectContaining({ message: expect.stringContaining('invalid YAML') })] })
+
+    await put(root, '.focused-spec/config.yaml', 'version: 2\nspecifications:\n  source: files\nrunners: {}\n')
+    const unsupported = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(unsupported.status).toBe(1)
+    expect(json(unsupported.stdout)).toMatchObject({ valid: false, violations: [expect.objectContaining({ message: 'configuration version must be 1' })] })
+  })
+
+  it('rejects invalid runner paths and non JSON options', async () => {
+    const root = await fixture()
+    await put(root, '.focused-spec/config.yaml', 'version: 1\nspecifications:\n  source: openspec\nrunners:\n  fixture:\n    module: ../outside.ts\n')
+    const pathResult = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(pathResult.status).toBe(1)
+    expect(json(pathResult.stdout)).toMatchObject({ valid: false, violations: [expect.objectContaining({ message: expect.stringContaining('stay inside project root') })] })
+
+    await put(root, '.focused-spec/config.yaml', 'version: 1\nspecifications:\n  source: openspec\nrunners:\n  fixture:\n    module: ./runner.ts\n    options: 1e999\n')
+    const optionsResult = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(optionsResult.status).toBe(1)
+    expect(json(optionsResult.stdout)).toMatchObject({ valid: false, violations: [expect.objectContaining({ message: expect.stringContaining('JSON-compatible') })] })
+  })
+
+  it('validates scenario structure without importing runner modules in syntax only mode', async () => {
+    const root = await fixture()
+    await rm(join(root, 'runner.ts'))
+    const syntax = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--change', 'add', '--syntax-only', '--json'], { encoding: 'utf8' })
+    expect(syntax.status).toBe(0)
+    expect(json(syntax.stdout)).toEqual({ valid: true, mode: 'syntax-only' })
+    const full = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--change', 'add', '--json'], { encoding: 'utf8' })
+    expect(full.status).toBe(1)
+    expect(json(full.stdout)).toMatchObject({ valid: false, violations: [expect.objectContaining({ message: expect.stringContaining('ENOENT') })] })
+  })
+
+  it('rejects an added change that steals a current scenario ID', async () => {
+    const root = await fixture()
+    const path = 'openspec/changes/add/specs/new/spec.md'
+    const delta = (operation: string) => [
+      `## ${operation} Requirements`,
+      '### Requirement: Current behavior',
+      '#### Scenario: Claims current ID',
+      '- **ID**: `fixture.current.passes`',
+      '- **EVIDENCE**: `planned:fixture::future`',
+      '- **WHEN** the change is planned',
+      '- **THEN** its ownership is validated',
+    ].join('\n')
+    await put(root, path, delta('ADDED'))
+    const added = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--change', 'add', '--json'], { encoding: 'utf8' })
+    expect(added.status).toBe(1)
+    expect(json(added.stdout)).toMatchObject({ valid: false, violations: [expect.objectContaining({ message: expect.stringContaining('already belongs to current scenario') })] })
+
+    await put(root, path, delta('MODIFIED'))
+    const modified = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--change', 'add', '--json'], { encoding: 'utf8' })
+    expect(modified.status).toBe(0)
+    expect(json(modified.stdout)).toMatchObject({ valid: true, plannedEvidence: 1 })
+  })
 })

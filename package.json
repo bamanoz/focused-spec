@@ -38,6 +38,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "focused-spec": "^0.1.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.8"
   },

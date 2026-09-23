@@ -41,3 +41,5 @@ Runner plugins are trusted project code. They must still use argument arrays wit
 With `source: openspec`, current behavior is owned by `openspec/specs/**/spec.md`; active change deltas are selected with `--change <name>`. Proposal turns create planning artifacts only. Apply turns replace planned evidence, add runners/configuration, and execute the change-scoped evidence.
 
 New IDs must also be unique across all active changes when validating without `--change`. A `MODIFIED` or `REMOVED` delta may retain its current scenario's ID.
+
+The focused behavioral baseline is recorded in the [OpenSpec capability specs](../../openspec/specs/scenario-authoring/spec.md); the [documentation map](../README.md) links every capability.

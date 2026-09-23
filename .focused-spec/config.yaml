@@ -1,0 +1,7 @@
+version: 1
+specifications:
+  source: openspec
+runners:
+  vitest:
+    module: ./.focused-spec/runners/vitest.ts
+    timeoutMs: 120000

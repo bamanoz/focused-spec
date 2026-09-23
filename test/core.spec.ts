@@ -55,4 +55,23 @@ describe('focused specification parsing', () => {
       expect.objectContaining({ message: expect.stringContaining('planned evidence is not allowed') }),
     )
   })
+  it('rejects scenarios without exactly one ID WHEN and THEN', () => {
+    const missing = scenario().split('\n').filter(line => !line.startsWith('- **ID**') && !line.startsWith('- **WHEN**') && !line.startsWith('- **THEN**')).join('\n')
+    const repeated = `${scenario()}\n- **ID**: \`auth.login.other\`\n- **WHEN** again\n- **THEN** another result`
+    const documents = [missing, repeated].map((source, index) => parseFocusedSpecDocument(`specs/${index}.md`, source))
+    const violations = validateDocuments(documents, config, { allowPlanned: false }).violations
+    for (const count of [0, 2]) {
+      for (const field of ['ID', 'WHEN', 'THEN']) {
+        expect(violations).toContainEqual(expect.objectContaining({ message: `expected exactly one ${field} row, found ${count}` }))
+      }
+    }
+  })
+
+  it('rejects a scenario without evidence', () => {
+    const source = scenario().split('\n').filter(line => !line.startsWith('- **EVIDENCE**')).join('\n')
+    const document = parseFocusedSpecDocument('specs/auth.md', source)
+    expect(validateDocuments([document], config, { allowPlanned: false }).violations).toContainEqual(
+      expect.objectContaining({ message: 'expected at least one EVIDENCE row' }),
+    )
+  })
 })

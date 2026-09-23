@@ -87,7 +87,7 @@ async function scenarioGate(workspace: string, evalCase: EvalCase): Promise<Eval
   return gate('scenario-contract', passed, `${evidence.length} evidence rows across ${distinctRunners.size} runners: ${evidence.join(', ')}`)
 }
 
-async function integrityGate(workspace: string, snapshots: ReadonlyMap<string, string>, transcripts: readonly string[]): Promise<EvalGate> {
+export async function integrityGate(workspace: string, snapshots: ReadonlyMap<string, string>, transcripts: readonly string[]): Promise<EvalGate> {
   const changed: string[] = []
   for (const [path, source] of snapshots) {
     try {
@@ -117,7 +117,7 @@ async function behaviorGate(workspace: string): Promise<EvalGate> {
   return gate('product-behavior', passed, `go=${String(go.code)} pytest=${String(pytest.code)}`)
 }
 
-async function mutationGate(workspace: string, evalCase: EvalCase): Promise<EvalGate> {
+export async function mutationGate(workspace: string, evalCase: EvalCase): Promise<EvalGate> {
   const goPath = join(workspace, 'auth', 'auth.go')
   const pythonPath = join(workspace, 'app', 'auth.py')
   const goSource = await readFile(goPath, 'utf8')

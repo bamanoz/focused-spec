@@ -13,4 +13,3 @@ __pycache__/
 !.env.example
 .omp
 .agents
-.focused-spec
