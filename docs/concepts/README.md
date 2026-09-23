@@ -11,6 +11,8 @@ A scenario contains:
 - one user-visible or durable `THEN` outcome;
 - one or more evidence references that form an `AND` contract.
 
+Malformed `EVIDENCE` rows are validation errors even when other evidence rows are valid; no authored evidence may be silently omitted.
+
 Example:
 
 ```markdown
@@ -37,3 +39,5 @@ Runner plugins are trusted project code. They must still use argument arrays wit
 ## OpenSpec boundary
 
 With `source: openspec`, current behavior is owned by `openspec/specs/**/spec.md`; active change deltas are selected with `--change <name>`. Proposal turns create planning artifacts only. Apply turns replace planned evidence, add runners/configuration, and execute the change-scoped evidence.
+
+New IDs must also be unique across all active changes when validating without `--change`. A `MODIFIED` or `REMOVED` delta may retain its current scenario's ID.

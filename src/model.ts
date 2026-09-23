@@ -10,6 +10,7 @@ export interface Scenario {
   readonly operation: SpecOperation
   readonly ids: readonly string[]
   readonly evidence: readonly string[]
+  readonly malformedEvidenceLines: readonly number[]
   readonly whenCount: number
   readonly thenCount: number
 }

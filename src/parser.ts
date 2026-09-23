@@ -2,6 +2,7 @@ import type { EvidenceReference, SpecDocument, SpecOperation } from './model.js'
 
 const ID = /^- \*\*ID\*\*: `([^`]+)`$/u
 const EVIDENCE = /^- \*\*EVIDENCE\*\*: `([^`]+)`$/u
+const EVIDENCE_ROW = /^\s*-\s*\*\*EVIDENCE\*\*/u
 const WHEN = /^- \*\*WHEN\*\*/u
 const THEN = /^- \*\*THEN\*\*/u
 const REQUIREMENT = /^### Requirement: (.+)$/u
@@ -29,9 +30,11 @@ export function parseFocusedSpecDocument(path: string, source: string): SpecDocu
     const scenarioMatch = SCENARIO.exec(line)
     if (scenarioMatch?.[1] === undefined) continue
     const body: string[] = []
+    const malformedEvidenceLines: number[] = []
     for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
       const candidate = lines[cursor] ?? ''
       if (SCENARIO.test(candidate) || REQUIREMENT.test(candidate) || candidate.startsWith('## ')) break
+      if (EVIDENCE_ROW.test(candidate) && !EVIDENCE.test(candidate)) malformedEvidenceLines.push(cursor + 1)
       body.push(candidate)
     }
     scenarios.push({
@@ -42,6 +45,7 @@ export function parseFocusedSpecDocument(path: string, source: string): SpecDocu
       operation,
       ids: body.flatMap(value => ID.exec(value)?.[1] ?? []),
       evidence: body.flatMap(value => EVIDENCE.exec(value)?.[1] ?? []),
+      malformedEvidenceLines,
       whenCount: body.filter(value => WHEN.test(value)).length,
       thenCount: body.filter(value => THEN.test(value)).length,
     })

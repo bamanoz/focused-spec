@@ -97,6 +97,75 @@ describe('focused-spec CLI', () => {
     expect(text.stdout).toContain('1 planned evidence')
     expect(text.stdout).toContain('1 unique targets')
   })
+  it('rejects duplicate IDs introduced by separate active changes', async () => {
+    const root = await fixture()
+    await put(root, 'openspec/changes/other/specs/new/spec.md', [
+      '## ADDED Requirements',
+      '### Requirement: Conflicting behavior',
+      '#### Scenario: Reuses the planned ID',
+      '- **ID**: `fixture.future.planned`',
+      '- **EVIDENCE**: `planned:fixture::other`',
+      '- **WHEN** the other change is planned',
+      '- **THEN** another outcome is promised',
+    ].join('\n'))
+
+    const validate = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
+
+    expect(validate.status).toBe(1)
+    expect(json(validate.stdout)).toMatchObject({
+      valid: false,
+      violations: [expect.objectContaining({ scenarioId: 'fixture.future.planned', message: expect.stringContaining('duplicate stable ID') })],
+    })
+  })
+
+  it('rejects malformed evidence rows rather than passing on the remaining evidence', async () => {
+    const root = await fixture()
+    await put(root, 'openspec/specs/current/spec.md', [
+      '### Requirement: Current behavior',
+      '#### Scenario: Both evidence rows are required',
+      '- **ID**: `fixture.current.passes`',
+      '- **EVIDENCE**: `fixture::current`',
+      '- **EVIDENCE**: fixture::missing-backticks',
+      '- **WHEN** current evidence runs',
+      '- **THEN** the current behavior passes',
+    ].join('\n'))
+
+    const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json'], { encoding: 'utf8' })
+
+    expect(run.status).toBe(1)
+    expect(json(run.stdout)).toMatchObject({
+      valid: false,
+      executionStarted: false,
+      violations: [expect.objectContaining({ scenarioId: 'fixture.current.passes', line: 5, message: expect.stringContaining('malformed EVIDENCE row') })],
+    })
+  })
+
+  it('rejects runner timeouts that overflow the host timer', async () => {
+    const root = await fixture()
+    const config = [
+      'version: 1',
+      'specifications:',
+      '  source: openspec',
+      'runners:',
+      '  fixture:',
+      '    module: ./runner.ts',
+      '    timeoutMs: 2147482647',
+    ]
+    await put(root, '.focused-spec/config.yaml', config.join('\n'))
+    const allowed = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(allowed.status).toBe(0)
+
+    await put(root, '.focused-spec/config.yaml', config.with(6, '    timeoutMs: 2147482648').join('\n'))
+
+    const validate = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
+
+    expect(validate.status).toBe(1)
+    expect(json(validate.stdout)).toMatchObject({
+      valid: false,
+      violations: [expect.objectContaining({ message: expect.stringContaining('timeoutMs must be') })],
+    })
+    expect(validate.stderr).not.toContain('TimeoutOverflowWarning')
+  })
 
   it('counts an all-planned change without inventing executable targets', async () => {
     const root = await fixture()

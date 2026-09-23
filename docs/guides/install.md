@@ -16,7 +16,7 @@ For development against a local source checkout, install it from the consuming p
 npm install --save-dev /path/to/focused-spec
 ```
 
-Alternatively, `FOCUSED_SPEC_PACKAGE=/path/to/focused-spec /path/to/focused-spec/install.sh` performs that install. The script defaults to the npm package `focused-spec`. Installing from a Git checkout or packing for npm builds `dist/` automatically via the package's `prepare` script; the published tarball includes the built CLI and type declarations.
+Installing from a Git checkout or packing for npm builds `dist/` automatically via the package's `prepare` script; the published tarball includes the built CLI and type declarations.
 
 ## Agent skill
 

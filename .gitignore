@@ -11,3 +11,6 @@ __pycache__/
 .env
 .env.*
 !.env.example
+.omp
+.agents
+.focused-spec

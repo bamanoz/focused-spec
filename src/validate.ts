@@ -39,6 +39,9 @@ export function validateDocuments(
         else violations.push(diagnostic(scenario, `duplicate stable ID; first owned by ${previous.path}:${previous.line}`))
       }
       if (scenario.evidence.length === 0) violations.push(diagnostic(scenario, 'expected at least one EVIDENCE row'))
+      for (const line of scenario.malformedEvidenceLines) {
+        violations.push({ ...diagnostic(scenario, 'malformed EVIDENCE row; expected - **EVIDENCE**: `<runner-id>::<selector>`'), line })
+      }
       if (scenario.whenCount !== 1) violations.push(diagnostic(scenario, `expected exactly one WHEN row, found ${scenario.whenCount}`))
       if (scenario.thenCount !== 1) violations.push(diagnostic(scenario, `expected exactly one THEN row, found ${scenario.thenCount}`))
 
@@ -109,9 +112,19 @@ export async function validateFocusedSpecs(
   }
 
   const resolutionDocuments = [...currentDocuments]
+  const activeIdentifiers = new Map<string, Scenario>()
   if (config.specifications.source === 'openspec') {
     for (const documents of (await loadActiveChanges(projectRoot, config)).values()) {
       const active = validateDocuments(documents, config, { allowPlanned: true })
+      for (const document of documents) {
+        for (const scenario of document.scenarios) {
+          const id = scenario.ids[0]
+          if (id === undefined || scenario.ids.length !== 1 || current.identifiers.has(id)) continue
+          const previous = activeIdentifiers.get(id)
+          if (previous === undefined) activeIdentifiers.set(id, scenario)
+          else violations.push(diagnostic(scenario, `duplicate stable ID; first owned by ${previous.path}:${previous.line}`))
+        }
+      }
       violations.push(...active.violations, ...collisionViolations(current.identifiers, documents))
       resolutionDocuments.push(...documents)
     }

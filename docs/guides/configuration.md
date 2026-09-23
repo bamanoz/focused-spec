@@ -23,6 +23,8 @@ For OpenSpec-backed projects, use `source: openspec`; current specs and active c
 
 A runner ID names one execution environment. Runner modules are project-relative `.ts`, `.mts`, `.js`, or `.mjs` files.
 
+`timeoutMs` is an optional positive integer per runner, at most `2147482647` ms. The limit leaves room for the host's one-second shutdown grace period within Node's timer range.
+
 ## Scenario
 
 ```markdown

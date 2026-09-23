@@ -6,6 +6,8 @@ import type { JsonValue } from './runner-api.js'
 
 const RUNNER_ID = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u
 const PARENT_SEGMENT = /(?:^|[\\/])\.\.(?:[\\/]|$)/u
+// The host timer adds a one-second grace period; Node timers cannot exceed 2^31 - 1 ms.
+const MAX_RUNNER_TIMEOUT_MS = 2_147_483_647 - 1_000
 
 function object(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -36,8 +38,8 @@ function parseRunner(id: string, value: unknown, path: string, violations: Viola
     violations.push({ path, message: `runner ${id} cwd must be a non-empty relative path` })
     return undefined
   }
-  if (record.timeoutMs !== undefined && (!Number.isInteger(record.timeoutMs) || (record.timeoutMs as number) <= 0)) {
-    violations.push({ path, message: `runner ${id} timeoutMs must be a positive integer` })
+  if (record.timeoutMs !== undefined && (!Number.isInteger(record.timeoutMs) || (record.timeoutMs as number) <= 0 || (record.timeoutMs as number) > MAX_RUNNER_TIMEOUT_MS)) {
+    violations.push({ path, message: `runner ${id} timeoutMs must be an integer from 1 to ${MAX_RUNNER_TIMEOUT_MS}` })
     return undefined
   }
   if (record.options !== undefined && !isJsonValue(record.options)) {
