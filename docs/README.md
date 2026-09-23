@@ -20,6 +20,7 @@
 - CLI contract: [CLI reference](reference/cli.md)
 - Runner API contract: [Runner API reference](reference/runner-api.md)
 - Repository checks: [Development guide](development/README.md)
+- npm package release: [Release process](development/releasing.md)
 - Agent evals: [Agent evals](development/agent-evals.md)
 - Behavioral baseline: [scenario authoring](../openspec/specs/scenario-authoring/spec.md), [configuration](../openspec/specs/project-configuration/spec.md), [validation](../openspec/specs/validation/spec.md), [runner protocol](../openspec/specs/runner-protocol/spec.md), [execution](../openspec/specs/scenario-execution/spec.md), [distribution](../openspec/specs/distribution/spec.md), [agent workflow](../openspec/specs/agent-workflow/spec.md)
 

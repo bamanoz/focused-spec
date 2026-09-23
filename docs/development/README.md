@@ -1,6 +1,7 @@
 # Development
 
 - [Repository workflow](workflow.md)
+- [Release process](releasing.md)
 - [Agent evaluations](agent-evals.md)
 
 Run the standard checks before handoff:
