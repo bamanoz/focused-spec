@@ -1,0 +1,5 @@
+Add an executable focused specification for the existing behavior: a blocked account with otherwise valid credentials cannot authenticate.
+
+This is an implementation task, not an exploration task. Start by creating the focused-spec configuration, one Markdown scenario, and the two project-local runner modules. Do not spend a separate planning turn or inspect package source.
+
+This clean repository intentionally has no focused-spec configuration or runners yet. Use the available focused-spec skill and installed CLI. The one scenario must be backed by both the existing Go unit test and the existing pytest functional test. Create whatever project-local TypeScript runners and configuration are needed, but do not inspect the focused-spec package source or its installed `dist/` implementation. Do not weaken or replace the product tests. Finish only after full validation and execution pass. Keep the implementation minimal: resolve the exact selectors, spawn `go test` and `uv run --with pytest python -m pytest` with argument arrays and `shell: false`, map real exit status to target results, then run the focused CLI.

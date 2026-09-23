@@ -1,0 +1,1 @@
+Propose a new change named `add-blocked-account-focused-spec` for the existing behavior “a blocked account with otherwise valid credentials cannot authenticate”. Generate the complete planning artifact set and choose the appropriate workflow from the available skills. This turn is planning only; do not implement runners or configuration.

@@ -1,0 +1,41 @@
+{
+  "name": "focused-spec",
+  "version": "0.1.0",
+  "description": "Executable evidence for focused behavioral specifications",
+  "type": "module",
+  "bin": {
+    "focused-spec": "./dist/cli.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./runner": "./dist/runner-api.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "install.sh",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck:tests": "tsc -p test/tsconfig.json && tsc -p examples/polyglot/tsconfig.json && tsc -p evals/tsconfig.json",
+    "test": "npm run build && npm run typecheck:tests && vitest run",
+    "check": "npm test",
+    "smoke": "node dist/cli.js run --root examples/polyglot",
+    "eval:agent": "node --experimental-strip-types evals/run.ts"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "fast-glob": "^3.3.3",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.8"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,9 @@
+{
+  "name": "focused-spec-eval-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:go": "go test ./...",
+    "test:functional": "uv run --with pytest python -m pytest -q"
+  }
+}
