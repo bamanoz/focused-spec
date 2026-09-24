@@ -37,6 +37,15 @@ A project may have no baseline documents. A baseline-only layout that matches no
 
 A runner ID names one execution environment. Runner modules are project-relative `.ts`, `.mts`, `.js`, or `.mjs` files. `timeoutMs` is an optional positive integer per runner, at most `2147482647` ms. The limit leaves room for the host's one-second shutdown grace period within Node's timer range. The complete runner contract is in the [runner API reference](../reference/runner-api.md).
 
+To allow safe runner-declared groups to overlap, optionally set the global runner-host limit:
+
+```yaml
+execution:
+  maxConcurrentGroups: 2
+```
+
+`maxConcurrentGroups` must be a positive integer and defaults to 1. The setting does not split runner targets or infer test independence; participating runner plugins define their own group and resource policy, whether in code, runner-owned configuration, or another project-specific source. Core reads only the groups those plugins return. Runners without partition support remain exclusive, even when the limit exceeds 1. See the [runner guide](runners.md) and [runner API reference](../reference/runner-api.md).
+
 ## Scenario
 
 ```markdown

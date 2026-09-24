@@ -47,6 +47,9 @@ export interface FocusedSpecConfig {
     readonly documents: readonly DocumentLayout[]
   }
   readonly runners: Readonly<Record<string, RunnerConfig>>
+  readonly execution?: {
+    readonly maxConcurrentGroups?: number
+  }
 }
 
 export interface EvidenceReference {

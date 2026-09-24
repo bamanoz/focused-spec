@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import process from 'node:process'
+import { performance } from 'node:perf_hooks'
 import { isAbsolute, resolve } from 'node:path'
 import { loadConfig } from './config.js'
 import { executePlan } from './executor.js'
 import type { ExecutionPlan, ExecutionResult, SpecDocument, Violation } from './model.js'
 import { parseEvidenceReference } from './parser.js'
-import { planEvidence } from './planner.js'
+import { planEvidence, projectExecutionPlan } from './planner.js'
 import { validateFocusedSpecs } from './validate.js'
 
 interface CliOptions {
@@ -18,11 +19,12 @@ interface CliOptions {
   readonly json: boolean
   readonly allowSkip: boolean
   readonly scenarioId?: string
+  readonly timings: boolean
 }
 
 const USAGE = `Usage:
-  focused-spec validate [--root <path>] [--config <path>] [--scope <name>] [--strict] [--syntax-only] [--json]
-  focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--json]
+  focused-spec validate [--root <path>] [--config <path>] [--scope <name>] [--strict] [--syntax-only] [--json] [--timings]
+  focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--json] [--timings]
 `
 
 function parseArguments(argumentsList: readonly string[]): CliOptions {
@@ -36,12 +38,14 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
   let json = false
   let allowSkip = false
   let scenarioId: string | undefined
+  let timings = false
 
   for (let index = 1; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index]
     if (argument === '--strict') strict = true
     else if (argument === '--syntax-only') syntaxOnly = true
     else if (argument === '--json') json = true
+    else if (argument === '--timings') timings = true
     else if (argument === '--allow-skip') allowSkip = true
     else if (argument === '--root' || argument === '--config' || argument === '--scope' || argument === '--scenario') {
       const value = argumentsList[index + 1]
@@ -69,6 +73,7 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
     syntaxOnly,
     json,
     allowSkip,
+    timings,
     ...(scenarioId === undefined ? {} : { scenarioId }),
   }
 }
@@ -89,6 +94,13 @@ interface ValidationContext {
 interface RunContext {
   readonly validationScope: ValidationScope
   readonly executionSelection: ExecutionSelection
+}
+
+interface PhaseTimings {
+  readonly validationMs?: number
+  readonly resolutionMs?: number
+  readonly executionMs?: number
+  readonly totalMs: number
 }
 
 function validationContext(options: CliOptions): ValidationContext {
@@ -135,22 +147,42 @@ function displayViolation(violation: Violation): string {
   return `${location}: ${violation.message}`
 }
 
-function printViolations(violations: readonly Violation[], json: boolean, context: ValidationContext | RunContext): void {
+function elapsed(started: number): number {
+  return Math.max(performance.now() - started, Number.EPSILON)
+}
+
+function displayTimings(timings: PhaseTimings): string {
+  const phases = [
+    ...(timings.validationMs === undefined ? [] : [`validation ${timings.validationMs.toFixed(2)} ms`]),
+    ...(timings.resolutionMs === undefined ? [] : [`resolution ${timings.resolutionMs.toFixed(2)} ms`]),
+    ...(timings.executionMs === undefined ? [] : [`execution ${timings.executionMs.toFixed(2)} ms`]),
+    `total ${timings.totalMs.toFixed(2)} ms`,
+  ]
+  return `timings: ${phases.join(', ')}\n`
+}
+
+function printViolations(
+  violations: readonly Violation[],
+  json: boolean,
+  context: ValidationContext | RunContext,
+  timings?: PhaseTimings,
+): void {
   if (json) {
     const output = 'executionSelection' in context
-      ? { valid: false, executionStarted: false, ...context, violations }
-      : { valid: false, ...context, violations }
+      ? { valid: false, executionStarted: false, ...context, violations, ...(timings === undefined ? {} : { timings }) }
+      : { valid: false, ...context, violations, ...(timings === undefined ? {} : { timings }) }
     process.stdout.write(`${JSON.stringify(output, null, 2)}\n`)
     return
   }
   if ('executionSelection' in context) process.stderr.write(`${displayRunContext(context)}execution did not start\n`)
   else process.stderr.write(displayValidationContext(context))
   for (const violation of violations) process.stderr.write(`${displayViolation(violation)}\n`)
+  if (timings !== undefined) process.stderr.write(displayTimings(timings))
 }
 
-function printExecution(result: ExecutionResult, json: boolean, context: RunContext): void {
+function printExecution(result: ExecutionResult, json: boolean, context: RunContext, timings?: PhaseTimings): void {
   if (json) {
-    process.stdout.write(`${JSON.stringify({ ...result, executionStarted: result.targetCount > 0, ...context }, null, 2)}\n`)
+    process.stdout.write(`${JSON.stringify({ ...result, executionStarted: result.targetCount > 0, ...context, ...(timings === undefined ? {} : { timings }) }, null, 2)}\n`)
     return
   }
   process.stdout.write(displayRunContext(context))
@@ -164,6 +196,7 @@ function printExecution(result: ExecutionResult, json: boolean, context: RunCont
   const counts = { PASS: 0, FAIL: 0, SKIP: 0, ERROR: 0 }
   for (const scenario of result.scenarios) counts[scenario.status] += 1
   process.stdout.write(`summary: ${counts.PASS} PASS, ${counts.FAIL} FAIL, ${counts.SKIP} SKIP, ${counts.ERROR} ERROR; ${result.targetCount} unique targets\n`)
+  if (timings !== undefined) process.stdout.write(displayTimings(timings))
 }
 
 function validationCounts(documents: readonly SpecDocument[], plan: ExecutionPlan): {
@@ -186,53 +219,69 @@ function validationCounts(documents: readonly SpecDocument[], plan: ExecutionPla
 }
 
 async function main(argumentsList: readonly string[]): Promise<number> {
+  const totalStarted = performance.now()
   const options = parseArguments(argumentsList)
   const context = options.command === 'run' ? runContext(options) : validationContext(options)
   const projectRoot = isAbsolute(options.root) ? options.root : resolve(options.root)
+  const phases: { validationMs?: number; resolutionMs?: number; executionMs?: number } = {}
+  const reportedTimings = (): PhaseTimings | undefined => options.timings
+    ? { ...phases, totalMs: elapsed(totalStarted) }
+    : undefined
   const loaded = await loadConfig(projectRoot, options.configPath)
   if (loaded.config === undefined) {
-    printViolations(loaded.violations, options.json, context)
+    printViolations(loaded.violations, options.json, context, reportedTimings())
     return 1
   }
 
+  const validationStarted = performance.now()
   const validation = await validateFocusedSpecs(projectRoot, loaded.config, {
     ...(options.scopeName === undefined ? {} : { scopeName: options.scopeName }),
     strict: options.command === 'run' || options.strict,
   })
+  phases.validationMs = elapsed(validationStarted)
   if (validation.violations.length > 0) {
-    printViolations(validation.violations, options.json, context)
+    printViolations(validation.violations, options.json, context, reportedTimings())
     return 1
   }
 
   if (options.syntaxOnly) {
-    if (options.json) process.stdout.write(`${JSON.stringify({ valid: true, mode: 'syntax-only', ...context }, null, 2)}\n`)
-    else process.stdout.write(`${displayValidationContext(context)}focused specifications are structurally valid\n`)
+    const timings = reportedTimings()
+    if (options.json) process.stdout.write(`${JSON.stringify({ valid: true, mode: 'syntax-only', ...context, ...(timings === undefined ? {} : { timings }) }, null, 2)}\n`)
+    else process.stdout.write(`${displayValidationContext(context)}focused specifications are structurally valid\n${timings === undefined ? '' : displayTimings(timings)}`)
     return 0
   }
 
+  const resolutionStarted = performance.now()
   const resolution = await planEvidence(projectRoot, loaded.config, validation.resolutionDocuments)
+  phases.resolutionMs = elapsed(resolutionStarted)
   if (resolution.violations.length > 0) {
-    printViolations(resolution.violations, options.json, context)
+    printViolations(resolution.violations, options.json, context, reportedTimings())
     return 1
   }
+  if (resolution.plan === undefined) throw new Error('evidence validation did not produce a resolution plan')
 
   if (options.command === 'validate') {
-    if (resolution.plan === undefined) throw new Error('evidence validation did not produce a resolution plan')
     const counts = validationCounts(validation.resolutionDocuments, resolution.plan)
-    if (options.json) process.stdout.write(`${JSON.stringify({ valid: true, ...counts, ...context }, null, 2)}\n`)
-    else process.stdout.write(`${displayValidationContext(context)}focused specifications are valid: ${counts.scenarios} scenarios, ${counts.plannedEvidence} planned evidence, ${counts.targets} unique targets\n`)
+    const timings = reportedTimings()
+    if (options.json) process.stdout.write(`${JSON.stringify({ valid: true, ...counts, ...context, ...(timings === undefined ? {} : { timings }) }, null, 2)}\n`)
+    else process.stdout.write(`${displayValidationContext(context)}focused specifications are valid: ${counts.scenarios} scenarios, ${counts.plannedEvidence} planned evidence, ${counts.targets} unique targets\n${timings === undefined ? '' : displayTimings(timings)}`)
     return 0
   }
 
-  const planned = await planEvidence(projectRoot, loaded.config, validation.targetDocuments, {
+  const planned = projectExecutionPlan(resolution.plan, validation.targetDocuments, {
     ...(options.scenarioId === undefined ? {} : { scenarioId: options.scenarioId }),
   })
   if (planned.violations.length > 0 || planned.plan === undefined) {
-    printViolations(planned.violations, options.json, context)
+    printViolations(planned.violations, options.json, context, reportedTimings())
     return 1
   }
-  const result = await executePlan(planned.plan, { allowSkip: options.allowSkip })
-  printExecution(result, options.json, context as RunContext)
+  const executionStarted = performance.now()
+  const result = await executePlan(planned.plan, {
+    allowSkip: options.allowSkip,
+    maxConcurrentGroups: loaded.config.execution?.maxConcurrentGroups ?? 1,
+  })
+  phases.executionMs = elapsed(executionStarted)
+  printExecution(result, options.json, context as RunContext, reportedTimings())
   return result.success ? 0 : 1
 }
 

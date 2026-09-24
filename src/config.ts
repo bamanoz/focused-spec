@@ -22,9 +22,10 @@ export function isJsonValue(value: unknown): value is JsonValue {
   const record = object(value)
   return record !== undefined && Object.values(record).every(isJsonValue)
 }
-const CONFIG_KEYS: Readonly<Record<string, true>> = { version: true, specifications: true, runners: true }
+const CONFIG_KEYS: Readonly<Record<string, true>> = { version: true, specifications: true, runners: true, execution: true }
 const SPECIFICATION_KEYS: Readonly<Record<string, true>> = { documents: true }
 const DOCUMENT_KEYS: Readonly<Record<string, true>> = { match: true, scope: true, exclude: true }
+const EXECUTION_KEYS: Readonly<Record<string, true>> = { maxConcurrentGroups: true }
 const SCOPE_TOKEN = '{scope}'
 const CAPTURE_GLOB = /[*?\[\]{}()!+@]/u
 
@@ -208,10 +209,25 @@ export async function loadConfig(projectRoot: string, explicitPath?: string): Pr
     if (parsed !== undefined) runners[id] = parsed
   }
 
+  const executionValue = object(root.execution)
+  let execution: FocusedSpecConfig['execution'] | undefined
+  if (root.execution !== undefined && executionValue === undefined) {
+    violations.push({ path, message: 'execution must be an object' })
+  } else if (executionValue !== undefined) {
+    rejectUnknownKeys(executionValue, EXECUTION_KEYS, 'execution', path, violations)
+    if (executionValue.maxConcurrentGroups !== undefined && (!Number.isInteger(executionValue.maxConcurrentGroups) || (executionValue.maxConcurrentGroups as number) <= 0)) {
+      violations.push({ path, message: 'execution.maxConcurrentGroups must be a positive integer' })
+    } else {
+      execution = executionValue.maxConcurrentGroups === undefined
+        ? {}
+        : { maxConcurrentGroups: executionValue.maxConcurrentGroups as number }
+    }
+  }
+
   if (specificationConfig === undefined || violations.length > 0) return { path, violations }
   return {
     path,
     violations,
-    config: { version: 2, specifications: specificationConfig, runners },
+    config: { version: 2, specifications: specificationConfig, runners, ...(execution === undefined ? {} : { execution }) },
   }
 }

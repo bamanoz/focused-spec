@@ -5,8 +5,8 @@ The binary is `focused-spec`.
 ## Commands
 
 ```text
-focused-spec validate [--root <path>] [--config <path>] [--scope <name>] [--strict] [--syntax-only] [--json]
-focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--json]
+focused-spec validate [--root <path>] [--config <path>] [--scope <name>] [--strict] [--syntax-only] [--json] [--timings]
+focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--json] [--timings]
 ```
 
 Scope names are path-safe single fragments. The CLI preserves the selected name exactly; it never treats it as a glob or path.
@@ -61,6 +61,8 @@ Non-strict validation permits `planned:` evidence only in named scopes and skips
 - with `--scope <name>`, validation covers the baseline plus only that scope, while execution selects that scope;
 - `--scenario <id>` narrows only the execution selection. It does not narrow validation.
 
+Strict `run` resolves all concrete evidence in its validation selection once, then selects already-resolved targets for execution. Unselected resolution errors still prevent all test execution.
+
 Text output begins with exactly one of these validation lines:
 
 ```text
@@ -100,6 +102,14 @@ If configuration, discovery, validation, or evidence resolution fails before tes
 
 The CLI exits nonzero on invalid configuration, discovery violations, unresolved evidence, failed execution, errors, or disallowed skips.
 
+## Timing output
+
+`--timings` adds a `timings` object to JSON or a `timings:` line to text output. Fields are elapsed milliseconds: `validationMs` covers document discovery and structural validation, `resolutionMs` covers runner resolution, `executionMs` covers execution (including partition planning and scheduling wait), and `totalMs` covers the command from argument parsing until output construction begins. A phase appears only if reached; validation failures retain timings for reached phases. The execution phase is absent when execution does not start. These phases do not cover all of `totalMs`, and concurrent activities can overlap; do not sum them to infer wall time. Without `--timings`, result fields and text remain unchanged.
+
+## Execution concurrency
+
+The optional `execution.maxConcurrentGroups` project setting is a positive integer, defaulting to 1. Above 1, the core may overlap only resource-compatible groups explicitly returned by a runner's optional `partition` method; legacy and explicitly exclusive groups remain exclusive. It does not configure the underlying framework worker count and it does not coordinate other CLI processes. See the [runner API](runner-api.md) for group validation and result semantics.
+
 ## Configuration
 
 The default config is `.focused-spec/config.yaml` under `--root`. A relative `--config` path is resolved from the selected project root. Configuration requires `version: 2`, a nonempty `specifications.documents` list, and a `runners` object. The [configuration guide](../guides/configuration.md) is the normative layout and migration reference.
@@ -114,4 +124,4 @@ The old `--change <name>` option has no compatibility alias; use `--scope <name>
 - replace `executionSelection.source: "current"` with `"baseline"`;
 - replace `executionSelection.source: "change"` with `"scope"` and rename its `change` property to `scope`.
 
-The runner plugin API is unchanged.
+Version-1 configuration migration does not require changing a project runner plugin. `partition` is an optional addition to the existing `apiVersion: 1` runner API.

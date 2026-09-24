@@ -118,3 +118,60 @@ export async function planEvidence(
 
   return { violations: [], plan: { projectRoot, scenarios, targets, groups } }
 }
+
+export function projectExecutionPlan(
+  plan: ExecutionPlan,
+  documents: readonly SpecDocument[],
+  options: PlanOptions = {},
+): PlanOutput {
+  const targetsByRunnerReference = new Map<string, PlannedTarget>()
+  for (const target of plan.targets) {
+    for (const reference of target.references) {
+      targetsByRunnerReference.set(`${target.runnerId}\u0000${reference}`, target)
+    }
+  }
+
+  const scenarios: PlannedScenario[] = []
+  const targetsByKey = new Map<string, PlannedTarget>()
+  const referencesByKey = new Map<string, Set<string>>()
+  let selectedScenarioFound = false
+
+  for (const document of documents) {
+    for (const scenario of document.scenarios) {
+      const id = scenario.ids[0]
+      if (id === undefined || (options.scenarioId !== undefined && id !== options.scenarioId)) continue
+      selectedScenarioFound = true
+
+      const evidence = scenario.evidence.flatMap(raw => {
+        const reference = parseEvidenceReference(raw)
+        if ('error' in reference || reference.planned) return []
+        const target = targetsByRunnerReference.get(`${reference.runnerId}\u0000${raw}`)
+        if (target === undefined) throw new Error(`planner lost resolved evidence ${raw}`)
+        targetsByKey.set(target.key, target)
+        const references = referencesByKey.get(target.key) ?? new Set<string>()
+        references.add(raw)
+        referencesByKey.set(target.key, references)
+        return [{ key: target.key, reference: raw }]
+      })
+      scenarios.push({ id, evidence })
+    }
+  }
+
+  if (options.scenarioId !== undefined && !selectedScenarioFound) {
+    return { violations: [{ path: options.scenarioId, message: `selected scenario has no executable evidence: ${options.scenarioId}` }] }
+  }
+
+  scenarios.sort((left, right) => left.id.localeCompare(right.id))
+  const targets = [...targetsByKey.values()]
+    .map(target => ({ ...target, references: [...(referencesByKey.get(target.key) ?? [])].sort() }))
+    .sort((left, right) => left.key.localeCompare(right.key))
+  const grouped = new Map<string, PlannedTarget[]>()
+  for (const target of targets) grouped.set(target.runnerId, [...(grouped.get(target.runnerId) ?? []), target])
+  const groups = [...grouped].sort(([left], [right]) => left.localeCompare(right)).map(([runnerId, runnerTargets]) => ({
+    runnerId,
+    config: runnerTargets[0]!.config,
+    targets: runnerTargets,
+  }))
+
+  return { violations: [], plan: { projectRoot: plan.projectRoot, scenarios, targets, groups } }
+}

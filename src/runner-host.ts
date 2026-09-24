@@ -20,7 +20,12 @@ interface RunHostRequest extends HostRequestBase {
   readonly targets: readonly ResolvedTarget[]
 }
 
-type HostRequest = ResolveHostRequest | RunHostRequest
+interface PartitionHostRequest extends HostRequestBase {
+  readonly operation: 'partition'
+  readonly targets: readonly ResolvedTarget[]
+}
+
+type HostRequest = ResolveHostRequest | RunHostRequest | PartitionHostRequest
 
 interface HostResponse {
   readonly ok: boolean
@@ -40,6 +45,9 @@ process.on('message', async message => {
     if (plugin === undefined || plugin.apiVersion !== 1 || typeof plugin.resolve !== 'function' || typeof plugin.run !== 'function') {
       throw new Error('runner module must default-export a RunnerPlugin with apiVersion 1')
     }
+    if (plugin.partition !== undefined && typeof plugin.partition !== 'function') {
+      throw new Error('runner partition must be a function when provided')
+    }
     const context = {
       projectRoot: request.projectRoot,
       cwd: request.cwd,
@@ -49,7 +57,11 @@ process.on('message', async message => {
     }
     const value = request.operation === 'resolve'
       ? await plugin.resolve({ ...context, selectors: request.selectors })
-      : await plugin.run({ ...context, targets: request.targets })
+      : request.operation === 'run'
+        ? await plugin.run({ ...context, targets: request.targets })
+        : plugin.partition === undefined
+          ? { supported: false }
+          : { supported: true, response: await plugin.partition({ ...context, targets: request.targets }) }
     process.send?.({ ok: true, value } satisfies HostResponse, () => process.disconnect())
   } catch (error) {
     process.send?.({

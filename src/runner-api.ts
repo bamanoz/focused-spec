@@ -52,8 +52,27 @@ export interface RunResponse {
   readonly results: readonly TargetResult[]
 }
 
+export interface ResourceExecutionGroup {
+  readonly targetIds: readonly string[]
+  readonly resources: readonly string[]
+  readonly exclusive?: never
+}
+
+export interface ExclusiveExecutionGroup {
+  readonly targetIds: readonly string[]
+  readonly exclusive: true
+  readonly resources?: never
+}
+
+export type ExecutionGroup = ResourceExecutionGroup | ExclusiveExecutionGroup
+
+export interface PartitionResponse {
+  readonly groups: readonly ExecutionGroup[]
+}
+
 export interface RunnerPlugin {
   readonly apiVersion: 1
   resolve(request: ResolveRequest): Promise<ResolveResponse>
   run(request: RunRequest): Promise<RunResponse>
+  partition?(request: RunRequest): Promise<PartitionResponse>
 }

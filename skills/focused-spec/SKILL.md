@@ -61,9 +61,11 @@ Use layouts that match focused scenarios, not arbitrary native SDD prose. The CL
 
 `runners` is a map keyed by runner ID. Each entry requires `module`; optional fields are project-relative `cwd`, positive integer `timeoutMs`, and JSON-compatible `options`. `module` must be a project-contained `.ts`, `.mts`, `.js`, or `.mjs` file. Every runner ID referenced by evidence must be registered.
 
+`execution.maxConcurrentGroups` is an optional positive integer in this same configuration, defaulting to 1. Raise it only when participating runner plugins explicitly partition selected targets and can establish resource compatibility. It limits concurrent runner-host invocations, not the framework's own workers; unchanged runners remain exclusive.
+
 ## Implement a runner
 
-Import types only from `focused-spec/runner`. A default-exported `RunnerPlugin` has `apiVersion: 1`, `resolve(request)`, and `run(request)`.
+Import types only from `focused-spec/runner`. A default-exported `RunnerPlugin` has `apiVersion: 1`, required `resolve(request)` and `run(request)`, and optional `partition(request)` for independently executable groups.
 
 - `resolve` receives `selectors`, `projectRoot`, resolved `cwd`, `runnerId`, JSON-compatible `options`, and abort `signal`.
 - For every selector, `resolve` returns exactly one target `{ selector, targetId, displayName, source?, data? }` or one error `{ selector, message }`.
@@ -71,6 +73,8 @@ Import types only from `focused-spec/runner`. A default-exported `RunnerPlugin` 
 - `run` receives resolved `targets` plus the same context and returns exactly one `{ targetId, status, diagnostic? }` per target.
 - Status is `pass`, `fail`, or `skip`. Never return `pass` without executing and interpreting the selected test.
 - Spawn tools with executable/argument arrays, `shell: false`, supplied `cwd`, and supplied `signal`. Keep diagnostics bounded.
+- Optional `partition` receives only selected unique resolved targets after strict validation, and only when `execution.maxConcurrentGroups > 1`. Return a partition containing each selected `targetId` exactly once in a nonempty group. Each group declares either `resources: string[]` with distinct nonempty shared-resource keys or `exclusive: true`; an empty `resources` array asserts compatibility with all other nonexclusive groups. Matching keys serialize groups across runners. If compatibility is unknown, declare the affected group exclusive or return an actionable error, never claim independence by default.
+- The runner decides whether grouping rules come from code, runner-owned config, or another source; the core sees only the returned groups. `run` must correctly execute and report the subset passed for each group. Without `partition` (or with the default limit 1), the core calls `run` once with all selected targets. Scheduling coordinates only one CLI invocation; control nested framework workers and externally shared resources separately.
 
 The public shape is:
 
@@ -79,6 +83,7 @@ interface RunnerPlugin {
   readonly apiVersion: 1
   resolve(request: ResolveRequest): Promise<{ targets: ResolvedTarget[]; errors: ResolveError[] }>
   run(request: RunRequest): Promise<{ results: TargetResult[] }>
+  partition?(request: RunRequest): Promise<PartitionResponse>
 }
 ```
 
@@ -86,19 +91,21 @@ interface RunnerPlugin {
 
 While a named scope still contains `planned:` evidence, validate its structure with `focused-spec validate --scope <name> --syntax-only` and its configuration plus concrete evidence with `focused-spec validate --scope <name>` (without `--strict`). Planned targets are not resolved or executed; a successful planning check does not prove them.
 
-Only after implementing the tests and runner, replace all `planned:` references with concrete selectors. Then verify the completed scope:
+Only after implementing the tests and runner, replace all `planned:` references with concrete selectors. `run` performs strict validation before any execution; use it to verify the completed scope:
 
 ```sh
-focused-spec validate --scope <name> --strict
 focused-spec run --scope <name>
 ```
+
+Use `focused-spec validate --scope <name> --strict` separately only when you need a validation-only preflight. Running it before `run` repeats resolution across two CLI commands.
 
 For the baseline, when all discovered named scopes are complete:
 
 ```sh
-focused-spec validate
 focused-spec run
 ```
+
+`focused-spec validate --strict` is an optional validation-only preflight. Add `--timings` to either command to see elapsed validation, resolution, and (for `run`) execution phases; it does not enable concurrency.
 
 Without `--scope`, validation covers the baseline and all discovered named scopes while execution selects the baseline. With `--scope`, both commands validate the baseline plus only the selected scope, and `run` executes that scope. `--scenario` narrows execution only. Never treat native SDD validation as a substitute for these focused checks, or vice versa.
 

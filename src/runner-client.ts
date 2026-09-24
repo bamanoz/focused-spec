@@ -5,7 +5,7 @@ import { extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { RunnerConfig } from './model.js'
 import { isJsonValue } from './config.js'
-import type { JsonValue, ResolveResponse, ResolvedTarget, RunResponse, TargetResult } from './runner-api.js'
+import type { ExecutionGroup, JsonValue, ResolveResponse, ResolvedTarget, RunResponse, TargetResult } from './runner-api.js'
 const DEFAULT_TIMEOUT_MS = 120_000
 const MODULE_EXTENSIONS = new Set(['.js', '.mjs', '.ts', '.mts'])
 const OUTPUT_LIMIT = 16_384
@@ -59,40 +59,54 @@ async function invokeHost(projectRoot: string, runnerId: string, config: RunnerC
   })
   const { promise, resolve: resolvePromise, reject: rejectPromise } = Promise.withResolvers<unknown>()
   let settled = false
+  let response: HostResponse | undefined
+  let timeoutError: Error | undefined
+  let processError: Error | undefined
+  let shutdownTimer: NodeJS.Timeout | undefined
   let output = ''
   child.stdout?.on('data', chunk => { output = boundedAppend(output, chunk) })
   child.stderr?.on('data', chunk => { output = boundedAppend(output, chunk) })
 
   const timer = setTimeout(() => {
     if (settled) return
-    settled = true
+    if (response === undefined) timeoutError = new Error(`runner ${runnerId} timed out after ${timeoutMs}ms`)
     child.kill('SIGKILL')
-    rejectPromise(new Error(`runner ${runnerId} timed out after ${timeoutMs}ms${output === '' ? '' : `\n${output}`}`))
   }, timeoutMs + 1_000)
 
   child.once('message', message => {
+    if (settled || timeoutError !== undefined || response !== undefined) return
+    response = message as HostResponse
+    shutdownTimer = setTimeout(() => {
+      if (!settled) child.kill('SIGKILL')
+    }, 1_000)
+    child.kill()
+  })
+  child.once('error', error => {
+    processError = error
+  })
+  child.once('close', code => {
     if (settled) return
     settled = true
     clearTimeout(timer)
-    child.kill()
-    const response = message as HostResponse
+    clearTimeout(shutdownTimer)
+    const diagnosticOutput = output === '' ? '' : `\n${output}`
+    if (timeoutError !== undefined) {
+      rejectPromise(new Error(`${timeoutError.message}${diagnosticOutput}`))
+      return
+    }
+    if (processError !== undefined && response === undefined) {
+      rejectPromise(processError)
+      return
+    }
+    if (response === undefined) {
+      rejectPromise(new Error(`runner ${runnerId} exited before responding with code ${String(code)}${diagnosticOutput}`))
+      return
+    }
     if (!response.ok) {
-      rejectPromise(new Error(`runner ${runnerId} failed: ${response.error ?? 'unknown error'}${output === '' ? '' : `\n${output}`}`))
+      rejectPromise(new Error(`runner ${runnerId} failed: ${response.error ?? 'unknown error'}${diagnosticOutput}`))
       return
     }
     resolvePromise(response.value)
-  })
-  child.once('error', error => {
-    if (settled) return
-    settled = true
-    clearTimeout(timer)
-    rejectPromise(error)
-  })
-  child.once('exit', code => {
-    if (settled) return
-    settled = true
-    clearTimeout(timer)
-    rejectPromise(new Error(`runner ${runnerId} exited before responding with code ${String(code)}${output === '' ? '' : `\n${output}`}`))
   })
   child.send({
     ...payload,
@@ -200,4 +214,53 @@ export async function runRunnerTargets(
     if (!seen.has(target.targetId)) throw new Error(`runner ${runnerId} did not return target ${target.targetId}`)
   }
   return { results }
+}
+
+export async function partitionRunnerTargets(
+  projectRoot: string,
+  runnerId: string,
+  config: RunnerConfig,
+  targets: readonly ResolvedTarget[],
+): Promise<readonly ExecutionGroup[] | undefined> {
+  const value = record(await invokeHost(projectRoot, runnerId, config, { operation: 'partition', targets }))
+  if (value === undefined || typeof value.supported !== 'boolean') {
+    throw new Error(`runner ${runnerId} returned an invalid partition support response`)
+  }
+  if (!value.supported) return undefined
+  const response = record(value.response)
+  if (response === undefined || !Array.isArray(response.groups)) {
+    throw new Error(`runner ${runnerId} returned an invalid partition response`)
+  }
+
+  const requested = new Set(targets.map(target => target.targetId))
+  if (requested.size !== targets.length) throw new Error(`runner ${runnerId} received duplicate selected target IDs`)
+  const seen = new Set<string>()
+  const groups: ExecutionGroup[] = response.groups.map((item, index) => {
+    const group = record(item)
+    if (group === undefined || !Array.isArray(group.targetIds) || group.targetIds.length === 0 || !group.targetIds.every(text)) {
+      throw new Error(`runner ${runnerId} returned invalid partition group ${index}: targetIds must be a non-empty string array`)
+    }
+    for (const targetId of group.targetIds) {
+      if (!requested.has(targetId)) throw new Error(`runner ${runnerId} partition group ${index} returned unknown target ${targetId}`)
+      if (seen.has(targetId)) throw new Error(`runner ${runnerId} partition returned duplicate target ${targetId}`)
+      seen.add(targetId)
+    }
+
+    const exclusive = group.exclusive === true
+    const hasResources = Array.isArray(group.resources)
+    if (exclusive === hasResources || (group.exclusive !== undefined && !exclusive) || (group.resources !== undefined && !hasResources)) {
+      throw new Error(`runner ${runnerId} partition group ${index} must declare exactly one of exclusive: true or resources`)
+    }
+    if (exclusive) return { targetIds: [...group.targetIds], exclusive: true }
+
+    const resources = group.resources as unknown[]
+    if (!resources.every(text) || new Set(resources).size !== resources.length) {
+      throw new Error(`runner ${runnerId} partition group ${index} resources must be distinct non-empty strings`)
+    }
+    return { targetIds: [...group.targetIds], resources: [...resources] as string[] }
+  })
+  for (const target of targets) {
+    if (!seen.has(target.targetId)) throw new Error(`runner ${runnerId} partition did not return target ${target.targetId}`)
+  }
+  return groups
 }

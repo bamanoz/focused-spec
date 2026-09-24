@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -325,7 +325,7 @@ describe('focused-spec CLI', () => {
       '    targets: request.selectors.filter(selector => selector !== "broken").map(selector => ({ selector, targetId: selector, displayName: selector })),',
       '    errors: request.selectors.filter(selector => selector === "broken").map(selector => ({ selector, message: "not found" })),',
       '  } },',
-      '  async run(request) { return { results: request.targets.map(target => ({ targetId: target.targetId, status: "pass" })) } },',
+      '  async run() { throw new Error("execution must not start") },',
       '}',
     ].join('\n'))
 
@@ -710,5 +710,166 @@ describe('focused-spec CLI', () => {
       executionSelection: { source: 'scope', scope: 'add' },
       scenarios: [{ id: 'fixture.future.executes', status: 'PASS' }],
     })
+  })
+
+  it('reuses strict resolution for scoped execution without resolving twice', async () => {
+    const root = await fixture()
+    await put(root, 'openspec/changes/add/specs/new/spec.md', focusedScenario(
+      'fixture.future.executes',
+      'fixture::future',
+      { name: 'Future evidence executes' },
+    ))
+    await put(root, 'openspec/changes/add/specs/shared/spec.md', focusedScenario(
+      'fixture.future.shared',
+      'fixture::future',
+      { name: 'Future evidence is shared' },
+    ))
+    await put(root, 'runner.ts', [
+      "import { appendFile } from 'node:fs/promises'",
+      "import { join } from 'node:path'",
+      'export default {',
+      '  apiVersion: 1,',
+      '  async resolve(request) {',
+      '    await appendFile(join(request.projectRoot, "calls"), `resolve:${request.selectors.join(",")}\n`)',
+      '    return { targets: request.selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] }',
+      '  },',
+      '  async run(request) {',
+      '    await appendFile(join(request.projectRoot, "calls"), `run:${request.targets.map(target => target.targetId).join(",")}\n`)',
+      '    return { results: request.targets.map(target => ({ targetId: target.targetId, status: "pass" })) }',
+      '  },',
+      '}',
+    ].join('\n'))
+
+    const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scope', 'add', '--json'], { encoding: 'utf8' })
+
+    expect(run.status).toBe(0)
+    expect(json(run.stdout)).toMatchObject({
+      success: true,
+      scenarios: [
+        { id: 'fixture.future.executes', evidence: [{ reference: 'fixture::future', status: 'PASS' }] },
+        { id: 'fixture.future.shared', evidence: [{ reference: 'fixture::future', status: 'PASS' }] },
+      ],
+      targetCount: 1,
+    })
+    expect(await readFile(join(root, 'calls'), 'utf8')).toBe('resolve:current,future\nrun:future\n')
+  })
+
+  it('executes revised evidence rather than baseline evidence for the same scenario ID', async () => {
+    const root = await fixture()
+    await put(root, 'openspec/changes/add/specs/new/spec.md', focusedScenario(
+      'fixture.current.passes',
+      'fixture::revised',
+      { name: 'Revision executes', revisionRows: ['- **REVISES**: baseline'] },
+    ))
+    await put(root, 'runner.ts', [
+      "import { appendFile } from 'node:fs/promises'",
+      "import { join } from 'node:path'",
+      'export default {',
+      '  apiVersion: 1,',
+      '  async resolve(request) { return { targets: request.selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] } },',
+      '  async run(request) {',
+      '    await appendFile(join(request.projectRoot, "runs"), `${request.targets.map(target => target.targetId).join(",")}\n`)',
+      '    return { results: request.targets.map(target => ({ targetId: target.targetId, status: "pass" })) }',
+      '  },',
+      '}',
+    ].join('\n'))
+
+    const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scope', 'add', '--scenario', 'fixture.current.passes', '--json'], { encoding: 'utf8' })
+
+    expect(run.status).toBe(0)
+    expect(json(run.stdout)).toMatchObject({
+      success: true,
+      scenarios: [{
+        id: 'fixture.current.passes',
+        evidence: [{ reference: 'fixture::revised', status: 'PASS' }],
+      }],
+      targetCount: 1,
+    })
+    expect(await readFile(join(root, 'runs'), 'utf8')).toBe('revised\n')
+  })
+
+  it('reports phase timings only when requested', async () => {
+    const root = await fixture()
+    await rm(join(root, 'openspec/changes'), { recursive: true })
+
+    const ordinaryValidation = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
+    const timedValidation = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json', '--timings'], { encoding: 'utf8' })
+    const ordinaryRun = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json'], { encoding: 'utf8' })
+    const timedRun = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json', '--timings'], { encoding: 'utf8' })
+    const timedText = spawnSync(process.execPath, [cli, 'run', '--root', root, '--timings'], { encoding: 'utf8' })
+
+    expect(ordinaryValidation.status).toBe(0)
+    expect(timedValidation.status).toBe(0)
+    expect(ordinaryRun.status).toBe(0)
+    expect(timedRun.status).toBe(0)
+    expect(timedText.status).toBe(0)
+    const ordinaryValidationOutput = json(ordinaryValidation.stdout)
+    const timedValidationOutput = json(timedValidation.stdout)
+    const ordinaryRunOutput = json(ordinaryRun.stdout)
+    const timedRunOutput = json(timedRun.stdout)
+    expect(ordinaryValidationOutput).not.toHaveProperty('timings')
+    expect(ordinaryRunOutput).not.toHaveProperty('timings')
+    expect(timedValidationOutput).toMatchObject({
+      valid: ordinaryValidationOutput.valid,
+      scenarios: ordinaryValidationOutput.scenarios,
+      plannedEvidence: ordinaryValidationOutput.plannedEvidence,
+      targets: ordinaryValidationOutput.targets,
+      timings: {
+        validationMs: expect.any(Number),
+        resolutionMs: expect.any(Number),
+        totalMs: expect.any(Number),
+      },
+    })
+    expect(timedRunOutput).toMatchObject({
+      success: ordinaryRunOutput.success,
+      scenarios: ordinaryRunOutput.scenarios,
+      targetCount: ordinaryRunOutput.targetCount,
+      timings: {
+        validationMs: expect.any(Number),
+        resolutionMs: expect.any(Number),
+        executionMs: expect.any(Number),
+        totalMs: expect.any(Number),
+      },
+    })
+    const validationTimings = timedValidationOutput.timings as Record<string, number>
+    const runTimings = timedRunOutput.timings as Record<string, number>
+    for (const duration of Object.values(validationTimings)) expect(duration).toBeGreaterThan(0)
+    for (const duration of Object.values(runTimings)) expect(duration).toBeGreaterThan(0)
+    expect(timedText.stdout).toMatch(/^timings: validation [\d.]+ ms, resolution [\d.]+ ms, execution [\d.]+ ms, total [\d.]+ ms$/m)
+  })
+
+  it('reports reached timings on validation failure', async () => {
+    const root = await fixture()
+    await rm(join(root, 'openspec/changes'), { recursive: true })
+    await put(root, 'runner.ts', [
+      'export default {',
+      '  apiVersion: 1,',
+      '  async resolve(request) { return { targets: [], errors: request.selectors.map(selector => ({ selector, message: "not found" })) } },',
+      '  async run() { throw new Error("execution must not start") },',
+      '}',
+    ].join('\n'))
+
+    const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json', '--timings'], { encoding: 'utf8' })
+    const text = spawnSync(process.execPath, [cli, 'run', '--root', root, '--timings'], { encoding: 'utf8' })
+    const output = json(run.stdout)
+
+    expect(run.status).toBe(1)
+    expect(text.status).toBe(1)
+    expect(output).toMatchObject({
+      valid: false,
+      executionStarted: false,
+      violations: [expect.objectContaining({ scenarioId: 'fixture.current.passes' })],
+      timings: {
+        validationMs: expect.any(Number),
+        resolutionMs: expect.any(Number),
+        totalMs: expect.any(Number),
+      },
+    })
+    expect(output).not.toHaveProperty('success')
+    expect(output).not.toHaveProperty('scenarios')
+    expect(output.timings).not.toHaveProperty('executionMs')
+    for (const duration of Object.values(output.timings as Record<string, number>)) expect(duration).toBeGreaterThan(0)
+    expect(text.stderr).toContain('execution did not start')
+    expect(text.stderr).toMatch(/^timings: validation [\d.]+ ms, resolution [\d.]+ ms, total [\d.]+ ms$/m)
   })
 })
