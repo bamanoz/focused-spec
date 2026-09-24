@@ -1,6 +1,6 @@
 import type { FocusedSpecConfig, Scenario, SpecDocument, Violation } from './model.js'
 import { parseEvidenceReference, STABLE_ID } from './parser.js'
-import { loadActiveChanges, loadChangeDocuments, loadCurrentDocuments, validateSourceSelection } from './sources.js'
+import { discoverDocuments, isScopeName } from './sources.js'
 
 function diagnostic(scenario: Scenario, message: string): Violation {
   return {
@@ -19,7 +19,7 @@ interface DocumentValidation {
 export function validateDocuments(
   documents: readonly SpecDocument[],
   config: FocusedSpecConfig,
-  options: { readonly allowPlanned: boolean },
+  options: { readonly allowPlanned: boolean; readonly baseline?: boolean },
 ): DocumentValidation {
   const violations: Violation[] = []
   const identifiers = new Map<string, Scenario>()
@@ -39,6 +39,11 @@ export function validateDocuments(
         else violations.push(diagnostic(scenario, `duplicate stable ID; first owned by ${previous.path}:${previous.line}`))
       }
       if (scenario.evidence.length === 0) violations.push(diagnostic(scenario, 'expected at least one EVIDENCE row'))
+      if (scenario.revisions.length > 1) violations.push(diagnostic(scenario, 'expected at most one REVISES row'))
+      if (options.baseline && scenario.revisions.length > 0) violations.push(diagnostic(scenario, 'baseline scenario cannot declare REVISES'))
+      for (const line of scenario.malformedRevisionLines) {
+        violations.push({ ...diagnostic(scenario, 'malformed REVISES row; expected - **REVISES**: baseline'), line })
+      }
       for (const line of scenario.malformedEvidenceLines) {
         violations.push({ ...diagnostic(scenario, 'malformed EVIDENCE row; expected - **EVIDENCE**: `<runner-id>::<selector>`'), line })
       }
@@ -52,7 +57,7 @@ export function validateDocuments(
           continue
         }
         if (reference.planned && !options.allowPlanned) {
-          violations.push(diagnostic(scenario, `planned evidence is not allowed here: ${raw}; use non-strict validate --change <name> while planning, then replace planned evidence before strict validation or run`))
+          violations.push(diagnostic(scenario, `planned evidence is not allowed here: ${raw}; use non-strict validate --scope <name> while planning, then replace planned evidence before strict validation or run`))
         }
         if (config.runners[reference.runnerId] === undefined) {
           violations.push(diagnostic(scenario, `unknown evidence runner ${reference.runnerId}`))
@@ -63,21 +68,25 @@ export function validateDocuments(
   return { violations, identifiers }
 }
 
-function collisionViolations(current: ReadonlyMap<string, Scenario>, documents: readonly SpecDocument[]): Violation[] {
+function collisionViolations(baseline: ReadonlyMap<string, Scenario>, documents: readonly SpecDocument[]): Violation[] {
   const violations: Violation[] = []
   for (const document of documents) {
     for (const scenario of document.scenarios) {
-      const id = scenario.ids[0]
-      const owner = id === undefined ? undefined : current.get(id)
-      if (owner === undefined || scenario.operation === 'MODIFIED' || scenario.operation === 'REMOVED') continue
-      violations.push(diagnostic(scenario, `stable ID already belongs to current scenario ${owner.path}:${owner.line}`))
+      if (scenario.ids.length !== 1) continue
+      const id = scenario.ids[0] as string
+      const owner = baseline.get(id)
+      if (scenario.revisions.length > 0) {
+        if (owner === undefined) violations.push(diagnostic(scenario, `REVISES baseline requires an existing baseline scenario with ID ${id}`))
+      } else if (owner !== undefined) {
+        violations.push(diagnostic(scenario, `stable ID already belongs to baseline scenario ${owner.path}:${owner.line}; declare REVISES: baseline to revise it`))
+      }
     }
   }
   return violations
 }
 
 export interface ValidationOptions {
-  readonly changeName?: string
+  readonly scopeName?: string
   readonly strict?: boolean
 }
 
@@ -92,44 +101,40 @@ export async function validateFocusedSpecs(
   config: FocusedSpecConfig,
   options: ValidationOptions = {},
 ): Promise<ValidationOutput> {
-  const violations = validateSourceSelection(config, options.changeName)
-  const currentDocuments = await loadCurrentDocuments(projectRoot, config)
-  const current = validateDocuments(currentDocuments, config, { allowPlanned: false })
-  violations.push(...current.violations)
-
-  if (options.changeName !== undefined) {
-    const changeDocuments = await loadChangeDocuments(projectRoot, config, options.changeName)
-    if (changeDocuments.length === 0) {
-      violations.push({ path: options.changeName, message: `OpenSpec change has no delta specifications: ${options.changeName}` })
-    }
-    const active = validateDocuments(changeDocuments, config, { allowPlanned: !options.strict })
-    violations.push(...active.violations, ...collisionViolations(current.identifiers, changeDocuments))
-    return {
-      violations: deduplicate(violations),
-      targetDocuments: changeDocuments,
-      resolutionDocuments: [...currentDocuments, ...changeDocuments],
-    }
+  if (options.scopeName !== undefined && !isScopeName(options.scopeName)) {
+    return { violations: [{ path: '.focused-spec/config.yaml', message: `invalid scope name ${options.scopeName}` }], targetDocuments: [], resolutionDocuments: [] }
   }
 
-  const resolutionDocuments = [...currentDocuments]
-  const activeIdentifiers = new Map<string, Scenario>()
-  if (config.specifications.source === 'openspec') {
-    for (const documents of (await loadActiveChanges(projectRoot, config)).values()) {
-      const active = validateDocuments(documents, config, { allowPlanned: true })
-      for (const document of documents) {
-        for (const scenario of document.scenarios) {
-          const id = scenario.ids[0]
-          if (id === undefined || scenario.ids.length !== 1 || current.identifiers.has(id)) continue
-          const previous = activeIdentifiers.get(id)
-          if (previous === undefined) activeIdentifiers.set(id, scenario)
-          else violations.push(diagnostic(scenario, `duplicate stable ID; first owned by ${previous.path}:${previous.line}`))
-        }
-      }
-      violations.push(...active.violations, ...collisionViolations(current.identifiers, documents))
-      resolutionDocuments.push(...documents)
+  const discovery = await discoverDocuments(projectRoot, config, options.scopeName)
+  const violations = [...discovery.violations]
+  const baseline = validateDocuments(discovery.baseline, config, { allowPlanned: false, baseline: true })
+  violations.push(...baseline.violations)
+
+  const resolutionDocuments = [...discovery.baseline]
+  const introduced = new Map<string, Scenario>()
+  for (const [name, documents] of discovery.scopes) {
+    if (documents.every(document => document.scenarios.length === 0)) {
+      violations.push({ path: name, message: `scope has no focused scenarios: ${name}` })
     }
+    const scoped = validateDocuments(documents, config, { allowPlanned: !options.strict })
+    violations.push(...scoped.violations, ...collisionViolations(baseline.identifiers, documents))
+    for (const [id, scenario] of scoped.identifiers) {
+      if (baseline.identifiers.has(id)) continue
+      const previous = introduced.get(id)
+      if (previous === undefined) introduced.set(id, scenario)
+      else violations.push(diagnostic(scenario, `duplicate stable ID; first owned by ${previous.path}:${previous.line}`))
+    }
+    resolutionDocuments.push(...documents)
   }
-  return { violations: deduplicate(violations), targetDocuments: currentDocuments, resolutionDocuments }
+
+  if (options.scopeName !== undefined && !discovery.scopes.has(options.scopeName)) {
+    violations.push({ path: options.scopeName, message: `scope has no matching documents: ${options.scopeName}` })
+  }
+  return {
+    violations: deduplicate(violations),
+    targetDocuments: options.scopeName === undefined ? discovery.baseline : discovery.scopes.get(options.scopeName) ?? [],
+    resolutionDocuments,
+  }
 }
 
 function deduplicate(violations: readonly Violation[]): Violation[] {

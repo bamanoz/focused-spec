@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
 import { parse } from 'yaml'
-import type { FocusedSpecConfig, RunnerConfig, Violation } from './model.js'
+import type { DocumentLayout, FocusedSpecConfig, RunnerConfig, Violation } from './model.js'
 import type { JsonValue } from './runner-api.js'
 
 const RUNNER_ID = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u
@@ -21,6 +21,104 @@ export function isJsonValue(value: unknown): value is JsonValue {
   if (Array.isArray(value)) return value.every(isJsonValue)
   const record = object(value)
   return record !== undefined && Object.values(record).every(isJsonValue)
+}
+const CONFIG_KEYS: Readonly<Record<string, true>> = { version: true, specifications: true, runners: true }
+const SPECIFICATION_KEYS: Readonly<Record<string, true>> = { documents: true }
+const DOCUMENT_KEYS: Readonly<Record<string, true>> = { match: true, scope: true, exclude: true }
+const SCOPE_TOKEN = '{scope}'
+const CAPTURE_GLOB = /[*?\[\]{}()!+@]/u
+
+function rejectUnknownKeys(
+  record: Readonly<Record<string, unknown>>,
+  allowed: Readonly<Record<string, true>>,
+  context: string,
+  path: string,
+  violations: Violation[],
+): void {
+  for (const key of Object.keys(record)) {
+    if (allowed[key] !== true) violations.push({ path, message: `unknown ${context} key ${key}` })
+  }
+}
+
+function validatePattern(value: unknown, context: string, path: string, violations: Violation[]): value is string {
+  if (typeof value !== 'string' || value.length === 0) {
+    violations.push({ path, message: `${context} must be a non-empty project-relative path pattern` })
+    return false
+  }
+  if (isAbsolute(value) || value.startsWith('!') || value.includes('\\') || value.includes('\0') || PARENT_SEGMENT.test(value)) {
+    violations.push({ path, message: `${context} must be a safe project-relative path pattern` })
+    return false
+  }
+  return true
+}
+
+
+function parseDocumentLayout(value: unknown, index: number, path: string, violations: Violation[]): DocumentLayout | undefined {
+  const violationCount = violations.length
+  const context = `specifications.documents[${index}]`
+  const record = object(value)
+  if (record === undefined) {
+    violations.push({ path, message: `${context} must be an object` })
+    return undefined
+  }
+  rejectUnknownKeys(record, DOCUMENT_KEYS, context, path, violations)
+
+  if (!validatePattern(record.match, `${context}.match`, path, violations)) return undefined
+  const match = record.match
+  if (!/\.md$/iu.test(match)) {
+    violations.push({ path, message: `${context}.match must select Markdown documents ending in .md` })
+  }
+
+  const captures = match.split(SCOPE_TOKEN).length - 1
+  const malformedCapture = /\{[^}]*scope[^}]*\}/u.exec(match)?.[0]
+  if (malformedCapture !== undefined && malformedCapture !== SCOPE_TOKEN) {
+    violations.push({ path, message: `${context}.match contains malformed scope capture ${malformedCapture}` })
+  }
+
+  if (record.scope === 'baseline') {
+    if (captures !== 0) violations.push({ path, message: `${context} baseline match must not contain ${SCOPE_TOKEN}` })
+  } else if (record.scope !== undefined) {
+    violations.push({ path, message: `${context}.scope must be baseline when present` })
+  } else if (captures !== 1) {
+    violations.push({ path, message: `${context} named-scope match must contain exactly one ${SCOPE_TOKEN}` })
+  }
+
+  if (captures > 0) {
+    const matchSegments = match.split('/')
+    const captureIndex = matchSegments.findIndex(segment => segment.includes(SCOPE_TOKEN))
+    const captureSegment = matchSegments[captureIndex]
+    if (captureSegment === undefined || CAPTURE_GLOB.test(captureSegment.replace(SCOPE_TOKEN, ''))) {
+      violations.push({ path, message: `${context}.match scope capture must be in one segment with only a fixed prefix or suffix` })
+    } else if (matchSegments.slice(0, captureIndex).includes('**') && matchSegments.slice(captureIndex + 1).includes('**')) {
+      violations.push({ path, message: `${context}.match scope capture is ambiguous between globstars` })
+    }
+  }
+
+  let exclude: readonly string[] | undefined
+  if (record.exclude !== undefined) {
+    if (!Array.isArray(record.exclude)) {
+      violations.push({ path, message: `${context}.exclude must be an array of project-relative path patterns` })
+    } else {
+      const parsed: string[] = []
+      for (let excludeIndex = 0; excludeIndex < record.exclude.length; excludeIndex += 1) {
+        const candidate = record.exclude[excludeIndex]
+        if (!validatePattern(candidate, `${context}.exclude[${excludeIndex}]`, path, violations)) continue
+        if (candidate.includes(SCOPE_TOKEN)) {
+          violations.push({ path, message: `${context}.exclude[${excludeIndex}] must not contain ${SCOPE_TOKEN}` })
+          continue
+        }
+        parsed.push(candidate)
+      }
+      exclude = parsed
+    }
+  }
+
+  if (violations.length !== violationCount) return undefined
+  return {
+    match,
+    ...(record.scope === 'baseline' ? { scope: 'baseline' as const } : {}),
+    ...(exclude === undefined ? {} : { exclude }),
+  }
 }
 
 
@@ -78,29 +176,28 @@ export async function loadConfig(projectRoot: string, explicitPath?: string): Pr
 
   const violations: Violation[] = []
   const root = object(value)
-  if (root === undefined || root.version !== 1) {
-    return { path, violations: [{ path, message: 'configuration version must be 1' }] }
+  if (root === undefined) {
+    return { path, violations: [{ path, message: 'configuration must be an object' }] }
   }
+  rejectUnknownKeys(root, CONFIG_KEYS, 'configuration', path, violations)
+  if (root.version !== 2) violations.push({ path, message: 'configuration version must be 2' })
 
   const specifications = object(root.specifications)
   let specificationConfig: FocusedSpecConfig['specifications'] | undefined
-  if (specifications?.source === 'openspec') {
-    if (specifications.root !== undefined && (typeof specifications.root !== 'string' || specifications.root.length === 0 || isAbsolute(specifications.root) || PARENT_SEGMENT.test(specifications.root))) {
-      violations.push({ path, message: 'specifications.root must be a non-empty relative path' })
-    } else {
-      specificationConfig = {
-        source: 'openspec',
-        ...(specifications.root === undefined ? {} : { root: specifications.root as string }),
-      }
-    }
-  } else if (specifications?.source === 'files') {
-    if (!Array.isArray(specifications.paths) || specifications.paths.length === 0 || !specifications.paths.every(item => typeof item === 'string' && item.length > 0 && !isAbsolute(item) && !PARENT_SEGMENT.test(item))) {
-      violations.push({ path, message: 'file specifications require a non-empty paths string array' })
-    } else {
-      specificationConfig = { source: 'files', paths: specifications.paths as string[] }
-    }
+  if (specifications === undefined) {
+    violations.push({ path, message: 'specifications must be an object' })
   } else {
-    violations.push({ path, message: 'specifications.source must be openspec or files' })
+    rejectUnknownKeys(specifications, SPECIFICATION_KEYS, 'specifications', path, violations)
+    if (!Array.isArray(specifications.documents) || specifications.documents.length === 0) {
+      violations.push({ path, message: 'specifications.documents must be a non-empty array' })
+    } else {
+      const documents: DocumentLayout[] = []
+      for (let index = 0; index < specifications.documents.length; index += 1) {
+        const layout = parseDocumentLayout(specifications.documents[index], index, path, violations)
+        if (layout !== undefined) documents.push(layout)
+      }
+      specificationConfig = { documents }
+    }
   }
 
   const runnerValues = object(root.runners)
@@ -115,6 +212,6 @@ export async function loadConfig(projectRoot: string, explicitPath?: string): Pr
   return {
     path,
     violations,
-    config: { version: 1, specifications: specificationConfig, runners },
+    config: { version: 2, specifications: specificationConfig, runners },
   }
 }

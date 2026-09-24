@@ -4,8 +4,8 @@ import { parseEvidenceReference, parseFocusedSpecDocument } from '../src/parser.
 import { validateDocuments } from '../src/validate.js'
 
 const config: FocusedSpecConfig = {
-  version: 1,
-  specifications: { source: 'files', paths: ['specs/**/*.md'] },
+  version: 2,
+  specifications: { documents: [{ match: 'specs/**/*.md', scope: 'baseline' }] },
   runners: { unit: { module: './runner.ts' } },
 }
 
@@ -48,8 +48,8 @@ describe('focused specification parsing', () => {
     ]))
   })
 
-  it('allows planned evidence only during non-strict change validation', () => {
-    const document = parseFocusedSpecDocument('changes/add/spec.md', scenario('auth.login.new', 'planned:unit::future test'))
+  it('allows planned evidence only during non-strict scope validation', () => {
+    const document = parseFocusedSpecDocument('scopes/add/spec.md', scenario('auth.login.new', 'planned:unit::future test'))
     expect(validateDocuments([document], config, { allowPlanned: true }).violations).toEqual([])
     expect(validateDocuments([document], config, { allowPlanned: false }).violations).toContainEqual(
       expect.objectContaining({ message: expect.stringContaining('planned evidence is not allowed') }),

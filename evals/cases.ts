@@ -8,7 +8,7 @@ const EXPECTED_SELECTORS = ['TestBlockedAccount', 'test_blocked_account'] as con
 export const EVAL_CASES: readonly EvalCase[] = [
   {
     id: 'files-source-bootstrap',
-    description: 'Creates file-backed focused specs and two project runners in a clean polyglot repository.',
+    description: 'Creates a declarative baseline focused spec and two project runners in a clean polyglot repository.',
     source: 'files',
     turns: [{ promptPath: 'cases/files-source-bootstrap/prompt.md', skills: FOCUSED }],
     expectedScenarioId: 'auth.login.blocked-account',

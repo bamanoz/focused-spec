@@ -43,10 +43,11 @@ describe('package distribution', () => {
 
   it('installs and executes the packed CLI from a consumer project', async () => {
     await put(join(consumer, '.focused-spec/config.yaml'), [
-      'version: 1',
+      'version: 2',
       'specifications:',
-      '  source: files',
-      '  paths: [specs/**/*.md]',
+      '  documents:',
+      '    - match: specs/**/*.md',
+      '      scope: baseline',
       'runners:',
       '  consumer:',
       '    module: ./runner.ts',
@@ -62,10 +63,10 @@ describe('package distribution', () => {
     const cli = join(consumer, 'node_modules/focused-spec/dist/cli.js')
     const validation = spawnSync(process.execPath, [cli, 'validate', '--root', consumer, '--json'], { encoding: 'utf8' })
     expect(validation.status).toBe(0)
-    expect(JSON.parse(validation.stdout)).toMatchObject({ valid: true, scenarios: 1, targets: 1 })
+    expect(JSON.parse(validation.stdout)).toMatchObject({ valid: true, validationScope: { baseline: true, scopes: { mode: 'all' } }, scenarios: 1, targets: 1 })
     const execution = spawnSync(process.execPath, [cli, 'run', '--root', consumer, '--json'], { encoding: 'utf8' })
     expect(execution.status).toBe(0)
-    expect(JSON.parse(execution.stdout)).toMatchObject({ success: true, scenarios: [{ id: 'consumer.cli.works', status: 'PASS' }] })
+    expect(JSON.parse(execution.stdout)).toMatchObject({ success: true, validationScope: { baseline: true, scopes: { mode: 'all' } }, executionSelection: { source: 'baseline' }, scenarios: [{ id: 'consumer.cli.works', status: 'PASS' }] })
   })
 
   it('typechecks a consumer plugin against focused-spec runner', async () => {

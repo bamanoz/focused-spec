@@ -1,6 +1,9 @@
-version: 1
+version: 2
 specifications:
-  source: openspec
+  documents:
+    - match: openspec/specs/**/spec.md
+      scope: baseline
+    - match: openspec/changes/{scope}/specs/**/spec.md
 runners:
   vitest:
     module: ./.focused-spec/runners/vitest.ts

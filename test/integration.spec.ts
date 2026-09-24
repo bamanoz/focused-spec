@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -22,9 +22,12 @@ async function fixture(status: 'pass' | 'skip' = 'pass'): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'focused-spec-'))
   roots.push(root)
   await put(root, '.focused-spec/config.yaml', [
-    'version: 1',
+    'version: 2',
     'specifications:',
-    '  source: openspec',
+    '  documents:',
+    '    - match: openspec/specs/**/spec.md',
+    '      scope: baseline',
+    '    - match: openspec/changes/{scope}/specs/**/spec.md',
     'runners:',
     '  fixture:',
     '    module: ./runner.ts',
@@ -162,6 +165,62 @@ describe('project-local TypeScript runners', () => {
     expect(output.status).toBe(1)
     expect(JSON.parse(output.stdout)).toMatchObject({ success: false, scenarios: [{ status: 'FAIL', evidence: [{ status: 'FAIL' }] }] })
   })
+
+  it('executes real Vitest evidence from a declarative scope layout', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-spec-vitest-'))
+    roots.push(root)
+    await put(root, 'package.json', '{"private":true,"type":"module"}\n')
+    await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'junction')
+    await put(root, '.focused-spec/config.yaml', [
+      'version: 2',
+      'specifications:',
+      '  documents:',
+      '    - match: features/{scope}/spec.md',
+      'runners:',
+      '  vitest:',
+      '    module: ./.focused-spec/runners/vitest.ts',
+      '    timeoutMs: 120000',
+    ].join('\n'))
+    await put(root, '.focused-spec/runners/vitest.ts', await readFile(fileURLToPath(new URL('../.focused-spec/runners/vitest.ts', import.meta.url)), 'utf8'))
+    await put(root, 'features/account-lock/spec.md', [
+      '#### Scenario: Vitest proves the named scope',
+      '- **ID**: `fixture.vitest.scope`',
+      '- **EVIDENCE**: `vitest::test/contract.spec.ts::fixture contract > accepts configured value`',
+      '- **WHEN** the named scope is executed',
+      '- **THEN** the real Vitest result determines the scenario status',
+    ].join('\n'))
+    const testPath = 'test/contract.spec.ts'
+    await put(root, testPath, [
+      "import { describe, expect, it } from 'vitest'",
+      "describe('fixture contract', () => {",
+      "  it('accepts configured value', () => { expect(2 + 2).toBe(4) })",
+      '})',
+    ].join('\n'))
+    const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url))
+    const args = [cli, 'run', '--root', root, '--scope', 'account-lock', '--json']
+
+    const passing = spawnSync(process.execPath, args, { encoding: 'utf8' })
+    expect(passing.status).toBe(0)
+    expect(JSON.parse(passing.stdout)).toMatchObject({
+      success: true,
+      validationScope: { baseline: true, scopes: { mode: 'selected', name: 'account-lock' } },
+      executionSelection: { source: 'scope', scope: 'account-lock' },
+      scenarios: [{ id: 'fixture.vitest.scope', status: 'PASS' }],
+    })
+
+    await put(root, testPath, [
+      "import { describe, expect, it } from 'vitest'",
+      "describe('fixture contract', () => {",
+      "  it('accepts configured value', () => { expect(2 + 2).toBe(5) })",
+      '})',
+    ].join('\n'))
+    const failing = spawnSync(process.execPath, args, { encoding: 'utf8' })
+    expect(failing.status).toBe(1)
+    expect(JSON.parse(failing.stdout)).toMatchObject({
+      success: false,
+      scenarios: [{ id: 'fixture.vitest.scope', status: 'FAIL', evidence: [{ status: 'FAIL' }] }],
+    })
+  }, 120_000)
 
   it('reports runner execution errors without a false pass', async () => {
     const root = await fixture()

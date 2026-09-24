@@ -1,28 +1,25 @@
-# project-configuration Specification
-
-## Purpose
-
-Versioned runner configuration and specification source discovery.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Project configuration
 The CLI SHALL load a version-2 `.focused-spec/config.yaml` from the selected project root unless an explicit configuration path is supplied. It SHALL reject invalid document layout settings and runner definitions at the configuration boundary, including obsolete version-1 source modes.
 
 #### Scenario: Missing or invalid configuration
 - **ID**: `config.document.invalid`
+- **REVISES**: baseline
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > reports missing malformed and unsupported configuration`
 - **WHEN** a project has no readable version-2 configuration with document layouts and runners map
 - **THEN** validation exits nonzero with an actionable configuration violation
 
 #### Scenario: Runner timeout exceeds the host timer range
 - **ID**: `config.runner.timeout-bound`
+- **REVISES**: baseline
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects runner timeouts that overflow the host timer`
 - **WHEN** a runner timeout exceeds 2147482647 milliseconds
 - **THEN** configuration is rejected before any overflowing host timer is created
 
 #### Scenario: Unsafe or non-JSON runner configuration
 - **ID**: `config.runner.invalid-options`
+- **REVISES**: baseline
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid runner paths and non JSON options`
 - **WHEN** a runner module path escapes the project root or runner options are not JSON-compatible
 - **THEN** validation reports a configuration or runner-path error without loading the module
@@ -38,12 +35,14 @@ The CLI SHALL discover focused scenarios from configured project-relative Markdo
 
 #### Scenario: File globs match no specifications
 - **ID**: `config.source.empty-files`
+- **REVISES**: baseline
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > preserves successful validation when no specifications match`
 - **WHEN** baseline-only document globs match no Markdown specifications and no scope is selected
 - **THEN** validation reports zero scenarios, planned evidence, and targets without treating absence as an error
 
 #### Scenario: Baseline and named scope are discovered
 - **ID**: `config.source.openspec-discovery`
+- **REVISES**: baseline
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > reports all scenarios, planned evidence, and unique resolved targets`
 - **WHEN** baseline documents and one named scope each contain focused scenarios under configured patterns
 - **THEN** full validation includes both sets in its reported scenario count

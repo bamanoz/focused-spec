@@ -3,6 +3,7 @@ export { executePlan } from './executor.js'
 export { parseEvidenceReference, parseFocusedSpecDocument } from './parser.js'
 export { planEvidence } from './planner.js'
 export type {
+  DocumentLayout,
   ExecutionPlan,
   ExecutionResult,
   FocusedSpecConfig,

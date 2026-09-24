@@ -12,7 +12,7 @@ interface CliOptions {
   readonly command: 'validate' | 'run'
   readonly root: string
   readonly configPath?: string
-  readonly changeName?: string
+  readonly scopeName?: string
   readonly strict: boolean
   readonly syntaxOnly: boolean
   readonly json: boolean
@@ -21,8 +21,8 @@ interface CliOptions {
 }
 
 const USAGE = `Usage:
-  focused-spec validate [--root <path>] [--config <path>] [--change <name>] [--strict] [--syntax-only] [--json]
-  focused-spec run [--root <path>] [--config <path>] [--change <name>] [--scenario <id>] [--allow-skip] [--json]
+  focused-spec validate [--root <path>] [--config <path>] [--scope <name>] [--strict] [--syntax-only] [--json]
+  focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--json]
 `
 
 function parseArguments(argumentsList: readonly string[]): CliOptions {
@@ -30,7 +30,7 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
   if (command !== 'validate' && command !== 'run') throw new Error(USAGE)
   let root = process.cwd()
   let configPath: string | undefined
-  let changeName: string | undefined
+  let scopeName: string | undefined
   let strict = false
   let syntaxOnly = false
   let json = false
@@ -43,13 +43,13 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
     else if (argument === '--syntax-only') syntaxOnly = true
     else if (argument === '--json') json = true
     else if (argument === '--allow-skip') allowSkip = true
-    else if (argument === '--root' || argument === '--config' || argument === '--change' || argument === '--scenario') {
+    else if (argument === '--root' || argument === '--config' || argument === '--scope' || argument === '--scenario') {
       const value = argumentsList[index + 1]
       if (value === undefined || value.startsWith('--')) throw new Error(`missing value for ${argument}\n${USAGE}`)
       index += 1
       if (argument === '--root') root = resolve(value)
       else if (argument === '--config') configPath = value
-      else if (argument === '--change') changeName = value
+      else if (argument === '--scope') scopeName = value
       else scenarioId = value
     } else {
       throw new Error(`unknown argument ${String(argument)}\n${USAGE}`)
@@ -64,7 +64,7 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
     command,
     root,
     ...(configPath === undefined ? {} : { configPath }),
-    ...(changeName === undefined ? {} : { changeName }),
+    ...(scopeName === undefined ? {} : { scopeName }),
     strict,
     syntaxOnly,
     json,
@@ -73,14 +73,17 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
   }
 }
 interface ValidationScope {
-  readonly current: true
-  readonly changes: { readonly mode: 'all-active' } | { readonly mode: 'selected'; readonly name: string }
+  readonly baseline: true
+  readonly scopes: { readonly mode: 'all' } | { readonly mode: 'selected'; readonly name: string }
 }
 
 interface ExecutionSelection {
-  readonly source: 'current' | 'change'
-  readonly change?: string
+  readonly source: 'baseline' | 'scope'
+  readonly scope?: string
   readonly scenario?: string
+}
+interface ValidationContext {
+  readonly validationScope: ValidationScope
 }
 
 interface RunContext {
@@ -88,33 +91,43 @@ interface RunContext {
   readonly executionSelection: ExecutionSelection
 }
 
-function runContext(options: CliOptions): RunContext {
+function validationContext(options: CliOptions): ValidationContext {
   return {
     validationScope: {
-      current: true,
-      changes: options.changeName === undefined
-        ? { mode: 'all-active' }
-        : { mode: 'selected', name: options.changeName },
+      baseline: true,
+      scopes: options.scopeName === undefined
+        ? { mode: 'all' }
+        : { mode: 'selected', name: options.scopeName },
     },
+  }
+}
+
+function runContext(options: CliOptions): RunContext {
+  return {
+    ...validationContext(options),
     executionSelection: {
-      source: options.changeName === undefined ? 'current' : 'change',
-      ...(options.changeName === undefined ? {} : { change: options.changeName }),
+      source: options.scopeName === undefined ? 'baseline' : 'scope',
+      ...(options.scopeName === undefined ? {} : { scope: options.scopeName }),
       ...(options.scenarioId === undefined ? {} : { scenario: options.scenarioId }),
     },
   }
 }
 
+function displayValidationContext(context: ValidationContext): string {
+  const scopes = context.validationScope.scopes
+  const validation = scopes.mode === 'all'
+    ? 'baseline specifications and all named scopes'
+    : `baseline specifications and selected scope ${scopes.name}`
+  return `validation scope: ${validation}\n`
+}
+
 function displayRunContext(context: RunContext): string {
-  const changes = context.validationScope.changes
-  const validation = changes.mode === 'all-active'
-    ? 'current specifications and all active changes'
-    : `current specifications and selected change ${changes.name}`
   const selection = context.executionSelection
-  const execution = selection.source === 'current'
-    ? 'current specifications'
-    : `change ${String(selection.change)}`
+  const execution = selection.source === 'baseline'
+    ? 'baseline specifications'
+    : `scope ${String(selection.scope)}`
   const scenario = selection.scenario === undefined ? '' : `, scenario ${selection.scenario}`
-  return `validation scope: ${validation}\nexecution selection: ${execution}${scenario}\n`
+  return `${displayValidationContext(context)}execution selection: ${execution}${scenario}\n`
 }
 
 function displayViolation(violation: Violation): string {
@@ -122,15 +135,16 @@ function displayViolation(violation: Violation): string {
   return `${location}: ${violation.message}`
 }
 
-function printViolations(violations: readonly Violation[], json: boolean, context?: RunContext): void {
+function printViolations(violations: readonly Violation[], json: boolean, context: ValidationContext | RunContext): void {
   if (json) {
-    const output = context === undefined
-      ? { valid: false, violations }
-      : { valid: false, executionStarted: false, ...context, violations }
+    const output = 'executionSelection' in context
+      ? { valid: false, executionStarted: false, ...context, violations }
+      : { valid: false, ...context, violations }
     process.stdout.write(`${JSON.stringify(output, null, 2)}\n`)
     return
   }
-  if (context !== undefined) process.stderr.write(`${displayRunContext(context)}execution did not start\n`)
+  if ('executionSelection' in context) process.stderr.write(`${displayRunContext(context)}execution did not start\n`)
+  else process.stderr.write(displayValidationContext(context))
   for (const violation of violations) process.stderr.write(`${displayViolation(violation)}\n`)
 }
 
@@ -173,7 +187,7 @@ function validationCounts(documents: readonly SpecDocument[], plan: ExecutionPla
 
 async function main(argumentsList: readonly string[]): Promise<number> {
   const options = parseArguments(argumentsList)
-  const context = options.command === 'run' ? runContext(options) : undefined
+  const context = options.command === 'run' ? runContext(options) : validationContext(options)
   const projectRoot = isAbsolute(options.root) ? options.root : resolve(options.root)
   const loaded = await loadConfig(projectRoot, options.configPath)
   if (loaded.config === undefined) {
@@ -182,7 +196,7 @@ async function main(argumentsList: readonly string[]): Promise<number> {
   }
 
   const validation = await validateFocusedSpecs(projectRoot, loaded.config, {
-    ...(options.changeName === undefined ? {} : { changeName: options.changeName }),
+    ...(options.scopeName === undefined ? {} : { scopeName: options.scopeName }),
     strict: options.command === 'run' || options.strict,
   })
   if (validation.violations.length > 0) {
@@ -191,8 +205,8 @@ async function main(argumentsList: readonly string[]): Promise<number> {
   }
 
   if (options.syntaxOnly) {
-    if (options.json) process.stdout.write(`${JSON.stringify({ valid: true, mode: 'syntax-only' }, null, 2)}\n`)
-    else process.stdout.write('focused specifications are structurally valid\n')
+    if (options.json) process.stdout.write(`${JSON.stringify({ valid: true, mode: 'syntax-only', ...context }, null, 2)}\n`)
+    else process.stdout.write(`${displayValidationContext(context)}focused specifications are structurally valid\n`)
     return 0
   }
 
@@ -205,8 +219,8 @@ async function main(argumentsList: readonly string[]): Promise<number> {
   if (options.command === 'validate') {
     if (resolution.plan === undefined) throw new Error('evidence validation did not produce a resolution plan')
     const counts = validationCounts(validation.resolutionDocuments, resolution.plan)
-    if (options.json) process.stdout.write(`${JSON.stringify({ valid: true, ...counts }, null, 2)}\n`)
-    else process.stdout.write(`focused specifications are valid: ${counts.scenarios} scenarios, ${counts.plannedEvidence} planned evidence, ${counts.targets} unique targets\n`)
+    if (options.json) process.stdout.write(`${JSON.stringify({ valid: true, ...counts, ...context }, null, 2)}\n`)
+    else process.stdout.write(`${displayValidationContext(context)}focused specifications are valid: ${counts.scenarios} scenarios, ${counts.plannedEvidence} planned evidence, ${counts.targets} unique targets\n`)
     return 0
   }
 

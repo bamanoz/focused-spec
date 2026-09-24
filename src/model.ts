@@ -1,13 +1,13 @@
 import type { JsonValue, ResolvedTarget, TargetResult } from './runner-api.js'
 
-export type SpecOperation = 'CURRENT' | 'ADDED' | 'MODIFIED' | 'REMOVED' | 'RENAMED'
 
 export interface Scenario {
   readonly path: string
   readonly line: number
   readonly name: string
   readonly requirement?: string
-  readonly operation: SpecOperation
+  readonly revisions: readonly string[]
+  readonly malformedRevisionLines: readonly number[]
   readonly ids: readonly string[]
   readonly evidence: readonly string[]
   readonly malformedEvidenceLines: readonly number[]
@@ -35,19 +35,17 @@ export interface RunnerConfig {
   readonly options?: JsonValue
 }
 
-export interface OpenSpecSourceConfig {
-  readonly source: 'openspec'
-  readonly root?: string
-}
-
-export interface FileSourceConfig {
-  readonly source: 'files'
-  readonly paths: readonly string[]
+export interface DocumentLayout {
+  readonly match: string
+  readonly scope?: 'baseline'
+  readonly exclude?: readonly string[]
 }
 
 export interface FocusedSpecConfig {
-  readonly version: 1
-  readonly specifications: OpenSpecSourceConfig | FileSourceConfig
+  readonly version: 2
+  readonly specifications: {
+    readonly documents: readonly DocumentLayout[]
+  }
   readonly runners: Readonly<Record<string, RunnerConfig>>
 }
 

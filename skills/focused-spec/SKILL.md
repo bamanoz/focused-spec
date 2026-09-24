@@ -25,34 +25,41 @@ Any behavioral specification authored in a project is a focused specification. K
 - **THEN** authentication is rejected
 ```
 
-Evidence is `[planned:]<runner-id>::<opaque selector>`. Only the first `::` separates the runner ID. Use `planned:` only while that exact test target does not exist; the runner ID, module path, and selector contract must already be chosen. Remove every `planned:` before completing implementation.
+Evidence is `[planned:]<runner-id>::<opaque selector>`. Only the first `::` separates the runner ID. Use `planned:` only in a named scope while that exact test target does not exist; the runner ID, module path, and selector contract must already be chosen. Baseline evidence is always concrete. Remove every `planned:` before completing implementation.
+
+When a named-scope scenario intentionally revises a baseline scenario, retain its ID and add exactly one explicit row:
+
+```markdown
+- **REVISES**: baseline
+```
+
+The baseline must own that ID. Never add `REVISES` to a baseline scenario or infer a revision from framework headings such as OpenSpec `MODIFIED Requirements`.
 
 ## Configure on demand
 
 Create or update `.focused-spec/config.yaml` as soon as the first scenario names evidence. Keep runner modules in `.focused-spec/runners/`. Do not create root-level `focused-spec.yaml`.
 
-For Markdown files selected by glob:
+Declare scenario-bearing Markdown with version-2 document layouts:
 
 ```yaml
-version: 1
+version: 2
 specifications:
-  source: files
-  paths: [specs/**/*.md]
+  documents:
+    - match: specs/**/*.md
+      scope: baseline
+      exclude: [specs/archive/**]
+    - match: changes/{scope}/spec.md
 runners:
   project-tests:
     module: ./.focused-spec/runners/project-tests.ts
     timeoutMs: 120000
 ```
 
-For a framework-managed source supported by the CLI, select it instead; for example:
+Every document entry is either a baseline pattern with `scope: baseline` and no `{scope}`, or a named-scope pattern with exactly one `{scope}` and no `scope` property. Patterns and optional per-entry exclusions are project-relative and must remain inside the project. Each document must belong to one configured entry and scope. Scope names are path-safe fragments and are preserved exactly.
 
-```yaml
-specifications:
-  source: openspec
-  root: openspec # optional; defaults to openspec
-```
+Use layouts that match focused scenarios, not arbitrary native SDD prose. The CLI does not interpret a framework's requirements format, infer evidence, add archive exclusions, or search fallback locations. When the native format cannot contain focused scenario blocks, configure an explicit companion Markdown document instead. A selected scope with no documents and any discovered named scope with no focused scenarios are errors; an empty baseline is valid.
 
-`runners` is a map keyed by runner ID. Each entry requires `module`; optional fields are project-relative `cwd`, positive integer `timeoutMs`, and JSON-compatible `options`. `module` must be a project-contained `.ts`, `.mts`, `.js`, or `.mjs` file. Every runner ID referenced by evidence must be registered. For another specification framework, use `source: files` with paths targeting its Markdown scenario files unless the CLI supports a dedicated source.
+`runners` is a map keyed by runner ID. Each entry requires `module`; optional fields are project-relative `cwd`, positive integer `timeoutMs`, and JSON-compatible `options`. `module` must be a project-contained `.ts`, `.mts`, `.js`, or `.mjs` file. Every runner ID referenced by evidence must be registered.
 
 ## Implement a runner
 
@@ -77,20 +84,22 @@ interface RunnerPlugin {
 
 ## Verify
 
-While a named change still contains `planned:` evidence, validate its structure with `focused-spec validate --change <name> --syntax-only` and its configuration with `focused-spec validate --change <name>` (without `--strict`). Planned targets are not resolved or executed; a successful planning check does not prove them.
+While a named scope still contains `planned:` evidence, validate its structure with `focused-spec validate --scope <name> --syntax-only` and its configuration plus concrete evidence with `focused-spec validate --scope <name>` (without `--strict`). Planned targets are not resolved or executed; a successful planning check does not prove them.
 
-Only after implementing the tests and runner, replace all `planned:` references with concrete selectors. Then verify the completed change:
+Only after implementing the tests and runner, replace all `planned:` references with concrete selectors. Then verify the completed scope:
 
 ```sh
-focused-spec validate --change <name> --strict
-focused-spec run --change <name>
+focused-spec validate --scope <name> --strict
+focused-spec run --scope <name>
 ```
 
-For current specifications (no change):
+For the baseline, when all discovered named scopes are complete:
 
 ```sh
 focused-spec validate
 focused-spec run
 ```
 
-Do not run `--strict` or `run` against a change that intentionally still contains `planned:`; their failure is expected, not a proposal defect. Full validation resolves non-planned evidence; `run` performs strict validation and executes it. `SKIP` and `ERROR` are not success. Use `--allow-skip` only when explicit project policy permits unavailable optional evidence.
+Without `--scope`, validation covers the baseline and all discovered named scopes while execution selects the baseline. With `--scope`, both commands validate the baseline plus only the selected scope, and `run` executes that scope. `--scenario` narrows execution only. Never treat native SDD validation as a substitute for these focused checks, or vice versa.
+
+Do not run `--strict` or `run` against a scope that intentionally still contains `planned:`; their failure is expected, not a proposal defect. Full validation resolves non-planned evidence; `run` performs strict validation and executes it. `SKIP` and `ERROR` are not success. Use `--allow-skip` only when explicit project policy permits unavailable optional evidence.

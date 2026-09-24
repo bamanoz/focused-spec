@@ -125,7 +125,7 @@ export async function mutationGate(workspace: string, evalCase: EvalCase): Promi
   const goMutated = goSource.replace('return credentialsValid && !blocked', 'return credentialsValid')
   const pythonMutated = pythonSource.replace('return credentials_valid and not blocked', 'return credentials_valid')
   if (goMutated === goSource || pythonMutated === pythonSource) return gate('mutation-sensitivity', false, 'fixture mutation target was not found')
-  const args = ['run', ...(evalCase.changeName === undefined ? [] : ['--change', evalCase.changeName])]
+  const args = ['run', ...(evalCase.changeName === undefined ? [] : ['--scope', evalCase.changeName])]
   try {
     await writeFile(goPath, goMutated)
     const goResult = await focusedCommand(workspace, args)
@@ -154,11 +154,11 @@ export async function judgeCompletedWorkspace(
   transcripts: readonly string[],
 ): Promise<EvalGate[]> {
   const gates: EvalGate[] = []
-  const strictArgs = ['validate', '--strict', ...(evalCase.changeName === undefined ? [] : ['--change', evalCase.changeName])]
+  const strictArgs = ['validate', '--strict', ...(evalCase.changeName === undefined ? [] : ['--scope', evalCase.changeName])]
   const strict = await focusedCommand(workspace, strictArgs)
   gates.push(gate('focused-validation', strict.code === 0, strict.code === 0 ? strict.stdout.trim() : (strict.stderr || strict.stdout).trim()))
 
-  const runArgs = ['run', ...(evalCase.changeName === undefined ? [] : ['--change', evalCase.changeName])]
+  const runArgs = ['run', ...(evalCase.changeName === undefined ? [] : ['--scope', evalCase.changeName])]
   const run = await focusedCommand(workspace, runArgs)
   gates.push(gate('focused-execution', run.code === 0, run.code === 0 ? run.stdout.trim() : (run.stderr || run.stdout).trim()))
 
