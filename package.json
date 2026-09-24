@@ -23,10 +23,10 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "prepare": "npm run build",
-    "typecheck:tests": "tsc -p test/tsconfig.json && tsc -p examples/polyglot/tsconfig.json && tsc -p evals/tsconfig.json",
+    "typecheck:tests": "tsc -p test/tsconfig.json && tsc -p examples/openspec/tsconfig.json && tsc -p evals/tsconfig.json",
     "test": "npm run build && npm run typecheck:tests && vitest run",
     "check": "npm test",
-    "smoke": "node dist/cli.js run --root examples/polyglot",
+    "smoke": "node dist/cli.js run --root examples/openspec",
     "eval:agent": "node --experimental-strip-types evals/run.ts"
   },
   "engines": {

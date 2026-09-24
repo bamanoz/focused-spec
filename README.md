@@ -8,7 +8,7 @@ Keep the specification workflow you already use. `focused-spec` finds focused sc
 
 ## See the contract
 
-A scenario names one behavior and the exact tests that prove it. This one lives in the [runnable Go + pytest example](examples/polyglot/openspec/specs/auth/spec.md):
+A scenario names one behavior and the exact tests that prove it. This one lives in the [runnable OpenSpec example (Go + pytest)](examples/openspec/openspec/specs/auth/spec.md):
 
 ```markdown
 #### Scenario: Blocked account submits valid credentials
@@ -71,11 +71,14 @@ For a named in-progress scope, use `validate --scope <name>` without `--strict` 
 
 Document discovery is explicit, not tied to a framework or inferred from its folders:
 
-| Existing workflow | What you configure |
-| --- | --- |
-| [OpenSpec](https://github.com/Fission-AI/OpenSpec) | Baseline `openspec/specs/**/spec.md` and named `openspec/changes/{scope}/specs/**/spec.md`, as in this repository's [config](.focused-spec/config.yaml). |
-| [Spec Kit](https://github.com/github/spec-kit), [Kiro](https://github.com/kirodotdev/Kiro), [BMad](https://github.com/bmad-code-org/BMAD-METHOD), or another layout | Paths to Markdown documents that actually contain focused scenarios, or an explicit companion Markdown document if native files cannot host them. |
-| Plain Markdown | A baseline glob and, if needed, a named-scope glob. |
+| Workflow | Runnable example | Focused scenario location |
+| --- | --- | --- |
+| [OpenSpec](https://github.com/Fission-AI/OpenSpec) | [Go + pytest](examples/openspec/) | `openspec/specs/**/spec.md` |
+| [Spec Kit](https://github.com/github/spec-kit) | [Spec Kit-style feature](examples/spec-kit/) | `specs/{scope}/spec.md` |
+| [Kiro](https://github.com/kirodotdev/Kiro) | [Kiro-style feature](examples/kiro/) | `.kiro/specs/{scope}/focused-spec.md` companion |
+| [BMad](https://github.com/bmad-code-org/BMAD-METHOD) | [BMad-style spec](examples/bmad/) | `specs/spec-{scope}/focused-spec.md` companion |
+
+Each example includes its own configuration, real tests, and project-local runner. [Run the examples](docs/guides/configuration.md#runnable-framework-examples) from this repository's checkout; plain Markdown works with the same configured document patterns.
 
 A document pattern selects a location; it does not translate a framework's prose into focused scenarios. Framework-native validation remains the framework's job. [Configuration guide](docs/guides/configuration.md).
 

@@ -14,7 +14,7 @@
 - `npm run build` checks the package sources.
 - `npm run typecheck:tests` checks test, example, and eval TypeScript.
 - `npm test` runs build, typechecks, and Vitest.
-- `npm run smoke` runs the real polyglot example.
+- `npm run smoke` runs the real [OpenSpec example](../../examples/openspec/) with Go and pytest evidence.
 - `node dist/cli.js validate --strict` and `node dist/cli.js run` check the repository's own [focused-spec baseline](../../openspec/specs/scenario-authoring/spec.md) using `.focused-spec/runners/vitest.ts` to discover and run exact Vitest tests.
 
 Tests protect observable behavior: parser boundaries, configuration errors, runner resolution/execution, CLI status, isolation, and failure handling. Do not add tests that only assert source layout or incidental implementation details.

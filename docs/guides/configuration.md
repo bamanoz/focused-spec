@@ -92,6 +92,19 @@ focused-spec run
 
 `run` always performs strict validation first. `SKIP` and `ERROR` are not success; use `--allow-skip` only when explicit project policy permits unavailable optional evidence.
 
+## Runnable framework examples
+
+From this repository's root after `npm install` and `npm run build`, these independent examples demonstrate explicit document selection and real test evidence:
+
+| Framework layout | Focused document | Commands |
+| --- | --- | --- |
+| [OpenSpec](../../examples/openspec/) | `openspec/specs/auth/spec.md` | `node dist/cli.js validate --root examples/openspec --strict` then `node dist/cli.js run --root examples/openspec` |
+| [Spec Kit](../../examples/spec-kit/) | `specs/001-blocked-account/spec.md` alongside native acceptance scenarios | `node dist/cli.js validate --root examples/spec-kit --scope 001-blocked-account --strict` then `node dist/cli.js run --root examples/spec-kit --scope 001-blocked-account` |
+| [Kiro](../../examples/kiro/) | `.kiro/specs/account-lock/focused-spec.md` beside native `requirements.md` | `node dist/cli.js validate --root examples/kiro --scope account-lock --strict` then `node dist/cli.js run --root examples/kiro --scope account-lock` |
+| [BMad](../../examples/bmad/) | `specs/spec-order-limit/focused-spec.md` beside native `SPEC.md` | `node dist/cli.js validate --root examples/bmad --scope order-limit --strict` then `node dist/cli.js run --root examples/bmad --scope order-limit` |
+
+All examples use project-local runners and real tests; the OpenSpec example runs Go and pytest, while the others use pytest through `uv run --with pytest python -m pytest` (requires `uv`). They demonstrate layouts, not substitutes for each framework's own generator, schema validation, or CLI. The Spec Kit, Kiro, and BMad examples deliberately use selected named scopes with no baseline: run each with `--scope` to execute its tests. Native requirements alone never count as focused evidence.
+
 ## Migrate from version 1
 
 Version 2 is a clean cutover: version-1 configuration and `source`, `paths`, and `root` keys are rejected.
