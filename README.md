@@ -16,6 +16,6 @@
 ## Installation
 
 ```sh
-npm install --save-dev focused-spec
+npm install --save-dev focused-spec@latest
 npx --yes skills add bamanoz/focused-spec --skill focused-spec
 ```
