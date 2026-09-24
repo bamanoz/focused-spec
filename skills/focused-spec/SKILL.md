@@ -1,45 +1,31 @@
 ---
 name: focused-spec
-description: MUST be used alongside any workflow that creates or changes behavioral specifications or scenarios, even when another skill owns that workflow. Enforces focused scenario IDs, executable evidence, on-demand configuration, and project-local runners.
+description: Connects focused behavioral scenarios to exact executable evidence using the installed CLI and project-local runners. Use when authoring or changing behavioral scenarios, configuring focused-spec, implementing a runner, or parallelizing evidence execution; use alongside any other spec workflow.
 ---
 
 # Focused Spec
 
-Any behavioral specification authored in a project is a focused specification. Keep the surrounding framework's document structure, but write every behavioral scenario in the format below.
+Author small scenarios in the host framework's Markdown, but use focused-spec's own IDs, evidence, and execution contract. The installed CLI and this bundled skill are sufficient; do not assume access to this skill's source repository.
 
 ## Author a scenario
 
-1. Find the single capability that owns the behavior; do not create a parallel formulation.
-2. Protect the smallest product-boundary outcome that can fail independently.
-3. Give the scenario one repository-unique lowercase dotted `ID` and preserve it when ownership moves.
-4. Determine the execution environment, runner ID, and opaque selector shape before writing evidence.
-5. Add one or more `EVIDENCE` rows. Multiple rows form an AND contract.
-6. Write exactly one `WHEN` request and one independently failing `THEN` outcome.
+1. Find the one capability that owns the behavior and choose one independently failing outcome.
+2. Assign a repository-unique lowercase dotted `ID`, exactly one `WHEN`, and exactly one `THEN`.
+3. Choose the execution environment, runner ID, and opaque selector **before** adding `EVIDENCE`. Each row is required; multiple rows form an AND contract.
 
 ```markdown
 #### Scenario: Blocked account submits valid credentials
 - **ID**: `auth.login.blocked-account`
-- **EVIDENCE**: `go-unit::./internal/auth::TestBlockedAccount`
 - **EVIDENCE**: `pytest-functional::tests/test_auth.py::test_blocked_account`
 - **WHEN** a blocked account submits otherwise valid credentials
 - **THEN** authentication is rejected
 ```
 
-Evidence is `[planned:]<runner-id>::<opaque selector>`. Only the first `::` separates the runner ID. Use `planned:` only in a named scope while that exact test target does not exist; the runner ID, module path, and selector contract must already be chosen. Baseline evidence is always concrete. Remove every `planned:` before completing implementation.
+Evidence is `[planned:]<runner-id>::<opaque selector>`; only the first `::` separates the runner ID. Baseline evidence is always concrete. Use `planned:` only in a named scope while that exact test is not implemented, then replace it before completion. To revise a baseline scenario in a named scope, keep its ID and add exactly one `- **REVISES**: baseline` row; never infer revision from framework headings.
 
-When a named-scope scenario intentionally revises a baseline scenario, retain its ID and add exactly one explicit row:
+## Configure when first needed
 
-```markdown
-- **REVISES**: baseline
-```
-
-The baseline must own that ID. Never add `REVISES` to a baseline scenario or infer a revision from framework headings such as OpenSpec `MODIFIED Requirements`.
-
-## Configure on demand
-
-Create or update `.focused-spec/config.yaml` as soon as the first scenario names evidence. Keep runner modules in `.focused-spec/runners/`. Do not create root-level `focused-spec.yaml`.
-
-Declare scenario-bearing Markdown with version-2 document layouts:
+Create `.focused-spec/config.yaml` when the first scenario names evidence. Select only scenario-bearing Markdown and exclude archives explicitly; do not create root-level `focused-spec.yaml`.
 
 ```yaml
 version: 2
@@ -55,58 +41,14 @@ runners:
     timeoutMs: 120000
 ```
 
-Every document entry is either a baseline pattern with `scope: baseline` and no `{scope}`, or a named-scope pattern with exactly one `{scope}` and no `scope` property. Patterns and optional per-entry exclusions are project-relative and must remain inside the project. Each document must belong to one configured entry and scope. Scope names are path-safe fragments and are preserved exactly.
+A baseline layout has `scope: baseline` and no `{scope}`; a named layout has one `{scope}` and no `scope` property. Patterns and exclusions are project-relative. The CLI does not infer evidence or archive exclusions from the surrounding framework. Register every evidence runner under `.focused-spec/runners/`; its module must stay inside the project and use `.ts`, `.mts`, `.js`, or `.mjs`.
 
-Use layouts that match focused scenarios, not arbitrary native SDD prose. The CLI does not interpret a framework's requirements format, infer evidence, add archive exclusions, or search fallback locations. When the native format cannot contain focused scenario blocks, configure an explicit companion Markdown document instead. A selected scope with no documents and any discovered named scope with no focused scenarios are errors; an empty baseline is valid.
+## Implement a runner only when evidence needs one
 
-`runners` is a map keyed by runner ID. Each entry requires `module`; optional fields are project-relative `cwd`, positive integer `timeoutMs`, and JSON-compatible `options`. `module` must be a project-contained `.ts`, `.mts`, `.js`, or `.mjs` file. Every runner ID referenced by evidence must be registered.
-
-`execution.maxConcurrentGroups` is an optional positive integer in this same configuration, defaulting to 1. Raise it only when participating runner plugins explicitly partition selected targets and can establish resource compatibility. It limits concurrent runner-host invocations, not the framework's own workers; unchanged runners remain exclusive.
-
-## Implement a runner
-
-Import types only from `focused-spec/runner`. A default-exported `RunnerPlugin` has `apiVersion: 1`, required `resolve(request)` and `run(request)`, and optional `partition(request)` for independently executable groups.
-
-- `resolve` receives `selectors`, `projectRoot`, resolved `cwd`, `runnerId`, JSON-compatible `options`, and abort `signal`.
-- For every selector, `resolve` returns exactly one target `{ selector, targetId, displayName, source?, data? }` or one error `{ selector, message }`.
-- Prove target existence through the real framework's collection/listing mechanism. Preserve the selector exactly and use deterministic target IDs.
-- `run` receives resolved `targets` plus the same context and returns exactly one `{ targetId, status, diagnostic? }` per target.
-- Status is `pass`, `fail`, or `skip`. Never return `pass` without executing and interpreting the selected test.
-- Spawn tools with executable/argument arrays, `shell: false`, supplied `cwd`, and supplied `signal`. Keep diagnostics bounded.
-- Optional `partition` receives only selected unique resolved targets after strict validation, and only when `execution.maxConcurrentGroups > 1`. Return a partition containing each selected `targetId` exactly once in a nonempty group. Each group declares either `resources: string[]` with distinct nonempty shared-resource keys or `exclusive: true`; an empty `resources` array asserts compatibility with all other nonexclusive groups. Matching keys serialize groups across runners. If compatibility is unknown, declare the affected group exclusive or return an actionable error, never claim independence by default.
-- The runner decides whether grouping rules come from code, runner-owned config, or another source; the core sees only the returned groups. `run` must correctly execute and report the subset passed for each group. Without `partition` (or with the default limit 1), the core calls `run` once with all selected targets. Scheduling coordinates only one CLI invocation; control nested framework workers and externally shared resources separately.
-
-The public shape is:
-
-```ts
-interface RunnerPlugin {
-  readonly apiVersion: 1
-  resolve(request: ResolveRequest): Promise<{ targets: ResolvedTarget[]; errors: ResolveError[] }>
-  run(request: RunRequest): Promise<{ results: TargetResult[] }>
-  partition?(request: RunRequest): Promise<PartitionResponse>
-}
-```
+**Read [the bundled runner workflow](references/runners.md) when creating or changing a runner.** It is part of this skill, not a link into the focused-spec repository. Start sequentially with `resolve` and `run` using the public `focused-spec/runner` types. Prove one selected test really executed before claiming `pass`; do not use a pretend runner or copy another project's test-source parser. Add optional `partition` and `execution.maxConcurrentGroups > 1` only after auditing the selected tests' shared resources and proving every group reports its own actual results. The default concurrency limit is 1.
 
 ## Verify
 
-While a named scope still contains `planned:` evidence, validate its structure with `focused-spec validate --scope <name> --syntax-only` and its configuration plus concrete evidence with `focused-spec validate --scope <name>` (without `--strict`). Planned targets are not resolved or executed; a successful planning check does not prove them.
+While a named scope intentionally contains `planned:` evidence, run `focused-spec validate --scope <name>`; add `--syntax-only` to check authoring shape alone. Do not use strict validation or execution as a planning check.
 
-Only after implementing the tests and runner, replace all `planned:` references with concrete selectors. `run` performs strict validation before any execution; use it to verify the completed scope:
-
-```sh
-focused-spec run --scope <name>
-```
-
-Use `focused-spec validate --scope <name> --strict` separately only when you need a validation-only preflight. Running it before `run` repeats resolution across two CLI commands.
-
-For the baseline, when all discovered named scopes are complete:
-
-```sh
-focused-spec run
-```
-
-`focused-spec validate --strict` is an optional validation-only preflight. Add `--timings` to either command to see elapsed validation, resolution, and (for `run`) execution phases; it does not enable concurrency.
-
-Without `--scope`, validation covers the baseline and all discovered named scopes while execution selects the baseline. With `--scope`, both commands validate the baseline plus only the selected scope, and `run` executes that scope. `--scenario` narrows execution only. Never treat native SDD validation as a substitute for these focused checks, or vice versa.
-
-Do not run `--strict` or `run` against a scope that intentionally still contains `planned:`; their failure is expected, not a proposal defect. Full validation resolves non-planned evidence; `run` performs strict validation and executes it. `SKIP` and `ERROR` are not success. Use `--allow-skip` only when explicit project policy permits unavailable optional evidence.
+After replacing planned evidence, run `focused-spec run --scope <name>` for a completed scope or `focused-spec run` for the baseline when all named scopes are complete. `run` performs strict validation before execution. `focused-spec validate --scope <name> --strict` is an optional validation-only preflight, not a substitute for execution. Without `--scope`, validation covers the baseline and all discovered named scopes; `run` selects baseline execution. Use `--allow-skip` only for an explicit project policy; `SKIP` and `ERROR` are not success otherwise. A native SDD check cannot replace focused-spec validation or execution.

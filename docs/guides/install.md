@@ -29,3 +29,5 @@ npx --yes skills add bamanoz/focused-spec --skill focused-spec
 ```
 
 The skills installer detects supported agents and lets you choose a target; pass `--agent <agent>` to select one explicitly, or `--agent '*'` to install for all supported agents. By default it installs in the project; `--copy` copies files instead of using symlinks. The skill does not install the CLI; install both when you need executable evidence and the agent authoring workflow.
+
+The installed skill includes a short `SKILL.md` and an on-demand `references/runners.md` workflow for writing and verifying project-local runners. An agent with only the installed skill and CLI does not need access to this repository's documentation or source. The runner reference is loaded only when runner work is needed.

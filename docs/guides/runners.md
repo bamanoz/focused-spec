@@ -11,35 +11,14 @@ A runner must:
 5. honor the supplied project root, working directory, options, and abort signal;
 6. keep diagnostics bounded and paths deterministic.
 
-Minimal shape:
+Build the smallest runner that can prove the chosen selector contract:
 
-```ts
-import type { RunnerPlugin, TargetResult } from 'focused-spec/runner'
+1. Start without `partition` and leave `execution.maxConcurrentGroups` at 1. Choose a framework-native selector that can identify one test; do not implement a parser for test source unless the selector contract requires one.
+2. In `resolve`, use the framework's collection mechanism to reject missing or ambiguous selectors. Give the selected test a stable `targetId`.
+3. In `run`, execute only the selected test and interpret its reported result. A zero exit code is insufficient if the framework also exits zero when no test matched or every test skipped. Report a missing test or unreadable report as `fail`, not `pass`.
+4. Prove the boundary: the selected test passes, an unrelated failing test is not executed, a selected-test mutation fails, and a missing selector produces an actionable resolution error.
 
-export default {
-  apiVersion: 1,
-  async resolve(request) {
-    return {
-      targets: request.selectors.map(selector => ({
-        selector,
-        targetId: selector,
-        displayName: selector,
-      })),
-      errors: [],
-    }
-  },
-  async run(request) {
-    const results: TargetResult[] = []
-    for (const target of request.targets) {
-      // Spawn the real framework command and map its exit status.
-      results.push({ targetId: target.targetId, status: 'pass' })
-    }
-    return { results }
-  },
-} satisfies RunnerPlugin
-```
-
-The example's `pass` is only a shape illustration. Production runners must execute and interpret the selected test; returning unconditional `pass` is invalid.
+The [Go](../../examples/openspec/.focused-spec/runners/go-test.ts) and [pytest](../../examples/openspec/.focused-spec/runners/pytest.ts) examples illustrate framework-specific collection and invocation, not a production result parser: both classify by process exit code and need adaptation to detect skipped or unexecuted selected tests. Do not copy another project's source parser or resource policy. Add `partition` only after the selected tests' shared filesystem, database, ports, processes, and time-sensitive behavior have been reviewed.
 
 ## Optional execution groups
 
