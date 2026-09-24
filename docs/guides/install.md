@@ -2,7 +2,7 @@
 
 ## CLI
 
-In a consuming Node.js 24+ project, install the CLI as a development dependency:
+In a consuming Node.js 22.16.0+ project, install the CLI as a development dependency:
 
 ```sh
 npm install --save-dev focused-spec
@@ -17,6 +17,8 @@ npm install --save-dev /path/to/focused-spec
 ```
 
 Installing from a Git checkout or packing for npm builds `dist/` automatically via the package's `prepare` script; the published tarball includes the built CLI and type declarations.
+
+Node.js 22.16 and 22.17 need the experimental type-stripping flag to load project-local `.ts`/`.mts` runners; the CLI supplies that flag to its isolated runner process automatically. Write runner plugins using erasable TypeScript syntax and `import type`; JavaScript plugins need no flag.
 
 ## Agent skill
 

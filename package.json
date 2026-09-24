@@ -30,7 +30,7 @@
     "eval:agent": "node --experimental-strip-types evals/run.ts"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=22.16.0"
   },
   "dependencies": {
     "fast-glob": "^3.3.3",

@@ -7,7 +7,7 @@ Project-local plugin invocation and exact target resolution and execution respon
 ## Requirements
 
 ### Requirement: Project-local runner invocation
-The CLI SHALL load a registered project-local `.ts`, `.mts`, `.js` or `.mjs` plugin in a child process and supply its project root, cwd, runner ID, JSON-compatible options and abort signal. A plugin SHALL default-export `apiVersion: 1` with `resolve` and `run`.
+The CLI SHALL load a registered project-local `.ts`, `.mts`, `.js` or `.mjs` plugin in a child process and supply its project root, cwd, runner ID, JSON-compatible options and abort signal. A TypeScript plugin SHALL execute on supported Node.js versions without requiring consumers to supply a Node flag. A plugin SHALL default-export `apiVersion: 1` with `resolve` and `run`.
 
 #### Scenario: Registered plugin resolves and executes evidence
 - **ID**: `runner.lifecycle.real-invocation`

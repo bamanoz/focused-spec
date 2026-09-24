@@ -49,7 +49,7 @@ describe('package distribution', () => {
       '  paths: [specs/**/*.md]',
       'runners:',
       '  consumer:',
-      '    module: ./runner.mjs',
+      '    module: ./runner.ts',
     ].join('\n'))
     await put(join(consumer, 'specs/example.md'), [
       '#### Scenario: Installed CLI checks evidence',
@@ -58,7 +58,7 @@ describe('package distribution', () => {
       '- **WHEN** the installed CLI validates evidence',
       '- **THEN** it resolves one target',
     ].join('\n'))
-    await put(join(consumer, 'runner.mjs'), 'export default { apiVersion: 1, async resolve({ selectors }) { return { targets: selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] } }, async run({ targets }) { return { results: targets.map(target => ({ targetId: target.targetId, status: "pass" })) } } }')
+    await put(join(consumer, 'runner.ts'), 'export default { apiVersion: 1, async resolve({ selectors }: { selectors: string[] }) { return { targets: selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] } }, async run({ targets }: { targets: { targetId: string }[] }) { return { results: targets.map(target => ({ targetId: target.targetId, status: "pass" })) } } }')
     const cli = join(consumer, 'node_modules/focused-spec/dist/cli.js')
     const validation = spawnSync(process.execPath, [cli, 'validate', '--root', consumer, '--json'], { encoding: 'utf8' })
     expect(validation.status).toBe(0)

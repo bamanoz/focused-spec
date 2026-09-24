@@ -6,7 +6,7 @@ Only bump the version for consumer-facing changes to the published package (the 
 
 ## Prepare
 
-Use Node.js 24+ and an npm account authorized to publish `focused-spec`. Start on `main` with a clean working tree. Confirm the registry and current published version:
+Use Node.js 22.16.0+ and an npm account authorized to publish `focused-spec`. Start on `main` with a clean working tree. Confirm the registry and current published version:
 
 ```sh
 git pull --ff-only origin main

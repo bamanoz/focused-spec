@@ -40,7 +40,7 @@ Before handoff, verify documentation links and the documentation tree. Do not cl
 
 ## TypeScript and package conventions
 
-- Node.js 24+, strict TypeScript, NodeNext ESM, and erasable TypeScript syntax for runtime-loaded plugins.
+- Node.js 22.16.0+, strict TypeScript, NodeNext ESM, and erasable TypeScript syntax for runtime-loaded plugins.
 - Relative TypeScript imports in source and plugins include the `.js` extension in emitted-runtime code; type-only imports use `import type`.
 - Keep public contracts exported from `src/index.ts` or the declared `./runner` subpath.
 - Preserve `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, and strict diagnostics.

@@ -7,7 +7,7 @@ Consumer installation, CLI and type exports, and independent agent skill setup.
 ## Requirements
 
 ### Requirement: Node package distribution
-The package SHALL install in Node.js 24+ consumers with a `focused-spec` CLI, compiled runtime and public `focused-spec` and `focused-spec/runner` entry points. Building a Git checkout or npm pack SHALL produce the same runnable package contents.
+The package SHALL install in Node.js 22.16.0+ consumers with a `focused-spec` CLI, compiled runtime and public `focused-spec` and `focused-spec/runner` entry points. Building a Git checkout or npm pack SHALL produce the same runnable package contents.
 
 #### Scenario: Packed CLI runs in a consumer project
 - **ID**: `distribution.package.cli`

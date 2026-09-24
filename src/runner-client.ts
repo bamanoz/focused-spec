@@ -52,7 +52,9 @@ async function invokeHost(projectRoot: string, runnerId: string, config: RunnerC
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const child = fork(hostPath, [], {
     cwd: projectRoot,
-    execArgv: [],
+    execArgv: (extname(modulePath) === '.ts' || extname(modulePath) === '.mts') && !process.features.typescript
+      ? ['--experimental-strip-types']
+      : [],
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   })
   const { promise, resolve: resolvePromise, reject: rejectPromise } = Promise.withResolvers<unknown>()

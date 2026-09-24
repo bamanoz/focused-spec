@@ -38,9 +38,10 @@ async function fixture(status: 'pass' | 'skip' = 'pass'): Promise<string> {
     '- **THEN** the project runner returns its observable result',
   ].join('\n'))
   await put(root, 'runner.ts', [
+    'type Selector = string',
     'export default {',
     '  apiVersion: 1,',
-    '  async resolve(request) {',
+    '  async resolve(request: { selectors: Selector[] }) {',
     '    return { targets: request.selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] }',
     '  },',
     '  async run(request) {',
