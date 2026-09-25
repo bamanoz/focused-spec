@@ -7,21 +7,33 @@ Selected evidence execution, status aggregation, and success policy.
 ## Requirements
 
 ### Requirement: Execution selection
-After strict validation, `run` SHALL execute baseline scenarios by default or the selected named scope with `--scope`; `--scenario` SHALL narrow only the executed scenarios. A selected scope with no configured matching documents SHALL cause an error before execution. Text and JSON results SHALL distinguish the baseline-plus-selected/all-scopes validation set from the baseline or named-scope execution selection without using OpenSpec-specific labels.
+`run` SHALL strictly validate and execute every discovered scope by default or only the scope named with `--scope`; with `--scenario <id>`, it SHALL strictly validate, resolve, and execute only occurrences of that ID in the selected scope(s). A requested scope with no matching documents or a selected ID absent from its scope selection SHALL fail before execution. Text and JSON results SHALL report the actual validation and execution selections, including the selected scenario when present. Every scenario result SHALL include its scope; multi-scope text output SHALL display the scope so repeated IDs are unambiguous.
 
-#### Scenario: Default execution selects baseline scenarios
+#### Scenario: Default execution includes and distinguishes all scopes
 - **ID**: `execution.selection.current`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > separates run validation scope from current execution selection`
-- **WHEN** run is called without a scope name while other named scopes exist
-- **THEN** it executes baseline scenarios and reports validation scope separately from execution selection
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > runs all scopes and disambiguates repeated scenario IDs`
+- **WHEN** run is called without a scope name or scenario ID and multiple scopes contain valid revisions sharing one ID
+- **THEN** every occurrence executes and its result identifies the owning scope
 
-#### Scenario: Named scope and scenario selection
+#### Scenario: Scope and scenario selection
 - **ID**: `execution.selection.change-scenario`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > reports selected change and scenario execution independently of validation scope`
-- **WHEN** run selects one scenario inside a named scope
-- **THEN** it executes that scenario and reports the selected scope and scenario in its result
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > reports selected scope and scenario execution independently of validation scope`
+- **WHEN** run selects one scenario inside one explicit scope
+- **THEN** it validates and executes only that scenario and reports both selections
 
-#### Scenario: Missing named scope does not start execution
+#### Scenario: Repeated ID selects every matching scope
+- **ID**: `execution.selection.shared-id`
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > validates and runs every matching scope for a selected scenario ID`
+- **WHEN** run selects one scenario ID across multiple scopes without `--scope`
+- **THEN** it strictly validates and executes each matching occurrence without executing other scenario IDs
+
+#### Scenario: Missing selected scenario does not start execution
+- **ID**: `execution.selection.missing-scenario`
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects a missing selected scenario before resolving evidence`
+- **WHEN** run selects a scenario ID absent from its selected scope(s)
+- **THEN** it reports the missing scenario and `executionStarted: false` without resolving other evidence or claiming PASS
+
+#### Scenario: Missing selected scope does not start execution
 - **ID**: `execution.selection.missing-scope`
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > refuses to execute a named scope without documents`
 - **WHEN** run explicitly selects a scope with no documents in the configured layout
@@ -57,29 +69,29 @@ Each resolved target SHALL run once per unique runner/target pair and contribute
 #### Scenario: Empty execution is distinguishable from proof
 - **ID**: `execution.status.empty`
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > preserves successful validation when no specifications match`
-- **WHEN** no baseline scenarios match the configured source and no named scope was requested
+- **WHEN** no documents match any configured layout and no scope was requested
 - **THEN** run reports `executionStarted: false` and zero scenarios rather than claiming any PASS
 
 ### Requirement: Single strict resolution for run
-`run` SHALL resolve concrete evidence for the entire strict validation selection before any execution. It SHALL derive the baseline or selected-scope execution plan, optionally narrowed by `--scenario`, from those validated targets without resolving them again. Selection SHALL distinguish document ownership when a named scope revises a baseline ID, execute only selected unique runner/target pairs, and preserve validation errors from unselected scenarios.
+`run` SHALL resolve concrete evidence for exactly its strict validation selection before any execution and derive the execution plan from those validated targets without resolving them again. With `--scenario`, only evidence from matching scenario instances in the selected scope(s) SHALL resolve; without it, the full selected scope(s) SHALL resolve. Selection SHALL distinguish document scope when IDs repeat, execute only selected unique runner/target pairs, and preserve validation errors from selected scenarios without requiring unrelated scenario evidence to resolve.
 
 #### Scenario: Resolved targets are reused for selected scope
 - **ID**: `execution.resolution.reuse`
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > reuses strict resolution for scoped execution without resolving twice`
-- **WHEN** run selects a named scope while baseline evidence and scoped evidence both require resolution
-- **THEN** each runner resolves its validation selectors once and only scoped targets execute
+- **WHEN** run selects one scope whose concrete evidence requires resolution
+- **THEN** each runner resolves its selectors once and only targets from that scope execute
 
-#### Scenario: Selected revision does not run baseline evidence
+#### Scenario: Selected revision does not resolve source evidence
 - **ID**: `execution.resolution.revised-id`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > executes revised evidence rather than baseline evidence for the same scenario ID`
-- **WHEN** run selects a named-scope revision sharing a stable ID with its baseline scenario
-- **THEN** only the revision's evidence executes while baseline evidence remains strictly validated
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > executes revised evidence rather than source-scope evidence for the same scenario ID`
+- **WHEN** a selected-scope revision shares its ID with a source scenario in an unselected scope
+- **THEN** only the revision's evidence is resolved and executed while the source is inspected only for ownership
 
-#### Scenario: Unselected evidence still blocks execution
+#### Scenario: Scenario filter narrows strict resolution
 - **ID**: `execution.resolution.strict-unselected`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > attributes an unselected scenario error to validation before execution`
-- **WHEN** run selects one scenario but concrete evidence in another validation-scope scenario cannot resolve
-- **THEN** no selected test starts and the unresolved evidence is reported as a validation violation
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > runs a selected scenario despite unrelated invalid evidence in its scope`
+- **WHEN** run selects one scenario but concrete evidence in another scenario of the same scope cannot resolve
+- **THEN** only selected evidence is resolved and executed; unrelated resolution errors do not block it
 
 ### Requirement: Opt-in phase timings
 `validate` and `run` SHALL expose nonnegative elapsed wall-time durations for reached document validation, runner resolution and runner execution phases, plus total duration, when `--timings` is requested. Timings SHALL be present on validation failures for phases reached, and SHALL be absent from ordinary text and JSON output without the flag. Parallel phase durations SHALL NOT be presented as an additive estimate of total wall time.

@@ -51,14 +51,14 @@ Usage:
 Options:
   --root <path>    Project root (default: current directory)
   --config <path>  Configuration file relative to the project root (default: .focused-spec/config.yaml)
-  --scope <name>   Validate baseline and this named scope (default: baseline and all named scopes)
+  --scope <name>   Validate only this scope (default: all discovered scopes)
   --strict         Reject all planned: evidence; use once exact tests exist
   --syntax-only    Check document syntax and ownership without loading runners or resolving evidence
   --json           Print the validation result as JSON
   --timings        Include elapsed validation and resolution phase timings
   -h, --help       Show this help
 
-Without --strict, planned: evidence is allowed only in named scopes and is not resolved.
+Without --strict, planned: evidence is allowed in every scope and is not resolved.
 Full validation resolves concrete evidence but never executes tests.
 
 Examples:
@@ -75,9 +75,9 @@ Usage:
 Options:
   --root <path>     Project root (default: current directory)
   --config <path>   Configuration file relative to the project root (default: .focused-spec/config.yaml)
-  --scope <name>    Validate baseline and this named scope, then execute that scope
-                    (default: validate baseline and all named scopes, then execute baseline)
-  --scenario <id>   Narrow execution to one scenario; validation remains unchanged
+  --scope <name>    Validate and execute only this scope (default: all discovered scopes)
+  --scenario <id>   Narrow validation and execution to matching scenarios
+                    within the selected scope(s)
   --allow-skip      Allow an overall successful exit with SKIP; never relabel SKIP as PASS
   --json            Print the execution result as JSON
   --timings         Include elapsed validation, resolution and execution phase timings
@@ -167,14 +167,15 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
     ...(scenarioId === undefined ? {} : { scenarioId }),
   }
 }
+type ScopeSelection = { readonly mode: 'all' } | { readonly mode: 'selected'; readonly name: string }
+
 interface ValidationScope {
-  readonly baseline: true
-  readonly scopes: { readonly mode: 'all' } | { readonly mode: 'selected'; readonly name: string }
+  readonly scopes: ScopeSelection
+  readonly scenario?: string
 }
 
 interface ExecutionSelection {
-  readonly source: 'baseline' | 'scope'
-  readonly scope?: string
+  readonly scopes: ScopeSelection
   readonly scenario?: string
 }
 interface ValidationContext {
@@ -196,10 +197,10 @@ interface PhaseTimings {
 function validationContext(options: CliOptions): ValidationContext {
   return {
     validationScope: {
-      baseline: true,
       scopes: options.scopeName === undefined
         ? { mode: 'all' }
         : { mode: 'selected', name: options.scopeName },
+      ...(options.command === 'run' && options.scenarioId !== undefined ? { scenario: options.scenarioId } : {}),
     },
   }
 }
@@ -208,28 +209,28 @@ function runContext(options: CliOptions): RunContext {
   return {
     ...validationContext(options),
     executionSelection: {
-      source: options.scopeName === undefined ? 'baseline' : 'scope',
-      ...(options.scopeName === undefined ? {} : { scope: options.scopeName }),
+      scopes: options.scopeName === undefined
+        ? { mode: 'all' }
+        : { mode: 'selected', name: options.scopeName },
       ...(options.scenarioId === undefined ? {} : { scenario: options.scenarioId }),
     },
   }
 }
 
+function displayScopeSelection(selection: ScopeSelection): string {
+  return selection.mode === 'all' ? 'all discovered scopes' : `selected scope ${String(selection.name)}`
+}
+
 function displayValidationContext(context: ValidationContext): string {
-  const scopes = context.validationScope.scopes
-  const validation = scopes.mode === 'all'
-    ? 'baseline specifications and all named scopes'
-    : `baseline specifications and selected scope ${scopes.name}`
-  return `validation scope: ${validation}\n`
+  const selection = context.validationScope
+  const scenario = selection.scenario === undefined ? '' : `, scenario ${selection.scenario}`
+  return `validation scope: ${displayScopeSelection(selection.scopes)}${scenario}\n`
 }
 
 function displayRunContext(context: RunContext): string {
   const selection = context.executionSelection
-  const execution = selection.source === 'baseline'
-    ? 'baseline specifications'
-    : `scope ${String(selection.scope)}`
   const scenario = selection.scenario === undefined ? '' : `, scenario ${selection.scenario}`
-  return `${displayValidationContext(context)}execution selection: ${execution}${scenario}\n`
+  return `${displayValidationContext(context)}execution selection: ${displayScopeSelection(selection.scopes)}${scenario}\n`
 }
 
 function displayViolation(violation: Violation): string {
@@ -277,7 +278,8 @@ function printExecution(result: ExecutionResult, json: boolean, context: RunCont
   }
   process.stdout.write(displayRunContext(context))
   for (const scenario of result.scenarios) {
-    process.stdout.write(`${scenario.status} ${scenario.id}\n`)
+    const scope = context.executionSelection.scopes.mode === 'all' ? ` [${scenario.scope}]` : ''
+    process.stdout.write(`${scenario.status}${scope} ${scenario.id}\n`)
     for (const evidence of scenario.evidence) {
       process.stdout.write(`  ${evidence.status} ${evidence.reference}\n`)
       if (evidence.diagnostic !== undefined) process.stdout.write(`    ${evidence.diagnostic.split('\n').join('\n    ')}\n`)
@@ -332,6 +334,7 @@ async function main(argumentsList: readonly string[]): Promise<number> {
   const validation = await validateFocusedSpecs(projectRoot, loaded.config, {
     ...(options.scopeName === undefined ? {} : { scopeName: options.scopeName }),
     strict: options.command === 'run' || options.strict,
+    ...(options.command === 'run' && options.scenarioId !== undefined ? { scenarioId: options.scenarioId } : {}),
   })
   phases.validationMs = elapsed(validationStarted)
   if (validation.violations.length > 0) {

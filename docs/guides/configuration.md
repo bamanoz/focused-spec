@@ -9,7 +9,7 @@ version: 2
 specifications:
   documents:
     - match: specs/**/*.md
-      scope: baseline
+      scope: current
       exclude:
         - specs/archive/**
     - match: changes/{scope}/spec.md
@@ -22,18 +22,18 @@ runners:
     timeoutMs: 120000
 ```
 
-`documents` is a nonempty ordered list. Every entry is exactly one of:
+`documents` is a nonempty ordered list. Every entry assigns exactly one path-safe scope in one of two ways:
 
-- a baseline layout, with `scope: baseline` and no `{scope}` token in `match`;
-- a named-scope layout, with exactly one `{scope}` token in `match` and no `scope` property.
+- an explicit layout has `scope: <name>` and no `{scope}` token in `match`;
+- a captured layout has exactly one `{scope}` token in `match` and no `scope` property.
 
 `match` and optional `exclude` globs are project-relative. They must select Markdown inside the project; absolute paths, traversal, symlink escapes, malformed scope captures, and non-Markdown matches are errors. `{scope}` captures one nonempty, path-safe fragment and preserves its name exactly. It can occupy a complete path segment, as in `changes/{scope}/spec.md`, or the variable part of one segment, as in `specs/spec-{scope}/SPEC.md`. Ordinary glob wildcards remain available outside that capture.
 
-An `exclude` list narrows only its own entry. There are no implicit archive exclusions, framework defaults, or fallback locations. Multiple entries may contribute documents to one named scope, but each document must match exactly one entry and scope; overlapping claims are errors.
+An `exclude` list narrows only its own entry. There are no implicit archive exclusions, framework defaults, default scopes, or fallback locations. Multiple entries may contribute documents to one scope, but each document must match exactly one entry and scope; overlapping claims are errors. `baseline` is permitted as an ordinary scope name and receives no special behavior.
 
 Configure files that contain focused scenarios, not every artifact understood by the surrounding specification-driven development (SDD) framework. `focused-spec` does not interpret native requirements prose, infer evidence from Given/When/Then, or validate the framework's own schema. If the native format cannot contain focused scenarios, point a layout at an explicit companion Markdown document produced or maintained through that framework's workflow.
 
-A project may have no baseline documents. A baseline-only layout that matches nothing is also a valid empty baseline. In contrast, an explicitly selected scope with no matching documents is an error, and every discovered named scope must contain at least one focused scenario. A broad or incorrect glob is never widened to hide an absent or empty scope.
+A project whose layouts match no documents has a valid empty selection when no scope is explicitly requested. In contrast, `--scope <name>` is an assertion that the named scope exists: no matching documents is an error. Every discovered scope must contain at least one focused scenario. A broad or incorrect glob is never widened to hide an absent or empty scope.
 
 A runner ID names one execution environment. Runner modules are project-relative `.ts`, `.mts`, `.js`, or `.mjs` files. `timeoutMs` is an optional positive integer per runner, at most `2147482647` ms. The limit leaves room for the host's one-second shutdown grace period within Node's timer range. The complete runner contract is in the [runner API reference](../reference/runner-api.md).
 
@@ -59,26 +59,26 @@ execution:
 
 Keep each scenario to one request and one independently failing outcome. Put independently failing behavior in separate scenarios. Evidence has the form `[planned:]<runner-id>::<opaque selector>`; multiple rows form an AND contract.
 
-Stable IDs are repository-wide. A named-scope scenario that intentionally revises an existing baseline scenario keeps its ID and declares the relationship explicitly:
+Stable IDs are repository-wide through explicit ownership. A scenario that intentionally reuses an ID from another scope keeps the ID and declares its source scope:
 
 ```markdown
 #### Scenario: Blocked account submits valid credentials
 - **ID**: `auth.login.blocked-account`
-- **REVISES**: baseline
+- **REVISES**: current
 - **EVIDENCE**: `planned:go-unit::./internal/auth::TestBlockedAccountWithAudit`
 - **WHEN** a blocked account submits otherwise valid credentials
 - **THEN** authentication is rejected and the attempt is audited
 ```
 
-`REVISES` is optional and may appear exactly once, with the value `baseline`. It is valid only in a named scope whose baseline owns the same ID. Baseline scenarios cannot revise themselves, and framework headings such as OpenSpec `MODIFIED Requirements` do not grant permission to reuse an ID. Two scopes may independently revise the same baseline ID, but they may not introduce the same new ID.
+`REVISES` is optional and may appear exactly once. Its value is the path-safe name of another scope containing the same ID. Within one scope an ID is always unique. Across scopes, one unmarked scenario owns the ID; every additional occurrence must point to an existing same-ID scenario in another scope, and each chain must reach that single owner. Self-revisions, missing sources, cycles, multiple unmarked owners, and unmarked collisions are errors. Branches are valid, so two scopes may independently revise the same source. Framework headings such as OpenSpec `MODIFIED Requirements` and names such as `baseline` grant no ownership.
 
-`planned:` is temporary planning evidence. It is allowed only in named scopes during non-strict validation. Baseline evidence must always be concrete. Choose the real runner and selector contract before adding a planned row, then remove `planned:` when that exact test target exists.
+`planned:` is temporary planning evidence allowed in every scope during non-strict validation. Choose the real runner and selector contract before adding a planned row, then remove `planned:` when that exact test target exists. Strict validation and `run` reject planned evidence in every scope.
 
 ## Scope and verification
 
-Without `--scope`, validation covers the baseline and every discovered named scope; `run` validates that same set strictly and then executes only the baseline. With `--scope <name>`, validation covers the baseline and only that named scope, while `run` executes only that scope. `--scenario` narrows execution, never validation. See the [CLI reference](../reference/cli.md) for exact result fields.
+Without `--scope`, `validate` and `run` select all discovered scopes. With `--scope <name>`, both select only that scope. `run --scenario <id>` narrows strict validation, evidence resolution, and execution to matching scenarios in the selected scopes; without `--scope`, repeated IDs select every matching scope. It does not change `validate` or the behavior of `run` without `--scenario`. See the [CLI reference](../reference/cli.md) for exact result fields.
 
-While a named scope still contains planned evidence, validate its structure and concrete evidence without strict mode:
+While a scope still contains planned evidence, validate its structure and concrete evidence without strict mode:
 
 ```sh
 focused-spec validate --scope add-auth --syntax-only
@@ -92,7 +92,9 @@ focused-spec validate --scope add-auth --strict
 focused-spec run --scope add-auth
 ```
 
-For baseline work when all discovered scopes are complete:
+While a scope contains unrelated unfinished scenarios, use `focused-spec run --scope add-auth --scenario auth.login.blocked-account` to validate and execute only that scenario. Run the full scope after replacing all planned references; a successful scenario-only run does not certify the scope.
+
+For all discovered scopes when every planned reference has been replaced:
 
 ```sh
 focused-spec validate
@@ -112,13 +114,13 @@ From this repository's root after `npm install` and `npm run build`, these indep
 | [Kiro](../../examples/kiro/) | `.kiro/specs/account-lock/focused-spec.md` beside native `requirements.md` | `node dist/cli.js validate --root examples/kiro --scope account-lock --strict` then `node dist/cli.js run --root examples/kiro --scope account-lock` |
 | [BMad](../../examples/bmad/) | `specs/spec-order-limit/focused-spec.md` beside native `SPEC.md` | `node dist/cli.js validate --root examples/bmad --scope order-limit --strict` then `node dist/cli.js run --root examples/bmad --scope order-limit` |
 
-All examples use project-local runners and real tests; the OpenSpec example runs Go and pytest, while the others use pytest through `uv run --with pytest python -m pytest` (requires `uv`). They demonstrate layouts, not substitutes for each framework's own generator, schema validation, or CLI. The Spec Kit, Kiro, and BMad examples deliberately use selected named scopes with no baseline: run each with `--scope` to execute its tests. Native requirements alone never count as focused evidence.
+All examples use project-local runners and real tests; the OpenSpec example runs Go and pytest, while the others use pytest through `uv run --with pytest python -m pytest` (requires `uv`). They demonstrate layouts, not substitutes for each framework's own generator, schema validation, or CLI. The Spec Kit, Kiro, and BMad commands explicitly select one scope; omitting `--scope` runs every scope their configurations discover. Native requirements alone never count as focused evidence.
 
 ## Migrate from version 1
 
 Version 2 is a clean cutover: version-1 configuration and `source`, `paths`, and `root` keys are rejected.
 
-- Replace each file-backed `paths` entry with `{ match: <glob>, scope: baseline }` under `specifications.documents`.
-- Replace `source: openspec` with explicit baseline and named-scope layouts, for example `openspec/specs/**/spec.md` with `scope: baseline` and `openspec/changes/{scope}/specs/**/spec.md` without it.
+- Replace each file-backed `paths` entry with `{ match: <glob>, scope: <name> }` under `specifications.documents`.
+- Replace `source: openspec` with explicit layouts, for example `openspec/specs/**/spec.md` with `scope: current` and `openspec/changes/{scope}/specs/**/spec.md` with a scope capture.
 - Add explicit `exclude` globs when a pattern would otherwise select archives or history. The CLI supplies none.
 - Replace `--change <name>` with `--scope <name>`. The [CLI reference](../reference/cli.md) owns the corresponding text and JSON result migration.

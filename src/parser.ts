@@ -3,7 +3,7 @@ import type { EvidenceReference, SpecDocument } from './model.js'
 const ID = /^- \*\*ID\*\*: `([^`]+)`$/u
 const EVIDENCE = /^- \*\*EVIDENCE\*\*: `([^`]+)`$/u
 const EVIDENCE_ROW = /^\s*-\s*\*\*EVIDENCE\*\*/u
-const REVISION = /^- \*\*REVISES\*\*: baseline$/u
+const REVISION = /^- \*\*REVISES\*\*: (\S+)$/u
 const REVISION_ROW = /^\s*-\s*\*\*REVISES\*\*/u
 const WHEN = /^- \*\*WHEN\*\*/u
 const THEN = /^- \*\*THEN\*\*/u
@@ -13,7 +13,7 @@ const MALFORMED_SCENARIO = /^(?:#{1,3}|#{5,}) Scenario:/u
 
 export const STABLE_ID = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u
 
-export function parseFocusedSpecDocument(path: string, source: string): SpecDocument {
+export function parseFocusedSpecDocument(path: string, source: string, scope: string): SpecDocument {
   const lines = source.split('\n')
   const scenarios: SpecDocument['scenarios'][number][] = []
   const malformedScenarioHeadings: number[] = []
@@ -38,11 +38,12 @@ export function parseFocusedSpecDocument(path: string, source: string): SpecDocu
       body.push(candidate)
     }
     scenarios.push({
+      scope,
       path,
       line: index + 1,
       name: scenarioMatch[1],
       ...(requirement === undefined ? {} : { requirement }),
-      revisions: body.filter(value => REVISION.test(value)),
+      revisions: body.flatMap(value => REVISION.exec(value)?.[1] ?? []),
       malformedRevisionLines,
       ids: body.flatMap(value => ID.exec(value)?.[1] ?? []),
       evidence: body.flatMap(value => EVIDENCE.exec(value)?.[1] ?? []),
@@ -52,7 +53,7 @@ export function parseFocusedSpecDocument(path: string, source: string): SpecDocu
     })
   }
 
-  return { path, scenarios, malformedScenarioHeadings }
+  return { path, scope, scenarios, malformedScenarioHeadings }
 }
 
 export function parseEvidenceReference(raw: string): EvidenceReference | { readonly error: string } {

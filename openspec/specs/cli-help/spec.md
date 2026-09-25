@@ -16,7 +16,7 @@ The CLI SHALL accept `focused-spec --help`, `focused-spec -h`, and `focused-spec
 - **THEN** the CLI exits successfully and shows the two commands and how to inspect their detailed help without claiming validation or execution
 
 ### Requirement: Command-specific help
-For `validate` and `run`, the CLI SHALL accept `<command> --help`, `<command> -h`, and `help <command>` as successful help requests. Each command help SHALL show its purpose, usage, every option supported by that command with its meaning, and practical examples. The `validate` help SHALL distinguish syntax-only, non-strict and strict validation and planned evidence policy. The `run` help SHALL describe strict validation before execution, scope and scenario selection, and the skip-success policy accurately. Help SHALL not offer options unsupported by that command.
+For `validate` and `run`, the CLI SHALL accept `<command> --help`, `<command> -h`, and `help <command>` as successful help requests. Each command help SHALL show its purpose, usage, every option supported by that command with its meaning, and practical examples. The `validate` help SHALL distinguish syntax-only, non-strict and strict validation, explain that planned evidence is allowed in any scope only when non-strict, and describe all-versus-selected scope behavior. The `run` help SHALL describe strict validation before execution, matching all-versus-selected scope behavior, that `--scenario` narrows both strict validation and execution to matching scenario instances, and the skip-success policy accurately. Help SHALL not offer options unsupported by that command.
 
 #### Scenario: Validate help explains validation options
 - **ID**: `cli.help.validate`
@@ -28,7 +28,7 @@ For `validate` and `run`, the CLI SHALL accept `<command> --help`, `<command> -h
 - **ID**: `cli.help.run`
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > explains execution selection and skip policy in command help`
 - **WHEN** a user requests `run` help using any supported form
-- **THEN** the CLI exits successfully with the supported run options, their semantics and a usable example without listing validate-only options
+- **THEN** the CLI exits successfully with the supported run options, their scenario validation/execution semantics and a usable example without listing validate-only options
 
 ### Requirement: Help independent of project state
 Help SHALL be available without an existing project configuration or runner; explicit help SHALL not load or execute either. It SHALL remain human-readable text regardless of `--json` on a known command.

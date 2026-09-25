@@ -25,7 +25,7 @@ Before choosing a command or flag, consult the installed CLI: `focused-spec --he
 - **THEN** authentication is rejected
 ```
 
-Evidence is `[planned:]<runner-id>::<opaque selector>`; only the first `::` separates the runner ID. Baseline evidence is always concrete. Use `planned:` only in a named scope while that exact test is not implemented, then replace it before completion. To revise a baseline scenario in a named scope, keep its ID and add exactly one `- **REVISES**: baseline` row; never infer revision from framework headings.
+Evidence is `[planned:]<runner-id>::<opaque selector>`; only the first `::` separates the runner ID. Any scope may use `planned:` while that exact test is not implemented, but strict validation and `run` reject it. To reuse an ID from another scope, add exactly one `- **REVISES**: <source-scope>` row naming an existing same-ID scenario; repeated IDs must form a graph with one unmarked owner and no missing sources, self-revisions, or cycles. Never infer revision from framework headings or a special scope name.
 
 ## Configure when first needed
 
@@ -36,7 +36,7 @@ version: 2
 specifications:
   documents:
     - match: specs/**/*.md
-      scope: baseline
+      scope: current
       exclude: [specs/archive/**]
     - match: changes/{scope}/spec.md
 runners:
@@ -45,7 +45,7 @@ runners:
     timeoutMs: 120000
 ```
 
-A baseline layout has `scope: baseline` and no `{scope}`; a named layout has one `{scope}` and no `scope` property. Patterns and exclusions are project-relative. The CLI does not infer evidence or archive exclusions from the surrounding framework. Register every evidence runner under `.focused-spec/runners/`; its module must stay inside the project and use `.ts`, `.mts`, `.js`, or `.mjs`.
+Every document layout either has `scope: <name>` and no `{scope}` token, or has exactly one `{scope}` token and no `scope` property. Scope names are path-safe and uniform; `baseline` has no reserved behavior. Patterns and exclusions are project-relative. The CLI does not infer evidence or archive exclusions from the surrounding framework. Register every evidence runner under `.focused-spec/runners/`; its module must stay inside the project and use `.ts`, `.mts`, `.js`, or `.mjs`.
 
 ## Implement a runner only when evidence needs one
 
@@ -53,6 +53,6 @@ A baseline layout has `scope: baseline` and no `{scope}`; a named layout has one
 
 ## Verify
 
-While a named scope intentionally contains `planned:` evidence, run `focused-spec validate --scope <name>`; add `--syntax-only` to check authoring shape alone. Do not use strict validation or execution as a planning check.
+While any scope intentionally contains `planned:` evidence, run `focused-spec validate --scope <name>`; add `--syntax-only` to check authoring shape alone. Do not use strict validation or execution as a planning check.
 
-After replacing planned evidence, run `focused-spec run --scope <name>` for a completed scope or `focused-spec run` for the baseline when all named scopes are complete. `run` performs strict validation before execution. `focused-spec validate --scope <name> --strict` is an optional validation-only preflight, not a substitute for execution. Without `--scope`, validation covers the baseline and all discovered named scopes; `run` selects baseline execution. Use `--allow-skip` only for an explicit project policy; `SKIP` and `ERROR` are not success otherwise. A native SDD check cannot replace focused-spec validation or execution.
+After replacing planned evidence, run `focused-spec run --scope <name>` for one completed scope or `focused-spec run` for every discovered scope. `run` performs strict validation before execution. `focused-spec validate --scope <name> --strict` is an optional validation-only preflight, not a substitute for execution. Without `--scope`, validation and execution both select all discovered scopes; with it, both select only that scope. `run --scenario <id>` strictly validates and executes only matching scenarios in the selected scope(s), including all matching revisions if `--scope` is absent. It does not certify unrelated scenarios; run the full scope after replacing their planned evidence. Use `--allow-skip` only for an explicit project policy; `SKIP` and `ERROR` are not success otherwise. A native SDD check cannot replace focused-spec validation or execution.

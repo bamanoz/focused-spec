@@ -10,12 +10,12 @@ const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url))
 
 interface Layout {
   readonly match: string
-  readonly scope?: 'baseline'
+  readonly scope?: string
   readonly exclude?: readonly string[]
 }
 
 const openSpecLayouts: readonly Layout[] = [
-  { match: 'openspec/specs/**/spec.md', scope: 'baseline' },
+  { match: 'openspec/specs/**/spec.md', scope: 'current' },
   { match: 'openspec/changes/{scope}/specs/**/spec.md' },
 ]
 
@@ -102,7 +102,7 @@ function json(stdout: string): Record<string, unknown> {
 async function emptyFixture(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'focused-spec-cli-empty-'))
   roots.push(root)
-  await configure(root, [{ match: 'specs/**/*.md', scope: 'baseline' }], ['runners: {}'])
+  await configure(root, [{ match: 'specs/**/*.md', scope: 'current' }], ['runners: {}'])
   return root
 }
 
@@ -134,7 +134,7 @@ describe('focused-spec CLI', () => {
         expect(result.stdout).toContain(option)
       }
       expect(result.stdout).toContain('without loading runners or resolving evidence')
-      expect(result.stdout).toContain('planned: evidence is allowed only in named scopes')
+      expect(result.stdout).toContain('planned: evidence is allowed in every scope')
       expect(result.stdout).toContain('without running tests')
       expect(result.stdout).toContain('focused-spec validate --scope add-search --strict')
       expect(result.stdout).not.toContain('--allow-skip')
@@ -151,7 +151,7 @@ describe('focused-spec CLI', () => {
       for (const option of ['--root <path>', '--config <path>', '--scope <name>', '--scenario <id>', '--allow-skip', '--json', '--timings', '-h, --help']) {
         expect(result.stdout).toContain(option)
       }
-      expect(result.stdout).toContain('validation remains unchanged')
+      expect(result.stdout).toContain('Narrow validation and execution to matching scenarios')
       expect(result.stdout).toContain('never relabel SKIP as PASS')
       expect(result.stdout).toContain('validates strictly before starting tests')
       expect(result.stdout).toContain('focused-spec run --scope add-search --scenario search.results.empty')
@@ -204,7 +204,7 @@ describe('focused-spec CLI', () => {
     expect(validate.status).toBe(0)
     expect(json(validate.stdout)).toEqual({
       valid: true,
-      validationScope: { baseline: true, scopes: { mode: 'all' } },
+      validationScope: { scopes: { mode: 'all' } },
       scenarios: 3,
       plannedEvidence: 1,
       targets: 1,
@@ -217,7 +217,7 @@ describe('focused-spec CLI', () => {
     expect(text.stdout).toContain('1 unique targets')
   })
 
-  it('rejects duplicate IDs introduced by separate active changes', async () => {
+  it('rejects unmarked ID reuse across captured scopes', async () => {
     const root = await fixture()
     await put(root, 'openspec/changes/other/specs/new/spec.md', focusedScenario(
       'fixture.future.planned',
@@ -228,11 +228,11 @@ describe('focused-spec CLI', () => {
     const validate = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
 
     expect(validate.status).toBe(1)
-    expect(json(validate.stdout)).toMatchObject({
-      valid: false,
-      validationScope: { baseline: true, scopes: { mode: 'all' } },
-      violations: [expect.objectContaining({ scenarioId: 'fixture.future.planned', message: expect.stringContaining('duplicate stable ID') })],
-    })
+    const output = json(validate.stdout)
+    expect(output).toMatchObject({ valid: false, validationScope: { scopes: { mode: 'all' } } })
+    expect(output.violations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ scenarioId: 'fixture.future.planned', message: expect.stringContaining('repeated IDs require exactly one owner') }),
+    ]))
   })
 
   it('rejects malformed evidence rows rather than passing on the remaining evidence', async () => {
@@ -254,8 +254,8 @@ describe('focused-spec CLI', () => {
     expect(json(run.stdout)).toMatchObject({
       valid: false,
       executionStarted: false,
-      validationScope: { baseline: true, scopes: { mode: 'all' } },
-      executionSelection: { source: 'baseline' },
+      validationScope: { scopes: { mode: 'all' } },
+      executionSelection: { scopes: { mode: 'all' } },
       violations: [expect.objectContaining({ scenarioId: 'fixture.current.passes', line: 5 })],
     })
   })
@@ -287,27 +287,32 @@ describe('focused-spec CLI', () => {
     expect(validate.stderr).not.toContain('TimeoutOverflowWarning')
   })
 
-  it('counts an all-planned change without inventing executable targets', async () => {
+  it('allows planned evidence in every scope only during non-strict validation', async () => {
     const root = await fixture()
-    await rm(join(root, 'openspec/specs'), { recursive: true })
+    await put(root, 'openspec/specs/current/spec.md', focusedScenario(
+      'fixture.current.planned',
+      'planned:fixture::current',
+    ))
 
-    const validate = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'add', '--json'], { encoding: 'utf8' })
-
+    const validate = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
     expect(validate.status).toBe(0)
     expect(json(validate.stdout)).toEqual({
       valid: true,
-      validationScope: { baseline: true, scopes: { mode: 'selected', name: 'add' } },
-      scenarios: 1,
-      plannedEvidence: 1,
+      validationScope: { scopes: { mode: 'all' } },
+      scenarios: 2,
+      plannedEvidence: 2,
       targets: 0,
     })
 
-    const strict = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'add', '--strict', '--json'], { encoding: 'utf8' })
+    const strict = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--strict', '--json'], { encoding: 'utf8' })
     expect(strict.status).toBe(1)
     expect(json(strict.stdout)).toMatchObject({
       valid: false,
-      validationScope: { baseline: true, scopes: { mode: 'selected', name: 'add' } },
-      violations: [expect.objectContaining({ scenarioId: 'fixture.future.planned' })],
+      validationScope: { scopes: { mode: 'all' } },
+      violations: expect.arrayContaining([
+        expect.objectContaining({ scenarioId: 'fixture.current.planned' }),
+        expect.objectContaining({ scenarioId: 'fixture.future.planned' }),
+      ]),
     })
   })
 
@@ -318,7 +323,7 @@ describe('focused-spec CLI', () => {
     expect(validate.status).toBe(0)
     expect(json(validate.stdout)).toEqual({
       valid: true,
-      validationScope: { baseline: true, scopes: { mode: 'all' } },
+      validationScope: { scopes: { mode: 'all' } },
       scenarios: 0,
       plannedEvidence: 0,
       targets: 0,
@@ -328,40 +333,52 @@ describe('focused-spec CLI', () => {
     expect(json(run.stdout)).toMatchObject({
       success: true,
       executionStarted: false,
-      validationScope: { baseline: true, scopes: { mode: 'all' } },
-      executionSelection: { source: 'baseline' },
+      validationScope: { scopes: { mode: 'all' } },
+      executionSelection: { scopes: { mode: 'all' } },
       scenarios: [],
       targetCount: 0,
     })
   })
 
-  it('separates run validation scope from current execution selection', async () => {
+  it('runs all scopes and disambiguates repeated scenario IDs', async () => {
     const root = await fixture()
     await put(root, 'openspec/changes/add/specs/new/spec.md', focusedScenario(
-      'fixture.future.executes',
-      'fixture::future',
-      { name: 'Future evidence executes', operation: 'ADDED' },
+      'fixture.current.passes',
+      'fixture::revised',
+      { name: 'A second scope revises current evidence', revisionRows: ['- **REVISES**: current'] },
+    ))
+    await put(root, 'openspec/changes/other/specs/new/spec.md', focusedScenario(
+      'fixture.current.passes',
+      'fixture::other-revision',
+      { name: 'Another scope revises current evidence', revisionRows: ['- **REVISES**: current'] },
     ))
     const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json'], { encoding: 'utf8' })
 
     expect(run.status).toBe(0)
-    expect(json(run.stdout)).toMatchObject({
+    const output = json(run.stdout)
+    expect(output).toMatchObject({
       success: true,
       executionStarted: true,
-      validationScope: { baseline: true, scopes: { mode: 'all' } },
-      executionSelection: { source: 'baseline' },
-      scenarios: [{ id: 'fixture.current.passes', status: 'PASS' }],
-      targetCount: 1,
+      validationScope: { scopes: { mode: 'all' } },
+      executionSelection: { scopes: { mode: 'all' } },
+      targetCount: 3,
     })
+    expect(output.scenarios).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'fixture.current.passes', scope: 'add', status: 'PASS' }),
+      expect.objectContaining({ id: 'fixture.current.passes', scope: 'other', status: 'PASS' }),
+      expect.objectContaining({ id: 'fixture.current.passes', scope: 'current', status: 'PASS' }),
+    ]))
 
     const text = spawnSync(process.execPath, [cli, 'run', '--root', root], { encoding: 'utf8' })
     expect(text.status).toBe(0)
-    expect(text.stdout).toMatch(/^validation scope:/m)
-    expect(text.stdout).toMatch(/^execution selection:/m)
-    expect(text.stdout).toContain('baseline')
+    expect(text.stdout).toMatch(/^validation scope: all discovered scopes$/m)
+    expect(text.stdout).toMatch(/^execution selection: all discovered scopes$/m)
+    expect(text.stdout).toContain('PASS [add] fixture.current.passes')
+    expect(text.stdout).toContain('PASS [other] fixture.current.passes')
+    expect(text.stdout).toContain('PASS [current] fixture.current.passes')
   })
 
-  it('reports selected change and scenario execution independently of validation scope', async () => {
+  it('reports selected scope and scenario execution independently of validation scope', async () => {
     const root = await fixture()
     await put(root, 'openspec/changes/add/specs/new/spec.md', focusedScenario(
       'fixture.future.executes',
@@ -375,28 +392,25 @@ describe('focused-spec CLI', () => {
     expect(json(run.stdout)).toMatchObject({
       success: true,
       executionStarted: true,
-      validationScope: { baseline: true, scopes: { mode: 'selected', name: 'add' } },
-      executionSelection: { source: 'scope', scope: 'add', scenario: 'fixture.future.executes' },
-      scenarios: [{ id: 'fixture.future.executes', status: 'PASS' }],
+      validationScope: { scopes: { mode: 'selected', name: 'add' }, scenario: 'fixture.future.executes' },
+      executionSelection: { scopes: { mode: 'selected', name: 'add' }, scenario: 'fixture.future.executes' },
+      scenarios: [{ id: 'fixture.future.executes', scope: 'add', status: 'PASS' }],
       targetCount: 1,
     })
   })
 
-  it('attributes an unselected scenario error to validation before execution', async () => {
+  it('runs a selected scenario despite unrelated invalid evidence in its scope', async () => {
     const root = await fixture()
     await rm(join(root, 'openspec/changes'), { recursive: true })
     await put(root, 'openspec/specs/current/spec.md', [
-      '### Requirement: Current behavior',
-      '#### Scenario: Selected evidence would pass',
-      '- **ID**: `fixture.current.selected`',
-      '- **EVIDENCE**: `fixture::selected`',
-      '- **WHEN** selected evidence runs',
-      '- **THEN** the selected behavior passes',
-      '#### Scenario: Unselected evidence is invalid',
-      '- **ID**: `fixture.current.unselected`',
-      '- **EVIDENCE**: `fixture::broken`',
-      '- **WHEN** unselected evidence is validated',
-      '- **THEN** its resolution error prevents execution',
+      focusedScenario('fixture.current.selected', 'fixture::selected'),
+      focusedScenario('fixture.current.unresolved', 'fixture::broken'),
+      focusedScenario('fixture.current.planned', 'planned:fixture::future'),
+      '#### Scenario: Unrelated malformed evidence',
+      '- **ID**: `fixture.current.malformed`',
+      '- **EVIDENCE**: fixture::missing-backticks',
+      '- **WHEN** another scenario is checked',
+      '- **THEN** its evidence is invalid',
     ].join('\n'))
     await put(root, 'runner.ts', [
       'export default {',
@@ -405,28 +419,68 @@ describe('focused-spec CLI', () => {
       '    targets: request.selectors.filter(selector => selector !== "broken").map(selector => ({ selector, targetId: selector, displayName: selector })),',
       '    errors: request.selectors.filter(selector => selector === "broken").map(selector => ({ selector, message: "not found" })),',
       '  } },',
-      '  async run() { throw new Error("execution must not start") },',
+      '  async run(request) { return { results: request.targets.map(target => ({ targetId: target.targetId, status: "pass" })) } },',
       '}',
     ].join('\n'))
 
     const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scenario', 'fixture.current.selected', '--json'], { encoding: 'utf8' })
-    const output = json(run.stdout)
-
-    expect(run.status).toBe(1)
-    expect(output).toMatchObject({
-      valid: false,
-      executionStarted: false,
-      validationScope: { baseline: true, scopes: { mode: 'all' } },
-      executionSelection: { source: 'baseline', scenario: 'fixture.current.selected' },
-      violations: [{ scenarioId: 'fixture.current.unselected' }],
+    expect(run.status).toBe(0)
+    expect(json(run.stdout)).toMatchObject({
+      success: true,
+      validationScope: { scopes: { mode: 'all' }, scenario: 'fixture.current.selected' },
+      executionSelection: { scopes: { mode: 'all' }, scenario: 'fixture.current.selected' },
+      scenarios: [{ id: 'fixture.current.selected', scope: 'current', status: 'PASS' }],
+      targetCount: 1,
     })
-    expect(output).not.toHaveProperty('success')
-    expect(output).not.toHaveProperty('scenarios')
 
-    const text = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scenario', 'fixture.current.selected'], { encoding: 'utf8' })
-    expect(text.status).toBe(1)
-    expect(text.stderr).toContain('execution did not start')
-    expect(text.stdout).not.toContain('PASS fixture.current.selected')
+    const full = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(full.status).toBe(1)
+    expect(json(full.stdout)).toMatchObject({ valid: false, executionStarted: false, validationScope: { scopes: { mode: 'all' } } })
+  })
+
+  it('rejects invalid selected scenario before execution', async () => {
+    for (const [content, expected] of [
+      [focusedScenario('fixture.bad', 'planned:fixture::later'), 'planned evidence is not allowed'],
+      [focusedScenario('fixture.bad', 'fixture::test', { revisionRows: ['- **REVISES**: missing'] }), 'REVISES missing'],
+      [['#### Scenario: Malformed evidence', '- **ID**: `fixture.bad`', '- **EVIDENCE**: fixture::bad', '- **WHEN** a scenario is requested', '- **THEN** its evidence is invalid'].join('\n'), 'malformed EVIDENCE row'],
+      [['#### Scenario: Missing outcome', '- **ID**: `fixture.bad`', '- **EVIDENCE**: `fixture::bad`', '- **WHEN** a scenario is requested'].join('\n'), 'expected exactly one THEN'],
+    ] as const) {
+      const root = await fixture()
+      await put(root, 'openspec/changes/add/specs/new/spec.md', content)
+      const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scope', 'add', '--scenario', 'fixture.bad', '--json'], { encoding: 'utf8' })
+      expect(run.status).toBe(1)
+      const output = json(run.stdout)
+      expect(output).toMatchObject({ valid: false, executionStarted: false, validationScope: { scopes: { mode: 'selected', name: 'add' }, scenario: 'fixture.bad' } })
+      expect(output.violations).toEqual(expect.arrayContaining([expect.objectContaining({ scenarioId: 'fixture.bad', message: expect.stringContaining(expected) })]))
+      expect(output).not.toHaveProperty('success')
+    }
+  })
+
+  it('rejects a missing selected scenario before resolving evidence', async () => {
+    const root = await fixture()
+    const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scope', 'add', '--scenario', 'fixture.missing', '--json'], { encoding: 'utf8' })
+    expect(run.status).toBe(1)
+    const output = json(run.stdout)
+    expect(output).toMatchObject({ valid: false, executionStarted: false, validationScope: { scopes: { mode: 'selected', name: 'add' }, scenario: 'fixture.missing' } })
+    expect(output.violations).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'fixture.missing', message: expect.stringContaining('selected scenario') })]))
+    expect(output).not.toHaveProperty('success')
+  })
+
+  it('validates and runs every matching scope for a selected scenario ID', async () => {
+    const root = await fixture()
+    await put(root, 'openspec/changes/add/specs/new/spec.md', focusedScenario('fixture.current.passes', 'fixture::revised', { revisionRows: ['- **REVISES**: current'] }))
+    await put(root, 'openspec/changes/other/specs/new/spec.md', focusedScenario('fixture.current.passes', 'fixture::other', { revisionRows: ['- **REVISES**: current'] }))
+    await put(root, 'openspec/changes/add/specs/unrelated/spec.md', focusedScenario('fixture.unrelated.planned', 'planned:fixture::later'))
+    const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scenario', 'fixture.current.passes', '--json'], { encoding: 'utf8' })
+    expect(run.status).toBe(0)
+    const output = json(run.stdout)
+    expect(output).toMatchObject({ success: true, validationScope: { scopes: { mode: 'all' }, scenario: 'fixture.current.passes' }, targetCount: 3 })
+    expect(output.scenarios).toEqual(expect.arrayContaining([
+      expect.objectContaining({ scope: 'current', id: 'fixture.current.passes', status: 'PASS' }),
+      expect.objectContaining({ scope: 'add', id: 'fixture.current.passes', status: 'PASS' }),
+      expect.objectContaining({ scope: 'other', id: 'fixture.current.passes', status: 'PASS' }),
+    ]))
+    expect((output.scenarios as unknown[]).length).toBe(3)
   })
 
   it('reports missing malformed and unsupported configuration', async () => {
@@ -436,7 +490,7 @@ describe('focused-spec CLI', () => {
     expect(missing.status).toBe(1)
     expect(json(missing.stdout)).toMatchObject({
       valid: false,
-      validationScope: { baseline: true, scopes: { mode: 'all' } },
+      validationScope: { scopes: { mode: 'all' } },
       violations: [expect.objectContaining({ message: expect.stringContaining('cannot read configuration') })],
     })
 
@@ -475,29 +529,33 @@ describe('focused-spec CLI', () => {
 
   it('validates scenario structure without importing runner modules in syntax only mode', async () => {
     const root = await fixture()
+    await put(root, 'openspec/changes/add/specs/new/spec.md', focusedScenario(
+      'fixture.future.concrete',
+      'fixture::future',
+    ))
     await rm(join(root, 'runner.ts'))
     const syntax = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'add', '--syntax-only', '--json'], { encoding: 'utf8' })
     expect(syntax.status).toBe(0)
     expect(json(syntax.stdout)).toEqual({
       valid: true,
       mode: 'syntax-only',
-      validationScope: { baseline: true, scopes: { mode: 'selected', name: 'add' } },
+      validationScope: { scopes: { mode: 'selected', name: 'add' } },
     })
     const full = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'add', '--json'], { encoding: 'utf8' })
     expect(full.status).toBe(1)
     expect(json(full.stdout)).toMatchObject({
       valid: false,
-      validationScope: { baseline: true, scopes: { mode: 'selected', name: 'add' } },
+      validationScope: { scopes: { mode: 'selected', name: 'add' } },
       violations: [expect.objectContaining({ path: 'fixture' })],
     })
   })
 
-  it('rejects an added change that steals a current scenario ID', async () => {
+  it('rejects unmarked ID reuse from another scope', async () => {
     const root = await fixture()
     await put(root, 'openspec/changes/add/specs/new/spec.md', focusedScenario(
       'fixture.current.passes',
       'planned:fixture::future',
-      { name: 'Claims the baseline ID', operation: 'ADDED' },
+      { name: 'Claims an existing scope ID', operation: 'ADDED' },
     ))
 
     const added = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'add', '--json'], { encoding: 'utf8' })
@@ -511,12 +569,14 @@ describe('focused-spec CLI', () => {
   it('rejects unsafe and ambiguous document layouts', async () => {
     const root = await emptyFixture()
     const invalidLayouts: readonly (readonly Layout[])[] = [
-      [{ match: '../outside/**/*.md', scope: 'baseline' }],
-      [{ match: '/absolute/specs/**/*.md', scope: 'baseline' }],
+      [{ match: '../outside/**/*.md', scope: 'current' }],
+      [{ match: '/absolute/specs/**/*.md', scope: 'current' }],
       [{ match: 'specs/{scope}/nested/{scope}.md' }],
       [{ match: 'specs/pre*{scope}/spec.md' }],
       [{ match: 'specs/{scope}/*.json' }],
       [{ match: 'specs/unowned/**/*.md' }],
+      [{ match: 'specs/{scope}/spec.md', scope: 'current' }],
+      [{ match: 'specs/**/*.md', scope: '../unsafe' }],
     ]
 
     for (const layouts of invalidLayouts) {
@@ -579,7 +639,7 @@ describe('focused-spec CLI', () => {
     expect(all.status).toBe(0)
     expect(json(all.stdout)).toMatchObject({
       valid: true,
-      validationScope: { baseline: true, scopes: { mode: 'all' } },
+      validationScope: { scopes: { mode: 'all' } },
       scenarios: 6,
       targets: 6,
     })
@@ -589,7 +649,7 @@ describe('focused-spec CLI', () => {
       expect(selected.status).toBe(0)
       expect(json(selected.stdout)).toMatchObject({
         valid: true,
-        validationScope: { baseline: true, scopes: { mode: 'selected', name } },
+        validationScope: { scopes: { mode: 'selected', name } },
         scenarios,
       })
     }
@@ -602,7 +662,7 @@ describe('focused-spec CLI', () => {
     expect(result.status).toBe(1)
     expect(json(result.stdout)).toMatchObject({
       valid: false,
-      validationScope: { baseline: true, scopes: { mode: 'selected', name: 'missing' } },
+      validationScope: { scopes: { mode: 'selected', name: 'missing' } },
       violations: [expect.objectContaining({ path: expect.stringContaining('missing') })],
     })
   })
@@ -615,7 +675,7 @@ describe('focused-spec CLI', () => {
     expect(result.status).toBe(1)
     expect(json(result.stdout)).toMatchObject({
       valid: false,
-      validationScope: { baseline: true, scopes: { mode: 'selected', name: 'empty' } },
+      validationScope: { scopes: { mode: 'selected', name: 'empty' } },
       violations: [expect.objectContaining({ path: expect.stringContaining('empty') })],
     })
 
@@ -625,7 +685,7 @@ describe('focused-spec CLI', () => {
     expect(output).toMatchObject({
       valid: false,
       executionStarted: false,
-      executionSelection: { source: 'scope', scope: 'empty' },
+      executionSelection: { scopes: { mode: 'selected', name: 'empty' } },
     })
     expect(output).not.toHaveProperty('success')
     expect(output).not.toHaveProperty('scenarios')
@@ -634,7 +694,7 @@ describe('focused-spec CLI', () => {
   it('rejects a document claimed by multiple layouts', async () => {
     const root = await emptyFixture()
     await configure(root, [
-      { match: 'specs/**/spec.md', scope: 'baseline' },
+      { match: 'specs/**/spec.md', scope: 'current' },
       { match: 'specs/{scope}/spec.md' },
     ])
     await put(root, 'runner.ts', 'export default { apiVersion: 1, async resolve() { return { targets: [], errors: [] } }, async run() { return { results: [] } } }')
@@ -647,8 +707,38 @@ describe('focused-spec CLI', () => {
     expect(output).toMatch(/claim|conflict|layout|overlap/iu)
   })
 
-  it('accepts explicit baseline revisions in a named scope', async () => {
+  it('accepts revisions from an unselected source without resolving its evidence', async () => {
     const root = await fixture()
+    await put(root, 'openspec/specs/current/spec.md', [
+      '#### Scenario: Malformed source evidence is irrelevant to selection',
+      '- **ID**: `fixture.current.passes`',
+      '- **EVIDENCE**: fixture::missing-backticks',
+      '- **WHEN** ownership is checked for a selected revision',
+      '- **THEN** the source scope evidence is not validated or resolved',
+    ].join('\n'))
+    await put(root, 'openspec/changes/add/specs/new/spec.md', focusedScenario(
+      'fixture.current.passes',
+      'planned:fixture::revised',
+      { name: 'Explicit revision', revisionRows: ['- **REVISES**: current'] },
+    ))
+
+    const result = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'add', '--json'], { encoding: 'utf8' })
+    expect(result.status).toBe(0)
+    expect(json(result.stdout)).toMatchObject({
+      valid: true,
+      validationScope: { scopes: { mode: 'selected', name: 'add' } },
+      scenarios: 1,
+      plannedEvidence: 1,
+      targets: 0,
+    })
+  })
+
+  it('treats baseline as an ordinary revision source name', async () => {
+    const root = await fixture()
+    await configure(root, [
+      { match: 'openspec/specs/**/spec.md', scope: 'baseline' },
+      { match: 'openspec/changes/{scope}/specs/**/spec.md' },
+    ])
     await put(root, 'openspec/changes/add/specs/new/spec.md', focusedScenario(
       'fixture.current.passes',
       'planned:fixture::revised',
@@ -659,19 +749,17 @@ describe('focused-spec CLI', () => {
     expect(result.status).toBe(0)
     expect(json(result.stdout)).toMatchObject({
       valid: true,
-      validationScope: { baseline: true, scopes: { mode: 'selected', name: 'add' } },
-      scenarios: 2,
+      scenarios: 1,
       plannedEvidence: 1,
     })
   })
 
-  it('rejects revisions without a baseline owner', async () => {
+  it('rejects revisions without an owning source scope', async () => {
     const root = await fixture()
-    await rm(join(root, 'openspec/specs'), { recursive: true })
     await put(root, 'openspec/changes/add/specs/new/spec.md', focusedScenario(
       'fixture.unowned.revision',
       'planned:fixture::revised',
-      { name: 'Orphan revision', revisionRows: ['- **REVISES**: baseline'] },
+      { name: 'Orphan revision', revisionRows: ['- **REVISES**: current'] },
     ))
 
     const result = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'add', '--json'], { encoding: 'utf8' })
@@ -685,15 +773,38 @@ describe('focused-spec CLI', () => {
     })
   })
 
-  it('rejects revision markers on baseline scenarios', async () => {
+  it('rejects cyclic revision ownership', async () => {
+    const root = await fixture()
+    await put(root, 'openspec/changes/first/specs/new/spec.md', focusedScenario(
+      'fixture.cyclic.revision',
+      'planned:fixture::first',
+      { revisionRows: ['- **REVISES**: second'] },
+    ))
+    await put(root, 'openspec/changes/second/specs/new/spec.md', focusedScenario(
+      'fixture.cyclic.revision',
+      'planned:fixture::second',
+      { revisionRows: ['- **REVISES**: first'] },
+    ))
+
+    const result = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(result.status).toBe(1)
+    expect(json(result.stdout)).toMatchObject({
+      valid: false,
+      violations: expect.arrayContaining([
+        expect.objectContaining({ scenarioId: 'fixture.cyclic.revision' }),
+      ]),
+    })
+  })
+
+  it('rejects revisions from the same scope', async () => {
     const root = await fixture()
     await put(root, 'openspec/specs/current/spec.md', focusedScenario(
       'fixture.current.passes',
       'fixture::current',
-      { name: 'Baseline cannot revise', revisionRows: ['- **REVISES**: baseline'] },
+      { name: 'Scope cannot revise itself', revisionRows: ['- **REVISES**: current'] },
     ))
 
-    const result = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'add', '--json'], { encoding: 'utf8' })
+    const result = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'current', '--json'], { encoding: 'utf8' })
     expect(result.status).toBe(1)
     expect(json(result.stdout)).toMatchObject({
       valid: false,
@@ -708,8 +819,8 @@ describe('focused-spec CLI', () => {
     const root = await fixture()
     const path = 'openspec/changes/add/specs/new/spec.md'
     for (const revisionRows of [
-      ['- **REVISES**: `baseline`'],
-      ['- **REVISES**: baseline', '- **REVISES**: baseline'],
+      ['- **REVISES**: `current`'],
+      ['- **REVISES**: current', '- **REVISES**: current'],
     ]) {
       await put(root, path, focusedScenario(
         'fixture.current.passes',
@@ -734,8 +845,8 @@ describe('focused-spec CLI', () => {
     expect(output).toMatchObject({
       valid: false,
       executionStarted: false,
-      validationScope: { baseline: true, scopes: { mode: 'selected', name: 'missing' } },
-      executionSelection: { source: 'scope', scope: 'missing' },
+      validationScope: { scopes: { mode: 'selected', name: 'missing' } },
+      executionSelection: { scopes: { mode: 'selected', name: 'missing' } },
       violations: [expect.objectContaining({ path: expect.stringContaining('missing') })],
     })
     expect(output).not.toHaveProperty('success')
@@ -759,7 +870,7 @@ describe('focused-spec CLI', () => {
     }
   })
 
-  it('validates baseline and selected scope without unrelated scopes', async () => {
+  it('validates only the selected scope evidence', async () => {
     const root = await fixture()
     await put(root, 'openspec/changes/add/specs/new/spec.md', focusedScenario(
       'fixture.future.executes',
@@ -768,17 +879,27 @@ describe('focused-spec CLI', () => {
     ))
     await put(root, 'openspec/changes/unrelated/specs/new/spec.md', focusedScenario(
       'fixture.unrelated.invalid',
-      'missing::unrelated',
+      'fixture::broken',
       { name: 'Unrelated evidence is invalid' },
     ))
+    await put(root, 'runner.ts', [
+      'export default {',
+      '  apiVersion: 1,',
+      '  async resolve(request) { return {',
+      '    targets: request.selectors.filter(selector => selector !== "broken").map(selector => ({ selector, targetId: selector, displayName: selector })),',
+      '    errors: request.selectors.filter(selector => selector === "broken").map(selector => ({ selector, message: "must stay unresolved" })),',
+      '  } },',
+      '  async run(request) { return { results: request.targets.map(target => ({ targetId: target.targetId, status: "pass" })) } },',
+      '}',
+    ].join('\n'))
 
     const validate = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'add', '--strict', '--json'], { encoding: 'utf8' })
     expect(validate.status).toBe(0)
     expect(json(validate.stdout)).toMatchObject({
       valid: true,
-      validationScope: { baseline: true, scopes: { mode: 'selected', name: 'add' } },
-      scenarios: 2,
-      targets: 2,
+      validationScope: { scopes: { mode: 'selected', name: 'add' } },
+      scenarios: 1,
+      targets: 1,
     })
 
     const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scope', 'add', '--json'], { encoding: 'utf8' })
@@ -786,9 +907,9 @@ describe('focused-spec CLI', () => {
     expect(json(run.stdout)).toMatchObject({
       success: true,
       executionStarted: true,
-      validationScope: { baseline: true, scopes: { mode: 'selected', name: 'add' } },
-      executionSelection: { source: 'scope', scope: 'add' },
-      scenarios: [{ id: 'fixture.future.executes', status: 'PASS' }],
+      validationScope: { scopes: { mode: 'selected', name: 'add' } },
+      executionSelection: { scopes: { mode: 'selected', name: 'add' } },
+      scenarios: [{ id: 'fixture.future.executes', scope: 'add', status: 'PASS' }],
     })
   })
 
@@ -826,20 +947,20 @@ describe('focused-spec CLI', () => {
     expect(json(run.stdout)).toMatchObject({
       success: true,
       scenarios: [
-        { id: 'fixture.future.executes', evidence: [{ reference: 'fixture::future', status: 'PASS' }] },
-        { id: 'fixture.future.shared', evidence: [{ reference: 'fixture::future', status: 'PASS' }] },
+        { id: 'fixture.future.executes', scope: 'add', evidence: [{ reference: 'fixture::future', status: 'PASS' }] },
+        { id: 'fixture.future.shared', scope: 'add', evidence: [{ reference: 'fixture::future', status: 'PASS' }] },
       ],
       targetCount: 1,
     })
-    expect(await readFile(join(root, 'calls'), 'utf8')).toBe('resolve:current,future\nrun:future\n')
+    expect(await readFile(join(root, 'calls'), 'utf8')).toBe('resolve:future\nrun:future\n')
   })
 
-  it('executes revised evidence rather than baseline evidence for the same scenario ID', async () => {
+  it('executes revised evidence rather than source-scope evidence for the same scenario ID', async () => {
     const root = await fixture()
     await put(root, 'openspec/changes/add/specs/new/spec.md', focusedScenario(
       'fixture.current.passes',
       'fixture::revised',
-      { name: 'Revision executes', revisionRows: ['- **REVISES**: baseline'] },
+      { name: 'Revision executes', revisionRows: ['- **REVISES**: current'] },
     ))
     await put(root, 'runner.ts', [
       "import { appendFile } from 'node:fs/promises'",
@@ -861,6 +982,7 @@ describe('focused-spec CLI', () => {
       success: true,
       scenarios: [{
         id: 'fixture.current.passes',
+        scope: 'add',
         evidence: [{ reference: 'fixture::revised', status: 'PASS' }],
       }],
       targetCount: 1,

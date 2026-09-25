@@ -27,32 +27,32 @@ The CLI SHALL load a version-2 `.focused-spec/config.yaml` from the selected pro
 - **WHEN** a runner module path escapes the project root or runner options are not JSON-compatible
 - **THEN** validation reports a configuration or runner-path error without loading the module
 
-#### Scenario: Unsafe or ambiguous document layout
+#### Scenario: Invalid scope assignment in document layout
 - **ID**: `config.layout.invalid`
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects unsafe and ambiguous document layouts`
-- **WHEN** a document pattern escapes the project root, captures a scope ambiguously, or includes a non-Markdown artifact
+- **WHEN** a document layout has both or neither of an explicit path-safe scope and exactly one unambiguous scope capture
 - **THEN** configuration fails before reading or executing documents
 
 ### Requirement: Specification sources
-The CLI SHALL discover focused scenarios from configured project-relative Markdown document patterns, without requiring a named SDD framework. A baseline pattern has no scope capture; a named-scope pattern captures one scope name. Optional per-pattern exclusions SHALL narrow matches without creating fallback locations. Multiple patterns MAY contribute documents to the same scope. A document SHALL belong to exactly one configured location and scope. Configuration SHALL support nested capability specs, a spec adjacent to planning artifacts, and frameworks with no baseline documents. A requested scope with no matching documents or any discovered named scope whose documents contain no focused scenarios SHALL fail. No pattern SHALL be silently widened when a configured scope does not match.
+The CLI SHALL discover focused scenarios from configured project-relative Markdown document patterns without requiring a named SDD framework. Every pattern SHALL assign exactly one path-safe scope: either an arbitrary explicit `scope: <name>` without `{scope}`, or exactly one `{scope}` capture without an explicit scope. No scope name, including `baseline`, SHALL receive special behavior. Optional per-pattern exclusions SHALL narrow matches without creating fallback locations. Multiple patterns MAY contribute documents to the same scope. A document SHALL belong to exactly one configured location and scope. Configuration SHALL support nested capability specs, a spec adjacent to planning artifacts, and projects whose layouts match no documents. An explicitly requested scope with no matching documents or any discovered scope whose documents contain no focused scenarios SHALL fail. No pattern SHALL be silently widened when a configured location is absent.
 
 #### Scenario: File globs match no specifications
 - **ID**: `config.source.empty-files`
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > preserves successful validation when no specifications match`
-- **WHEN** baseline-only document globs match no Markdown specifications and no scope is selected
-- **THEN** validation reports zero scenarios, planned evidence, and targets without treating absence as an error
+- **WHEN** configured document globs match no Markdown specifications and no scope is selected
+- **THEN** validation reports zero scenarios, planned evidence, and targets without treating global absence as an error
 
-#### Scenario: Baseline and named scope are discovered
+#### Scenario: Explicit and captured scopes are discovered
 - **ID**: `config.source.openspec-discovery`
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > reports all scenarios, planned evidence, and unique resolved targets`
-- **WHEN** baseline documents and one named scope each contain focused scenarios under configured patterns
-- **THEN** full validation includes both sets in its reported scenario count
+- **WHEN** one layout explicitly names a scope and another captures a different scope from matching scenario documents
+- **THEN** full validation includes both scopes in its reported scenario count without privileging either name
 
 #### Scenario: Adjacent and nested scope layouts
 - **ID**: `config.source.layout-variants`
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > discovers adjacent and nested scope documents from declared patterns`
 - **WHEN** projects configure a document adjacent to planning artifacts or nested under a feature or capability directory
-- **THEN** each declared document is discovered in its own named scope without an SDD-specific locator
+- **THEN** each declared document is discovered in its captured scope without an SDD-specific locator
 
 #### Scenario: Absent selected scope
 - **ID**: `config.source.missing-scope`

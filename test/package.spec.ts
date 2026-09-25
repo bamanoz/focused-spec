@@ -47,7 +47,7 @@ describe('package distribution', () => {
       'specifications:',
       '  documents:',
       '    - match: specs/**/*.md',
-      '      scope: baseline',
+      '      scope: current',
       'runners:',
       '  consumer:',
       '    module: ./runner.ts',
@@ -63,10 +63,10 @@ describe('package distribution', () => {
     const cli = join(consumer, 'node_modules/focused-spec/dist/cli.js')
     const validation = spawnSync(process.execPath, [cli, 'validate', '--root', consumer, '--json'], { encoding: 'utf8' })
     expect(validation.status).toBe(0)
-    expect(JSON.parse(validation.stdout)).toMatchObject({ valid: true, validationScope: { baseline: true, scopes: { mode: 'all' } }, scenarios: 1, targets: 1 })
+    expect(JSON.parse(validation.stdout)).toMatchObject({ valid: true, validationScope: { scopes: { mode: 'all' } }, scenarios: 1, targets: 1 })
     const execution = spawnSync(process.execPath, [cli, 'run', '--root', consumer, '--json'], { encoding: 'utf8' })
     expect(execution.status).toBe(0)
-    expect(JSON.parse(execution.stdout)).toMatchObject({ success: true, validationScope: { baseline: true, scopes: { mode: 'all' } }, executionSelection: { source: 'baseline' }, scenarios: [{ id: 'consumer.cli.works', status: 'PASS' }] })
+    expect(JSON.parse(execution.stdout)).toMatchObject({ success: true, validationScope: { scopes: { mode: 'all' } }, executionSelection: { scopes: { mode: 'all' } }, scenarios: [{ id: 'consumer.cli.works', scope: 'current', status: 'PASS' }] })
   })
 
   it('typechecks a consumer plugin against focused-spec runner', async () => {

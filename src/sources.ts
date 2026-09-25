@@ -11,7 +11,7 @@ interface Claim {
   readonly absolutePath: string
   readonly path: string
   readonly layoutIndex: number
-  readonly scope?: string
+  readonly scope: string
 }
 
 export function isScopeName(name: string): boolean {
@@ -26,10 +26,6 @@ function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
 
-function selectedMatch(layout: DocumentLayout, selectedScope: string | undefined): string {
-  if (layout.scope === 'baseline') return layout.match
-  return layout.match.replace(SCOPE_TOKEN, selectedScope === undefined ? '*' : fg.escapePath(selectedScope))
-}
 
 function capturedScope(layout: DocumentLayout, path: string): string | undefined {
   const segments = layout.match.split('/')
@@ -53,11 +49,19 @@ async function claimsForLayout(
   projectRoot: string,
   layout: DocumentLayout,
   layoutIndex: number,
-  selectedScope: string | undefined,
   violations: Violation[],
+  capturedScopeSelection?: string,
 ): Promise<Claim[]> {
-  if (selectedScope !== undefined && layout.scope !== 'baseline' && !isScopeName(selectedScope)) return []
-  const pattern = selectedMatch(layout, selectedScope)
+  if (layout.scope !== undefined && !isScopeName(layout.scope)) {
+    violations.push({
+      path: '.focused-spec/config.yaml',
+      message: `layout ${layoutIndex + 1} has invalid scope name ${layout.scope}`,
+    })
+    return []
+  }
+  const pattern = layout.scope === undefined
+    ? layout.match.replace(SCOPE_TOKEN, capturedScopeSelection === undefined ? '*' : fg.escapePath(capturedScopeSelection))
+    : layout.match
   let paths: string[]
   try {
     paths = await fg(pattern, {
@@ -80,9 +84,8 @@ async function claimsForLayout(
 
   return paths.sort(compareText).flatMap(absolutePath => {
     const path = portable(relative(projectRoot, absolutePath))
-    if (layout.scope === 'baseline') return [{ absolutePath, path, layoutIndex }]
-    const scope = capturedScope(layout, path)
-    if (scope === undefined || (selectedScope !== undefined && scope !== selectedScope)) {
+    const scope = layout.scope ?? capturedScope(layout, path)
+    if (scope === undefined) {
       violations.push({
         path,
         message: `document matched layout ${layoutIndex + 1} but its scope capture is not a path-safe non-empty fragment`,
@@ -98,7 +101,6 @@ export async function discoverDocuments(
   config: FocusedSpecConfig,
   selectedScope?: string,
 ): Promise<{
-  baseline: readonly SpecDocument[]
   scopes: ReadonlyMap<string, readonly SpecDocument[]>
   violations: readonly Violation[]
 }> {
@@ -108,15 +110,22 @@ export async function discoverDocuments(
     projectRealPath = await realpath(projectRoot)
   } catch (error) {
     return {
-      baseline: [],
       scopes: new Map(),
       violations: [{ path: projectRoot, message: `cannot resolve project root: ${error instanceof Error ? error.message : String(error)}` }],
     }
   }
 
-  const claims = (await Promise.all(config.specifications.documents.map((layout, index) => (
-    claimsForLayout(projectRoot, layout, index, selectedScope, violations)
-  )))).flat().sort((left, right) => compareText(left.path, right.path) || left.layoutIndex - right.layoutIndex)
+  const claims = (await Promise.all(config.specifications.documents.map(async (layout, index) => {
+    if (selectedScope === undefined) return claimsForLayout(projectRoot, layout, index, violations)
+    if (layout.scope !== undefined) {
+      return layout.scope === selectedScope
+        ? claimsForLayout(projectRoot, layout, index, violations)
+        : claimsForLayout(projectRoot, layout, index, [])
+    }
+    const allClaims = await claimsForLayout(projectRoot, layout, index, [])
+    const selectedClaims = await claimsForLayout(projectRoot, layout, index, violations, selectedScope)
+    return [...allClaims.filter(claim => claim.scope !== selectedScope), ...selectedClaims]
+  }))).flat().sort((left, right) => compareText(left.path, right.path) || left.layoutIndex - right.layoutIndex)
 
   const claimsByPath = new Map<string, Claim[]>()
   for (const claim of claims) {
@@ -125,15 +134,16 @@ export async function discoverDocuments(
     else existing.push(claim)
   }
 
-  const baseline: SpecDocument[] = []
   const scopes = new Map<string, SpecDocument[]>()
-  const canonicalClaims = new Map<string, string>()
+  const canonicalClaims = new Map<string, Claim>()
   for (const [path, pathClaims] of claimsByPath) {
     if (pathClaims.length > 1) {
-      const locations = pathClaims.map(claim => (
-        `layout ${claim.layoutIndex + 1} (${claim.scope === undefined ? 'baseline' : `scope ${claim.scope}`})`
-      )).join(', ')
-      violations.push({ path, message: `document is claimed more than once: ${locations}` })
+      if (selectedScope === undefined || pathClaims.some(claim => claim.scope === selectedScope)) {
+        const locations = pathClaims.map(claim => (
+          `layout ${claim.layoutIndex + 1} (scope ${claim.scope})`
+        )).join(', ')
+        violations.push({ path, message: `document is claimed more than once: ${locations}` })
+      }
       continue
     }
 
@@ -143,42 +153,40 @@ export async function discoverDocuments(
     try {
       canonicalPath = await realpath(claim.absolutePath)
     } catch (error) {
-      violations.push({ path, message: `cannot resolve document path: ${error instanceof Error ? error.message : String(error)}` })
+      if (selectedScope === undefined || claim.scope === selectedScope) violations.push({ path, message: `cannot resolve document path: ${error instanceof Error ? error.message : String(error)}` })
       continue
     }
     const fromRoot = relative(projectRealPath, canonicalPath)
     if (isAbsolute(fromRoot) || fromRoot === '..' || fromRoot.startsWith(`..${sep}`)) {
-      violations.push({ path, message: `document resolves outside project root: ${canonicalPath}` })
+      if (selectedScope === undefined || claim.scope === selectedScope) violations.push({ path, message: `document resolves outside project root: ${canonicalPath}` })
       continue
     }
 
-    const previousPath = canonicalClaims.get(canonicalPath)
-    if (previousPath !== undefined) {
-      violations.push({ path, message: `document is also claimed through ${previousPath}` })
+    const previousClaim = canonicalClaims.get(canonicalPath)
+    if (previousClaim !== undefined) {
+      if (selectedScope === undefined || claim.scope === selectedScope || previousClaim.scope === selectedScope) {
+        violations.push({ path, message: `document is also claimed through ${previousClaim.path}` })
+      }
       continue
     }
-    canonicalClaims.set(canonicalPath, path)
+    canonicalClaims.set(canonicalPath, claim)
 
     let document: SpecDocument
     try {
-      document = parseFocusedSpecDocument(path, await readFile(claim.absolutePath, 'utf8'))
+      document = parseFocusedSpecDocument(path, await readFile(claim.absolutePath, 'utf8'), claim.scope)
     } catch (error) {
-      violations.push({ path, message: `cannot read document: ${error instanceof Error ? error.message : String(error)}` })
+      if (selectedScope === undefined || claim.scope === selectedScope) violations.push({ path, message: `cannot read document: ${error instanceof Error ? error.message : String(error)}` })
       continue
     }
-    if (claim.scope === undefined) baseline.push(document)
-    else {
-      const existing = scopes.get(claim.scope)
-      if (existing === undefined) scopes.set(claim.scope, [document])
-      else existing.push(document)
-    }
+    const existing = scopes.get(claim.scope)
+    if (existing === undefined) scopes.set(claim.scope, [document])
+    else existing.push(document)
   }
 
-  baseline.sort((left, right) => compareText(left.path, right.path))
   const sortedScopes = new Map<string, readonly SpecDocument[]>()
   for (const name of [...scopes.keys()].sort(compareText)) {
     sortedScopes.set(name, (scopes.get(name) ?? []).sort((left, right) => compareText(left.path, right.path)))
   }
   violations.sort((left, right) => compareText(left.path, right.path) || compareText(left.message, right.message))
-  return { baseline, scopes: sortedScopes, violations }
+  return { scopes: sortedScopes, violations }
 }

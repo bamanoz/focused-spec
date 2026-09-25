@@ -3,6 +3,7 @@ import { isAbsolute, resolve } from 'node:path'
 import { parse } from 'yaml'
 import type { DocumentLayout, FocusedSpecConfig, RunnerConfig, Violation } from './model.js'
 import type { JsonValue } from './runner-api.js'
+import { isScopeName } from './sources.js'
 
 const RUNNER_ID = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u
 const PARENT_SEGMENT = /(?:^|[\\/])\.\.(?:[\\/]|$)/u
@@ -76,12 +77,13 @@ function parseDocumentLayout(value: unknown, index: number, path: string, violat
     violations.push({ path, message: `${context}.match contains malformed scope capture ${malformedCapture}` })
   }
 
-  if (record.scope === 'baseline') {
-    if (captures !== 0) violations.push({ path, message: `${context} baseline match must not contain ${SCOPE_TOKEN}` })
-  } else if (record.scope !== undefined) {
-    violations.push({ path, message: `${context}.scope must be baseline when present` })
+  if (record.scope !== undefined) {
+    if (typeof record.scope !== 'string' || !isScopeName(record.scope)) {
+      violations.push({ path, message: `${context}.scope must be a path-safe non-empty scope name` })
+    }
+    if (captures !== 0) violations.push({ path, message: `${context} fixed-scope match must not contain ${SCOPE_TOKEN}` })
   } else if (captures !== 1) {
-    violations.push({ path, message: `${context} named-scope match must contain exactly one ${SCOPE_TOKEN}` })
+    violations.push({ path, message: `${context} captured-scope match must contain exactly one ${SCOPE_TOKEN}` })
   }
 
   if (captures > 0) {
@@ -117,7 +119,7 @@ function parseDocumentLayout(value: unknown, index: number, path: string, violat
   if (violations.length !== violationCount) return undefined
   return {
     match,
-    ...(record.scope === 'baseline' ? { scope: 'baseline' as const } : {}),
+    ...(typeof record.scope === 'string' ? { scope: record.scope } : {}),
     ...(exclude === undefined ? {} : { exclude }),
   }
 }

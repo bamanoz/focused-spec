@@ -2,7 +2,7 @@ version: 2
 specifications:
   documents:
     - match: openspec/specs/**/spec.md
-      scope: baseline
+      scope: current
     - match: openspec/changes/{scope}/specs/**/spec.md
 runners:
   go-unit:

@@ -2,7 +2,7 @@ import type { EvidenceResult, ExecutionPlan, ExecutionResult, EvidenceStatus, Pl
 import { partitionRunnerTargets, runRunnerTargets } from './runner-client.js'
 
 function aggregate(statuses: readonly EvidenceStatus[]): EvidenceStatus {
-  if (statuses.includes('ERROR')) return 'ERROR'
+  if (statuses.length === 0 || statuses.includes('ERROR')) return 'ERROR'
   if (statuses.includes('FAIL')) return 'FAIL'
   if (statuses.includes('SKIP')) return 'SKIP'
   return 'PASS'
@@ -153,7 +153,12 @@ export async function executePlan(
       const result = resultByKey.get(item.key) ?? { status: 'ERROR' as const, diagnostic: 'execution plan lost the evidence result' }
       return { reference: item.reference, ...result }
     })
-    return { id: scenario.id, status: aggregate(evidence.map(item => item.status)), evidence }
+    return {
+      scope: scenario.scope,
+      id: scenario.id,
+      status: aggregate(evidence.map(item => item.status)),
+      evidence,
+    }
   })
   const success = scenarios.every(scenario => scenario.status === 'PASS' || (options.allowSkip === true && scenario.status === 'SKIP'))
   return { success, scenarios, targetCount: plan.targets.length }

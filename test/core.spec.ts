@@ -5,7 +5,7 @@ import { validateDocuments } from '../src/validate.js'
 
 const config: FocusedSpecConfig = {
   version: 2,
-  specifications: { documents: [{ match: 'specs/**/*.md', scope: 'baseline' }] },
+  specifications: { documents: [{ match: 'specs/**/*.md', scope: 'current' }] },
   runners: { unit: { module: './runner.ts' } },
 }
 
@@ -22,7 +22,8 @@ function scenario(id = 'auth.login.blocked', evidence = 'unit::auth test'): stri
 
 describe('focused specification parsing', () => {
   it('parses a focused scenario and opaque runner selector', () => {
-    const document = parseFocusedSpecDocument('specs/auth.md', scenario())
+    const document = parseFocusedSpecDocument('specs/auth.md', scenario(), 'current')
+    expect(document.scope).toBe('current')
     expect(document.scenarios).toEqual([expect.objectContaining({
       name: 'Blocked account logs in',
       ids: ['auth.login.blocked'],
@@ -39,8 +40,8 @@ describe('focused specification parsing', () => {
   })
 
   it('rejects malformed shape, unknown runners, and duplicate ownership', () => {
-    const first = parseFocusedSpecDocument('specs/one.md', scenario())
-    const second = parseFocusedSpecDocument('specs/two.md', scenario('auth.login.blocked', 'missing::target'))
+    const first = parseFocusedSpecDocument('specs/one.md', scenario(), 'current')
+    const second = parseFocusedSpecDocument('specs/two.md', scenario('auth.login.blocked', 'missing::target'), 'current')
     const validation = validateDocuments([first, second], config, { allowPlanned: false })
     expect(validation.violations.map(item => item.message)).toEqual(expect.arrayContaining([
       expect.stringContaining('duplicate stable ID'),
@@ -49,7 +50,7 @@ describe('focused specification parsing', () => {
   })
 
   it('allows planned evidence only during non-strict scope validation', () => {
-    const document = parseFocusedSpecDocument('scopes/add/spec.md', scenario('auth.login.new', 'planned:unit::future test'))
+    const document = parseFocusedSpecDocument('scopes/add/spec.md', scenario('auth.login.new', 'planned:unit::future test'), 'add')
     expect(validateDocuments([document], config, { allowPlanned: true }).violations).toEqual([])
     expect(validateDocuments([document], config, { allowPlanned: false }).violations).toContainEqual(
       expect.objectContaining({ message: expect.stringContaining('planned evidence is not allowed') }),
@@ -58,7 +59,7 @@ describe('focused specification parsing', () => {
   it('rejects scenarios without exactly one ID WHEN and THEN', () => {
     const missing = scenario().split('\n').filter(line => !line.startsWith('- **ID**') && !line.startsWith('- **WHEN**') && !line.startsWith('- **THEN**')).join('\n')
     const repeated = `${scenario()}\n- **ID**: \`auth.login.other\`\n- **WHEN** again\n- **THEN** another result`
-    const documents = [missing, repeated].map((source, index) => parseFocusedSpecDocument(`specs/${index}.md`, source))
+    const documents = [missing, repeated].map((source, index) => parseFocusedSpecDocument(`specs/${index}.md`, source, 'current'))
     const violations = validateDocuments(documents, config, { allowPlanned: false }).violations
     for (const count of [0, 2]) {
       for (const field of ['ID', 'WHEN', 'THEN']) {
@@ -69,7 +70,7 @@ describe('focused specification parsing', () => {
 
   it('rejects a scenario without evidence', () => {
     const source = scenario().split('\n').filter(line => !line.startsWith('- **EVIDENCE**')).join('\n')
-    const document = parseFocusedSpecDocument('specs/auth.md', source)
+    const document = parseFocusedSpecDocument('specs/auth.md', source, 'current')
     expect(validateDocuments([document], config, { allowPlanned: false }).violations).toContainEqual(
       expect.objectContaining({ message: 'expected at least one EVIDENCE row' }),
     )

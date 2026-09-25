@@ -72,7 +72,7 @@ async function scenarioGate(workspace: string, evalCase: EvalCase): Promise<Eval
   const paths = await fg(['**/*.md', '!node_modules/**', '!README.md', '!**/SKILL.md'], { cwd: workspace, onlyFiles: true })
   const matches = []
   for (const path of paths) {
-    const document = parseFocusedSpecDocument(path, await readFile(join(workspace, path), 'utf8'))
+    const document = parseFocusedSpecDocument(path, await readFile(join(workspace, path), 'utf8'), evalCase.changeName ?? 'current')
     matches.push(...document.scenarios.filter(scenario => scenario.ids.includes(evalCase.expectedScenarioId)))
   }
   if (matches.length !== 1) return gate('scenario-contract', false, `expected one ${evalCase.expectedScenarioId} owner, found ${matches.length}`)
@@ -174,6 +174,6 @@ export async function judgeCompletedWorkspace(
   gates.push(await behaviorGate(workspace))
   gates.push(await integrityGate(workspace, snapshots, transcripts))
   if (strict.code === 0 && run.code === 0) gates.push(await mutationGate(workspace, evalCase))
-  else gates.push(gate('mutation-sensitivity', false, 'baseline focused validation or execution failed'))
+  else gates.push(gate('mutation-sensitivity', false, 'focused validation or execution failed'))
   return gates
 }

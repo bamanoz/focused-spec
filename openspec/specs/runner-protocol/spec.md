@@ -26,7 +26,7 @@ Each requested selector SHALL resolve to exactly one validated target or one act
 
 #### Scenario: Unresolved selector blocks validation
 - **ID**: `runner.resolve.unresolved`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > attributes an unselected scenario error to validation before execution`
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > reports reached timings on validation failure`
 - **WHEN** a runner reports that a requested selector has no target
 - **THEN** validation reports its evidence and the CLI does not begin execution
 

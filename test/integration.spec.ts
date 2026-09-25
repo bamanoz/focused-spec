@@ -27,7 +27,7 @@ async function fixture(status: 'pass' | 'skip' = 'pass'): Promise<string> {
     'specifications:',
     '  documents:',
     '    - match: openspec/specs/**/spec.md',
-    '      scope: baseline',
+    '      scope: current',
     '    - match: openspec/changes/{scope}/specs/**/spec.md',
     'runners:',
     '  fixture:',
@@ -88,6 +88,7 @@ function executionPlan(root: string, runners: readonly TestRunner[]): ExecutionP
     groups,
     targets,
     scenarios: targets.map(target => ({
+      scope: 'current',
       id: `${target.runnerId}.${target.target.targetId}`,
       evidence: [{ key: target.key, reference: target.references[0] as string }],
     })),
@@ -304,9 +305,9 @@ describe('project-local TypeScript runners', () => {
     expect(passing.status).toBe(0)
     expect(JSON.parse(passing.stdout)).toMatchObject({
       success: true,
-      validationScope: { baseline: true, scopes: { mode: 'selected', name: 'account-lock' } },
-      executionSelection: { source: 'scope', scope: 'account-lock' },
-      scenarios: [{ id: 'fixture.vitest.scope', status: 'PASS' }],
+      validationScope: { scopes: { mode: 'selected', name: 'account-lock' } },
+      executionSelection: { scopes: { mode: 'selected', name: 'account-lock' } },
+      scenarios: [{ id: 'fixture.vitest.scope', scope: 'account-lock', status: 'PASS' }],
     })
 
     await put(root, testPath, [
@@ -349,7 +350,7 @@ describe('project-local TypeScript runners', () => {
       'specifications:',
       '  documents:',
       '    - match: specs/**/*.md',
-      '      scope: baseline',
+      '      scope: current',
       'runners:',
       '  selected:',
       '    module: ./selected.ts',
@@ -376,7 +377,7 @@ describe('project-local TypeScript runners', () => {
         'specifications:',
         '  documents:',
         '    - match: specs/**/*.md',
-        '      scope: baseline',
+        '      scope: current',
         'runners: {}',
         'execution:',
         `  maxConcurrentGroups: ${invalid}`,

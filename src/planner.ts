@@ -3,6 +3,7 @@ import { parseEvidenceReference } from './parser.js'
 import { resolveRunnerTargets } from './runner-client.js'
 
 interface EvidenceUse {
+  readonly scope: string
   readonly raw: string
   readonly runnerId: string
   readonly selector: string
@@ -28,23 +29,28 @@ export async function planEvidence(
 ): Promise<PlanOutput> {
   const uses: EvidenceUse[] = []
   const scenarioUses = new Map<string, EvidenceUse[]>()
+  let selectedScenarioFound = false
   for (const document of documents) {
     for (const scenario of document.scenarios) {
       const scenarioId = scenario.ids[0]
       if (scenarioId === undefined || (options.scenarioId !== undefined && scenarioId !== options.scenarioId)) continue
+      selectedScenarioFound = true
       const selected: EvidenceUse[] = []
       for (const raw of scenario.evidence) {
         const reference = parseEvidenceReference(raw)
         if ('error' in reference || reference.planned) continue
-        const use = { raw, runnerId: reference.runnerId, selector: reference.selector, path: scenario.path, line: scenario.line, scenarioId }
+        const use = { scope: document.scope, raw, runnerId: reference.runnerId, selector: reference.selector, path: scenario.path, line: scenario.line, scenarioId }
         uses.push(use)
         selected.push(use)
       }
-      if (selected.length > 0) scenarioUses.set(scenarioId, selected)
+      if (selected.length > 0) {
+        const key = `${document.scope}\u0000${scenarioId}`
+        scenarioUses.set(key, [...(scenarioUses.get(key) ?? []), ...selected])
+      }
     }
   }
 
-  if (options.scenarioId !== undefined && !scenarioUses.has(options.scenarioId)) {
+  if (options.scenarioId !== undefined && (!selectedScenarioFound || scenarioUses.size === 0)) {
     return { violations: [{ path: options.scenarioId, message: `selected scenario has no executable evidence: ${options.scenarioId}` }] }
   }
 
@@ -55,7 +61,12 @@ export async function planEvidence(
   const targetsByRunnerSelector = new Map<string, PlannedTarget>()
   for (const [runnerId, runnerUses] of [...byRunner].sort(([left], [right]) => left.localeCompare(right))) {
     const runnerConfig = config.runners[runnerId]
-    if (runnerConfig === undefined) continue
+    if (runnerConfig === undefined) {
+      for (const use of runnerUses) {
+        violations.push({ path: use.path, line: use.line, scenarioId: use.scenarioId, message: `unknown evidence runner ${runnerId}` })
+      }
+      continue
+    }
     const selectors = [...new Set(runnerUses.map(use => use.selector))].sort()
     try {
       const resolved = await resolveRunnerTargets(projectRoot, runnerId, runnerConfig, selectors)
@@ -97,15 +108,17 @@ export async function planEvidence(
   }
 
   const scenarios: PlannedScenario[] = []
-  for (const [id, selectedUses] of scenarioUses) {
+  for (const selectedUses of scenarioUses.values()) {
+    const first = selectedUses[0]
+    if (first === undefined) continue
     const evidence = selectedUses.map(use => {
       const target = targetsByRunnerSelector.get(`${use.runnerId}\u0000${use.selector}`)
       if (target === undefined) throw new Error(`planner lost resolved evidence ${use.raw}`)
       return { key: target.key, reference: use.raw }
     })
-    scenarios.push({ id, evidence })
+    scenarios.push({ scope: first.scope, id: first.scenarioId, evidence })
   }
-  scenarios.sort((left, right) => left.id.localeCompare(right.id))
+  scenarios.sort((left, right) => left.scope.localeCompare(right.scope) || left.id.localeCompare(right.id))
 
   const targets = [...targetsByKey.values()].sort((left, right) => left.key.localeCompare(right.key))
   const grouped = new Map<string, PlannedTarget[]>()
@@ -135,6 +148,7 @@ export function projectExecutionPlan(
   const targetsByKey = new Map<string, PlannedTarget>()
   const referencesByKey = new Map<string, Set<string>>()
   let selectedScenarioFound = false
+  let selectedExecutableScenarioFound = false
 
   for (const document of documents) {
     for (const scenario of document.scenarios) {
@@ -153,15 +167,17 @@ export function projectExecutionPlan(
         referencesByKey.set(target.key, references)
         return [{ key: target.key, reference: raw }]
       })
-      scenarios.push({ id, evidence })
+      if (evidence.length === 0) continue
+      selectedExecutableScenarioFound = true
+      scenarios.push({ scope: document.scope, id, evidence })
     }
   }
 
-  if (options.scenarioId !== undefined && !selectedScenarioFound) {
+  if (options.scenarioId !== undefined && (!selectedScenarioFound || !selectedExecutableScenarioFound)) {
     return { violations: [{ path: options.scenarioId, message: `selected scenario has no executable evidence: ${options.scenarioId}` }] }
   }
 
-  scenarios.sort((left, right) => left.id.localeCompare(right.id))
+  scenarios.sort((left, right) => left.scope.localeCompare(right.scope) || left.id.localeCompare(right.id))
   const targets = [...targetsByKey.values()]
     .map(target => ({ ...target, references: [...(referencesByKey.get(target.key) ?? [])].sort() }))
     .sort((left, right) => left.key.localeCompare(right.key))

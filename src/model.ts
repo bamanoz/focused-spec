@@ -2,6 +2,7 @@ import type { JsonValue, ResolvedTarget, TargetResult } from './runner-api.js'
 
 
 export interface Scenario {
+  readonly scope: string
   readonly path: string
   readonly line: number
   readonly name: string
@@ -17,6 +18,7 @@ export interface Scenario {
 
 export interface SpecDocument {
   readonly path: string
+  readonly scope: string
   readonly scenarios: readonly Scenario[]
   readonly malformedScenarioHeadings: readonly number[]
 }
@@ -37,7 +39,7 @@ export interface RunnerConfig {
 
 export interface DocumentLayout {
   readonly match: string
-  readonly scope?: 'baseline'
+  readonly scope?: string
   readonly exclude?: readonly string[]
 }
 
@@ -73,6 +75,7 @@ export interface PlannedEvidence {
 }
 
 export interface PlannedScenario {
+  readonly scope: string
   readonly id: string
   readonly evidence: readonly PlannedEvidence[]
 }
@@ -99,6 +102,7 @@ export interface EvidenceResult {
 }
 
 export interface ScenarioResult {
+  readonly scope: string
   readonly id: string
   readonly status: EvidenceStatus
   readonly evidence: readonly EvidenceResult[]

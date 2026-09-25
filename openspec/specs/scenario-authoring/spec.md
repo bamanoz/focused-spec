@@ -7,13 +7,13 @@ Focused scenario identity, shape, and evidence references.
 ## Requirements
 
 ### Requirement: Focused scenario identity
-A focused scenario SHALL have one repository-unique lowercase dotted stable ID, except that a named-scope scenario MAY explicitly declare `- **REVISES**: baseline` to revise the baseline scenario with that same ID. The marker SHALL be valid only when the baseline contains that ID and SHALL not permit duplicate declarations within a document/scope or two independent scopes to introduce the same new ID. Section headers such as OpenSpec `MODIFIED Requirements` SHALL NOT confer revision rights. Independent outcomes SHALL use independent scenarios.
+A focused scenario SHALL have one lowercase dotted stable ID that is unique within its scope. Across scopes, the same ID MAY appear only when exactly one occurrence is the unmarked owner and every other occurrence has exactly one `- **REVISES**: <source-scope>` row naming an existing same-ID scenario in another scope. Revision chains SHALL reach that owner without self-references or cycles; multiple scopes MAY independently revise one source. Section headers such as OpenSpec `MODIFIED Requirements` and scope names such as `baseline` SHALL NOT confer revision rights. Independent outcomes SHALL use independent scenarios.
 
 #### Scenario: Duplicate stable ID in separate documents
 - **ID**: `scenario.identity.duplicate-document`
 - **EVIDENCE**: `vitest::test/core.spec.ts::focused specification parsing > rejects malformed shape, unknown runners, and duplicate ownership`
-- **WHEN** two specification documents in one owner claim the same scenario ID
-- **THEN** validation reports duplicate ownership instead of accepting both
+- **WHEN** two specification documents in one scope claim the same scenario ID
+- **THEN** validation reports the within-scope duplicate instead of accepting both
 
 #### Scenario: Missing or multiple scenario fields
 - **ID**: `scenario.shape.cardinality`
@@ -21,29 +21,41 @@ A focused scenario SHALL have one repository-unique lowercase dotted stable ID, 
 - **WHEN** a scenario has zero or multiple ID, WHEN, or THEN rows
 - **THEN** validation rejects its shape with an actionable violation
 
-#### Scenario: Explicit baseline revision
+#### Scenario: Explicit cross-scope revision
 - **ID**: `scenario.identity.explicit-revision`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > accepts explicit baseline revisions in a named scope`
-- **WHEN** a named-scope scenario declares one REVISES baseline row and retains an ID owned by a baseline scenario
-- **THEN** validation accepts that revision without using framework-specific headings
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > accepts revisions from an unselected source without resolving its evidence`
+- **WHEN** a scenario keeps an ID from another scope and declares one REVISES row naming that same-ID source scope
+- **THEN** validation accepts the revision without using framework-specific headings or privileged scope names
 
-#### Scenario: Invalid baseline revision
+#### Scenario: Baseline is an ordinary source name
+- **ID**: `scenario.identity.baseline-ordinary`
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > treats baseline as an ordinary revision source name`
+- **WHEN** a scope named baseline owns an ID and a different scope explicitly revises it
+- **THEN** validation accepts the relationship by the same rules as every other pair of scope names
+
+#### Scenario: Revision source does not own the ID
 - **ID**: `scenario.identity.invalid-revision`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects revisions without a baseline owner`
-- **WHEN** a named-scope scenario declares REVISES baseline for an ID absent from baseline
-- **THEN** validation rejects the orphan revision with its scenario location and ID
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects revisions without an owning source scope`
+- **WHEN** a scenario declares REVISES for a source scope that has no scenario with the same ID
+- **THEN** validation rejects the orphan revision with its location, ID, and source scope
 
-#### Scenario: Baseline cannot revise itself
+#### Scenario: Scope cannot revise itself
 - **ID**: `scenario.identity.baseline-revision`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects revision markers on baseline scenarios`
-- **WHEN** a baseline scenario declares a REVISES row
-- **THEN** validation rejects the misplaced revision marker
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects revisions from the same scope`
+- **WHEN** a scenario declares its own scope in a REVISES row
+- **THEN** validation rejects the self-reference rather than treating the scope name specially
 
 #### Scenario: Ambiguous revision marker
 - **ID**: `scenario.identity.malformed-revision`
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects malformed and repeated revision markers`
-- **WHEN** a named-scope scenario declares malformed or repeated REVISES rows
+- **WHEN** a scenario declares malformed or repeated REVISES rows
 - **THEN** validation rejects the ambiguous revision instead of allowing ID reuse
+
+#### Scenario: Revision cycle has no owner
+- **ID**: `scenario.identity.revision-cycle`
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects cyclic revision ownership`
+- **WHEN** every occurrence of one ID revises another occurrence and their links form a cycle
+- **THEN** validation rejects the cycle because no chain reaches one unmarked owner
 
 ### Requirement: Evidence rows
 Each scenario SHALL name at least one evidence reference in the form `[planned:]<runner-id>::<opaque selector>`. Every authored evidence row SHALL be preserved for validation and multiple rows form an AND contract.

@@ -1,8 +1,9 @@
-version: 1
+version: 2
 specifications:
-  source: files
-  paths:
-    - examples/openspec/openspec/specs/**/spec.md
+  documents:
+    - match: examples/openspec/openspec/specs/**/spec.md
+      scope: current
+    - match: examples/openspec/openspec/changes/{scope}/specs/**/spec.md
 runners:
   go-unit:
     module: ./examples/openspec/.focused-spec/runners/go-test.ts

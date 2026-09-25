@@ -7,7 +7,7 @@ Structure, ownership, resolution, and scope validation before execution.
 ## Requirements
 
 ### Requirement: Validation modes
-The CLI SHALL check scenario shape and ownership before resolution. Full validation SHALL resolve concrete evidence without executing tests; strict validation SHALL reject planned evidence. Planned evidence SHALL be permitted only in named scopes during non-strict planning validation; baseline evidence SHALL remain concrete even when a scope is selected.
+The CLI SHALL check scenario shape and ownership before resolution. Full validation SHALL resolve concrete evidence without executing tests; strict validation SHALL reject planned evidence. Planned evidence SHALL be permitted in every scope during non-strict planning validation.
 
 #### Scenario: Syntax-only validation does not load runners
 - **ID**: `validation.mode.syntax-only`
@@ -18,47 +18,53 @@ The CLI SHALL check scenario shape and ownership before resolution. Full validat
 #### Scenario: Full validation reports resolved and planned counts
 - **ID**: `validation.mode.counts`
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > reports all scenarios, planned evidence, and unique resolved targets`
-- **WHEN** full validation sees baseline evidence and planned named-scope evidence
+- **WHEN** full validation sees concrete and planned evidence across discovered scopes
 - **THEN** it reports all scenarios, planned rows, and only unique concrete targets without executing tests
 
 #### Scenario: Planned evidence is temporary
 - **ID**: `validation.planned.strict-policy`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > counts an all-planned change without inventing executable targets`
-- **WHEN** a named scope contains only planned evidence
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > allows planned evidence in every scope only during non-strict validation`
+- **WHEN** a scope contains only planned evidence
 - **THEN** non-strict validation accepts the planning state with zero targets while strict validation rejects it
 
 ### Requirement: Repository-wide scenario ownership
-Baseline scenarios SHALL own their stable IDs; new IDs across named scopes SHALL not collide. A named-scope scenario SHALL retain a baseline ID only by explicitly declaring a revision of that baseline ID. A revision without an owner SHALL fail, including in a project without baseline documents; an OpenSpec section heading SHALL not implicitly grant ownership.
+Stable IDs SHALL be unique within each scope. Across scopes, repeated IDs SHALL form a revision graph with exactly one unmarked owner: every other occurrence SHALL name an existing same-ID scenario in another scope, and every chain SHALL reach the owner without a self-reference or cycle. Two scopes MAY independently revise one source. An OpenSpec section heading or the name `baseline` SHALL not implicitly grant ownership.
 
-#### Scenario: Same new ID in two named scopes
+#### Scenario: Same new ID in two scopes
 - **ID**: `validation.identity.cross-change`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects duplicate IDs introduced by separate active changes`
-- **WHEN** two named scopes introduce the same new stable ID
-- **THEN** validation rejects the duplicate and identifies the conflicting owner
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects unmarked ID reuse across captured scopes`
+- **WHEN** two scopes introduce the same ID without either declaring a revision source
+- **THEN** validation rejects the competing unmarked owners and identifies both scopes
 
-#### Scenario: New scope scenario reuses a baseline ID
+#### Scenario: Scope reuses another scope's ID without REVISES
 - **ID**: `validation.identity.current-owner`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects an added change that steals a current scenario ID`
-- **WHEN** a named-scope scenario claims an ID already owned by the baseline without a revision marker
-- **THEN** validation rejects the scope without invalidating legitimate explicitly marked revisions
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects unmarked ID reuse from another scope`
+- **WHEN** a scenario claims an ID already owned by another scope without a revision marker
+- **THEN** validation rejects the collision without invalidating legitimate explicitly marked revisions
 
 #### Scenario: Section heading does not authorize ID reuse
 - **ID**: `validation.identity.no-heading-privilege`
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects unmarked ID reuse under an OpenSpec MODIFIED heading`
-- **WHEN** a named-scope scenario reuses a baseline ID under an OpenSpec MODIFIED or REMOVED heading without a REVISES row
+- **WHEN** a scenario reuses another scope's ID under an OpenSpec MODIFIED or REMOVED heading without a REVISES row
 - **THEN** validation rejects ID reuse just as it would in any other Markdown layout
 
 ### Requirement: Validation before selected execution
-`run` SHALL strictly validate the complete baseline-plus-selected-scope before selecting tests; with no selected scope it SHALL validate the baseline and all discovered named scopes before selecting baseline tests. `--scenario` SHALL narrow execution only, not validation. An explicitly requested scope with no matching documents SHALL fail before test execution; unrelated named scopes SHALL not block a selected scope's execution.
+`run` SHALL strictly validate exactly its selection before starting tests: all discovered scopes without `--scope`, or only the explicitly named scope with it; when `--scenario <id>` is present, only occurrences of that ID in the selected scope(s) SHALL have their scenario shape and evidence strictly validated and resolved. An explicitly requested scope with no matching documents or a selected scenario ID absent from its scope selection SHALL fail before execution. Ownership checks SHALL still verify the selected ID and its revision chain across scopes without resolving unselected evidence. Malformed or unresolved evidence in other scenarios SHALL NOT prevent selected-scenario execution. Without `--scenario`, full-scope validation remains unchanged.
 
-#### Scenario: Error in an unselected scenario blocks execution
+#### Scenario: Unrelated invalid scenario does not block selected run
 - **ID**: `validation.scope.unselected-error`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > attributes an unselected scenario error to validation before execution`
-- **WHEN** a selected scenario would pass but another scenario in the validation scope has unresolved evidence
-- **THEN** run reports validation failure and does not start the selected scenario
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > runs a selected scenario despite unrelated invalid evidence in its scope`
+- **WHEN** a selected scenario has valid executable evidence while another scenario in the same scope has malformed, planned, or unresolved evidence
+- **THEN** run executes the selected scenario without validating or resolving the unrelated evidence
 
-#### Scenario: Explicit scope excludes unrelated scopes
+#### Scenario: Selected scenario retains strict checks
+- **ID**: `validation.scope.selected-own-errors`
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid selected scenario before execution`
+- **WHEN** the selected scenario itself has malformed or planned evidence or an orphan REVISES source
+- **THEN** run reports its violation and does not start any tests
+
+#### Scenario: Explicit scope excludes unrelated evidence failures
 - **ID**: `validation.scope.selected-only`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > validates baseline and selected scope without unrelated scopes`
-- **WHEN** one unrelated scope contains invalid evidence while a selected scope and baseline are valid
-- **THEN** validation and execution of the selected scope are not blocked by the unrelated scope
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > validates only the selected scope evidence`
+- **WHEN** a selected scope is structurally valid while an unselected scope contains malformed or unresolved evidence
+- **THEN** validation and execution of the selected scope are not blocked by the unrelated evidence
