@@ -110,11 +110,10 @@ From this repository's root after `npm install` and `npm run build`, these indep
 | Framework layout | Focused document | Commands |
 | --- | --- | --- |
 | [OpenSpec](../../examples/openspec/) | `openspec/specs/auth/spec.md` | `node dist/cli.js validate --root examples/openspec --strict` then `node dist/cli.js run --root examples/openspec` |
-| [Spec Kit](../../examples/spec-kit/) | `specs/001-blocked-account/spec.md` alongside native acceptance scenarios | `node dist/cli.js validate --root examples/spec-kit --scope 001-blocked-account --strict` then `node dist/cli.js run --root examples/spec-kit --scope 001-blocked-account` |
-| [Kiro](../../examples/kiro/) | `.kiro/specs/account-lock/focused-spec.md` beside native `requirements.md` | `node dist/cli.js validate --root examples/kiro --scope account-lock --strict` then `node dist/cli.js run --root examples/kiro --scope account-lock` |
-| [BMad](../../examples/bmad/) | `specs/spec-order-limit/focused-spec.md` beside native `SPEC.md` | `node dist/cli.js validate --root examples/bmad --scope order-limit --strict` then `node dist/cli.js run --root examples/bmad --scope order-limit` |
+| [Spec Kit](../../examples/spec-kit/) | `specs/001-blocked-account/spec.md`, focused block inside native **Acceptance Scenarios** | `node dist/cli.js validate --root examples/spec-kit --scope 001-blocked-account --strict` then `node dist/cli.js run --root examples/spec-kit --scope 001-blocked-account` |
+| [BMad](../../examples/bmad/) | `_bmad-output/specs/spec-order-limit/scenarios.md` registered in native `SPEC.md` | `node dist/cli.js validate --root examples/bmad --scope order-limit --strict` then `node dist/cli.js run --root examples/bmad --scope order-limit` |
 
-All examples use project-local runners and real tests; the OpenSpec example runs Go and pytest, while the others use pytest through `uv run --with pytest python -m pytest` (requires `uv`). They demonstrate layouts, not substitutes for each framework's own generator, schema validation, or CLI. The Spec Kit, Kiro, and BMad commands explicitly select one scope; omitting `--scope` runs every scope their configurations discover. Native requirements alone never count as focused evidence.
+All examples use project-local runners and real tests; the OpenSpec example runs Go and pytest, while Spec Kit and BMad use pytest through `uv run --with pytest python -m pytest` (requires `uv`). They demonstrate layouts, not substitutes for each framework's own generator, schema validation, or CLI. The Spec Kit and BMad commands explicitly select one scope; omitting `--scope` runs every scope their configurations discover. Native requirements alone never count as focused evidence.
 
 ## Migrate from version 1
 

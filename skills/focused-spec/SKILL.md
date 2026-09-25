@@ -1,11 +1,13 @@
 ---
 name: focused-spec
-description: Connects focused behavioral scenarios to exact executable evidence using the installed CLI and project-local runners. Use when authoring or changing behavioral scenarios, configuring focused-spec, implementing a runner, or parallelizing evidence execution; use alongside any other spec workflow.
+description: Requires executable evidence when authoring or changing behavioral specifications: add focused scenarios during planning and execute their exact tests before completion. Use alongside any host specification workflow.
 ---
 
 # Focused Spec
 
-Author small scenarios in the host framework's Markdown, but use focused-spec's own IDs, evidence, and execution contract. The installed CLI and this bundled skill are sufficient; do not assume access to this skill's source repository.
+Author small scenarios in the host framework's file, but use focused-spec's own IDs, evidence, and execution contract. The installed CLI and this bundled skill are sufficient; do not assume access to this skill's source repository.
+
+When this skill is active in a workflow that creates or changes a behavioral specification, author a focused scenario for each independently failing outcome before treating the specification as ready. Do not wait for implementation or infer evidence from the host's acceptance prose. If the host's file cannot contain focused scenario blocks without violating its format or generation rules, put them in an adjacent Markdown companion and register that companion through the host's normal authoring workflow. Keep the host's requirement as the source of intent; the companion records the focused outcome and exact evidence, not a second copy of the entire specification. Never hand-edit a generated host artifact outside its owning workflow. Name the intended runner and selector using `planned:` when the target does not yet exist, and validate the planning scope non-strictly. Do not declare the implementation complete until all planned rows have been replaced and `focused-spec run` executes the selected tests successfully.
 
 ## Discover CLI commands and options
 

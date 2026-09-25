@@ -1,6 +1,4 @@
-# Focused evidence for order item limit
-
-This companion records executable focused-spec evidence for `CAP-1`; `SPEC.md` remains the native BMad contract.
+# Order item limit scenarios
 
 #### Scenario: Order at its item limit rejects another item
 - **ID**: `order.limit.reject-at-capacity`

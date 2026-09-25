@@ -2,9 +2,11 @@
 
 [![npm](https://img.shields.io/npm/v/focused-spec?label=npm)](https://www.npmjs.com/package/focused-spec) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Behavioral scenarios backed by exact executable evidence.**
+**Make each behavioral promise answerable by a test result.**
 
-Keep the specification workflow you already use. `focused-spec` finds focused scenarios in the Markdown files you configure, resolves their evidence through project-local runners, and reports what the selected tests actually did. It works alongside OpenSpec, Spec Kit, Kiro, BMad, or plain Markdown; it does not replace their planning or validation tools.
+SDD workflows produce requirements and plans; projects run tests. A green suite alone does not say which test checks a particular outcome, or whether a newly written scenario has any executable check at all. `focused-spec` keeps that link explicit: a small scenario names exact test targets, and `run` executes them before reporting the scenario as passed.
+
+Keep your existing specification workflow and tests. The agent skill asks for scenarios while authoring a spec, allows `planned:` targets until implementation, and requires real evidence before completion. The CLI finds those scenarios in configured Markdown; project-local runners execute the selected tests. It does not replace OpenSpec, Spec Kit, BMad, or their native validation.
 
 ## See the contract
 
@@ -40,7 +42,7 @@ Focused scenario (ID · WHEN · THEN · EVIDENCE)
 Project-local runner → exact test → observed result
 ```
 
-Your SDD tool owns proposals, requirements, and its native document rules. `focused-spec` owns the link between a focused scenario and executable evidence. Its core does not depend on a language or test framework: your project provides the runners for Go, pytest, Vitest, or whatever actually runs its tests.
+Your SDD tool owns proposals, requirements, and native document rules. `focused-spec` owns the checkable link from one outcome to one or more independent tests, even across languages. Its core is language- and framework-neutral; project-local runners select and execute the tests. If a Gherkin scenario already runs through Cucumber/Godog, that scenario is itself an executable specification—you do not need a second focused scenario merely to run it again.
 
 ## Get started
 
@@ -77,8 +79,7 @@ Every layout assigns exactly one ordinary, path-safe scope, either explicitly wi
 | --- | --- | --- |
 | [OpenSpec](https://github.com/Fission-AI/OpenSpec) | [Go + pytest](examples/openspec/) | `openspec/specs/**/spec.md` |
 | [Spec Kit](https://github.com/github/spec-kit) | [Spec Kit-style feature](examples/spec-kit/) | `specs/{scope}/spec.md` |
-| [Kiro](https://github.com/kirodotdev/Kiro) | [Kiro-style feature](examples/kiro/) | `.kiro/specs/{scope}/focused-spec.md` companion |
-| [BMad](https://github.com/bmad-code-org/BMAD-METHOD) | [BMad-style spec](examples/bmad/) | `specs/spec-{scope}/focused-spec.md` companion |
+| [BMad](https://github.com/bmad-code-org/BMAD-METHOD) | [BMad-style spec](examples/bmad/) | `_bmad-output/specs/spec-{scope}/scenarios.md` companion |
 
 Each example includes its own configuration, real tests, and project-local runner. [Run the examples](docs/guides/configuration.md#runnable-framework-examples) from this repository's checkout; plain Markdown works with the same configured document patterns.
 
