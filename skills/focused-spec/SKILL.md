@@ -7,6 +7,10 @@ description: Connects focused behavioral scenarios to exact executable evidence 
 
 Author small scenarios in the host framework's Markdown, but use focused-spec's own IDs, evidence, and execution contract. The installed CLI and this bundled skill are sufficient; do not assume access to this skill's source repository.
 
+## Discover CLI commands and options
+
+Before choosing a command or flag, consult the installed CLI: `focused-spec --help` lists commands; `focused-spec validate --help` and `focused-spec run --help` explain their options, defaults, selection rules, and examples. Help works even before `.focused-spec/config.yaml` exists. Use it instead of guessing flags; use this skill for scenario and runner workflow. Help is guidance, not evidence: still execute the selected tests as described below.
+
 ## Author a scenario
 
 1. Find the one capability that owns the behavior and choose one independently failing outcome.

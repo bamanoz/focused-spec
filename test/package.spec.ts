@@ -20,7 +20,7 @@ beforeAll(async () => {
   consumer = join(root, 'project')
   await mkdir(consumer)
   await writeFile(join(consumer, 'package.json'), '{"name":"consumer","private":true,"type":"module"}\n')
-  const pack = spawnSync('npm', ['pack', '--pack-destination', root, '--json'], { cwd: repository, encoding: 'utf8', timeout: 120_000 })
+  const pack = spawnSync('npm', ['pack', '--ignore-scripts', '--pack-destination', root, '--json'], { cwd: repository, encoding: 'utf8', timeout: 120_000 })
   if (pack.status !== 0) throw new Error(`npm pack failed: ${pack.stderr}`)
   const name = (JSON.parse(pack.stdout) as { filename: string }[])[0]?.filename
   if (name === undefined) throw new Error('npm pack returned no tarball')

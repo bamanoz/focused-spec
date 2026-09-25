@@ -111,6 +111,86 @@ afterEach(async () => {
 })
 
 describe('focused-spec CLI', () => {
+  it('shows a successful command overview for root help forms', () => {
+    for (const args of [['--help'], ['-h'], ['help']]) {
+      const result = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' })
+      expect(result.status).toBe(0)
+      expect(result.stderr).toBe('')
+      expect(result.stdout).toContain('Usage:')
+      expect(result.stdout).toMatch(/validate\s+Check scenario structure and resolve evidence without running tests/)
+      expect(result.stdout).toMatch(/run\s+Strictly validate, then execute selected evidence/)
+      expect(result.stdout).toContain('focused-spec <command> --help')
+      expect(result.stdout).not.toContain('execution selection:')
+    }
+  })
+
+  it('explains validation modes and options in command help', () => {
+    for (const args of [['validate', '--help'], ['validate', '-h'], ['help', 'validate']]) {
+      const result = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' })
+      expect(result.status).toBe(0)
+      expect(result.stderr).toBe('')
+      expect(result.stdout).toContain('focused-spec validate [options]')
+      for (const option of ['--root <path>', '--config <path>', '--scope <name>', '--strict', '--syntax-only', '--json', '--timings', '-h, --help']) {
+        expect(result.stdout).toContain(option)
+      }
+      expect(result.stdout).toContain('without loading runners or resolving evidence')
+      expect(result.stdout).toContain('planned: evidence is allowed only in named scopes')
+      expect(result.stdout).toContain('without running tests')
+      expect(result.stdout).toContain('focused-spec validate --scope add-search --strict')
+      expect(result.stdout).not.toContain('--allow-skip')
+      expect(result.stdout).not.toContain('--scenario')
+    }
+  })
+
+  it('explains execution selection and skip policy in command help', () => {
+    for (const args of [['run', '--help'], ['run', '-h'], ['help', 'run']]) {
+      const result = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' })
+      expect(result.status).toBe(0)
+      expect(result.stderr).toBe('')
+      expect(result.stdout).toContain('focused-spec run [options]')
+      for (const option of ['--root <path>', '--config <path>', '--scope <name>', '--scenario <id>', '--allow-skip', '--json', '--timings', '-h, --help']) {
+        expect(result.stdout).toContain(option)
+      }
+      expect(result.stdout).toContain('validation remains unchanged')
+      expect(result.stdout).toContain('never relabel SKIP as PASS')
+      expect(result.stdout).toContain('validates strictly before starting tests')
+      expect(result.stdout).toContain('focused-spec run --scope add-search --scenario search.results.empty')
+      expect(result.stdout).not.toContain('--syntax-only')
+      expect(result.stdout).not.toMatch(/^  --strict\b/m)
+    }
+  })
+
+  it('shows help without loading configuration or runners', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-spec-cli-help-'))
+    roots.push(root)
+    for (const args of [['--help'], ['validate', '--help'], ['run', '--json', '--help']]) {
+      const result = spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: 'utf8' })
+      expect(result.status).toBe(0)
+      expect(result.stderr).toBe('')
+      expect(result.stdout).toContain('Usage:')
+      expect(result.stdout).not.toContain('valid: false')
+      expect(result.stdout).not.toMatch(/^\{/)
+    }
+  })
+
+  it('directs invalid invocations to help without succeeding', () => {
+    const invalid = [
+      { args: [], diagnostic: 'missing command', hint: 'focused-spec --help' },
+      { args: ['unknown', '--help'], diagnostic: 'unknown command unknown', hint: 'focused-spec --help' },
+      { args: ['help', 'unknown'], diagnostic: 'unknown help command unknown', hint: 'focused-spec --help' },
+      { args: ['validate', '--unknown'], diagnostic: 'unknown argument --unknown', hint: 'focused-spec validate --help' },
+      { args: ['run', '--scope'], diagnostic: 'missing value for --scope', hint: 'focused-spec run --help' },
+    ]
+    for (const { args, diagnostic, hint } of invalid) {
+      const result = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' })
+      expect(result.status, `arguments: ${JSON.stringify(args)}; stderr: ${result.stderr}`).toBe(1)
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toContain(diagnostic)
+      expect(result.stderr).toContain(hint)
+      expect(result.stderr).not.toContain('Usage:')
+    }
+  })
+
   it('reports all scenarios, planned evidence, and unique resolved targets', async () => {
     const root = await fixture()
     await put(root, 'openspec/specs/shared/spec.md', focusedScenario(

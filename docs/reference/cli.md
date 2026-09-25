@@ -11,6 +11,14 @@ focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario 
 
 Scope names are path-safe single fragments. The CLI preserves the selected name exactly; it never treats it as a glob or path.
 
+## Help and argument errors
+
+The root overview is available as `focused-spec --help`, `focused-spec -h`, or `focused-spec help`. It describes both commands and points to detailed help. Use `focused-spec validate --help`, `focused-spec validate -h`, or `focused-spec help validate` for validation options; use the corresponding `run` forms for execution options. Each command's help includes its purpose, supported options, defaults, selection rules, and examples.
+
+Explicit help writes text to stdout and exits zero without reading `.focused-spec/config.yaml` or loading runners; it works outside a configured project. For a known command, help takes precedence over other options, including `--json`: `focused-spec run --json --help` prints text, not a JSON result. An unknown command does not become valid by adding `--help`.
+
+No command, an unknown command or option, a missing option value, or an unknown `help` target exits nonzero with a diagnostic on stderr and a pointer to `focused-spec --help` or the relevant `<command> --help`. Other validation and execution output contracts below are unchanged.
+
 ## Validation
 
 `validate --syntax-only` checks document syntax and ownership without loading runners. Full `validate` loads runners and resolves concrete evidence but does not execute tests. A successful full validation reports:

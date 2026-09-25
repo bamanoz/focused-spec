@@ -22,14 +22,102 @@ interface CliOptions {
   readonly timings: boolean
 }
 
-const USAGE = `Usage:
-  focused-spec validate [--root <path>] [--config <path>] [--scope <name>] [--strict] [--syntax-only] [--json] [--timings]
-  focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--json] [--timings]
+const ROOT_HELP = `focused-spec — Validate and run focused behavioral specifications against real evidence.
+
+Usage:
+  focused-spec <command> [options]
+  focused-spec help [command]
+
+Commands:
+  validate  Check scenario structure and resolve evidence without running tests
+  run       Strictly validate, then execute selected evidence
+
+Options:
+  -h, --help  Show this help
+
+Examples:
+  focused-spec validate --scope add-search
+  focused-spec run --scope add-search
+  focused-spec validate --help
+
+Run 'focused-spec <command> --help' for command options.
 `
+
+const VALIDATE_HELP = `Validate scenario structure and resolve concrete evidence without running tests.
+
+Usage:
+  focused-spec validate [options]
+
+Options:
+  --root <path>    Project root (default: current directory)
+  --config <path>  Configuration file relative to the project root (default: .focused-spec/config.yaml)
+  --scope <name>   Validate baseline and this named scope (default: baseline and all named scopes)
+  --strict         Reject all planned: evidence; use once exact tests exist
+  --syntax-only    Check document syntax and ownership without loading runners or resolving evidence
+  --json           Print the validation result as JSON
+  --timings        Include elapsed validation and resolution phase timings
+  -h, --help       Show this help
+
+Without --strict, planned: evidence is allowed only in named scopes and is not resolved.
+Full validation resolves concrete evidence but never executes tests.
+
+Examples:
+  focused-spec validate --scope add-search
+  focused-spec validate --scope add-search --strict
+  focused-spec validate --syntax-only --json
+`
+
+const RUN_HELP = `Strictly validate evidence before executing selected tests.
+
+Usage:
+  focused-spec run [options]
+
+Options:
+  --root <path>     Project root (default: current directory)
+  --config <path>   Configuration file relative to the project root (default: .focused-spec/config.yaml)
+  --scope <name>    Validate baseline and this named scope, then execute that scope
+                    (default: validate baseline and all named scopes, then execute baseline)
+  --scenario <id>   Narrow execution to one scenario; validation remains unchanged
+  --allow-skip      Allow an overall successful exit with SKIP; never relabel SKIP as PASS
+  --json            Print the execution result as JSON
+  --timings         Include elapsed validation, resolution and execution phase timings
+  -h, --help        Show this help
+
+Run always validates strictly before starting tests; planned: evidence blocks execution.
+
+Examples:
+  focused-spec run
+  focused-spec run --scope add-search --scenario search.results.empty
+`
+
+function argumentError(message: string, command?: CliOptions['command']): Error {
+  return new Error(`${message}\nRun 'focused-spec ${command === undefined ? '--help' : `${command} --help`}' for usage.`)
+}
+
+function requestedHelp(argumentsList: readonly string[]): string | undefined {
+  const command = argumentsList[0]
+  if (command === '--help' || command === '-h' || command === 'help') {
+    if (argumentsList.length === 1) return ROOT_HELP
+    if (command === 'help' && argumentsList.length === 2) {
+      if (argumentsList[1] === 'validate') return VALIDATE_HELP
+      if (argumentsList[1] === 'run') return RUN_HELP
+      throw argumentError(`unknown help command ${String(argumentsList[1])}`)
+    }
+    throw argumentError('unexpected arguments for help')
+  }
+  if (command === 'validate' || command === 'run') {
+    if (argumentsList.includes('--help') || argumentsList.includes('-h')) {
+      return command === 'validate' ? VALIDATE_HELP : RUN_HELP
+    }
+  }
+  return undefined
+}
 
 function parseArguments(argumentsList: readonly string[]): CliOptions {
   const command = argumentsList[0]
-  if (command !== 'validate' && command !== 'run') throw new Error(USAGE)
+  if (command !== 'validate' && command !== 'run') {
+    throw argumentError(command === undefined ? 'missing command' : `unknown command ${command}`)
+  }
   let root = process.cwd()
   let configPath: string | undefined
   let scopeName: string | undefined
@@ -49,21 +137,23 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
     else if (argument === '--allow-skip') allowSkip = true
     else if (argument === '--root' || argument === '--config' || argument === '--scope' || argument === '--scenario') {
       const value = argumentsList[index + 1]
-      if (value === undefined || value.startsWith('--')) throw new Error(`missing value for ${argument}\n${USAGE}`)
+      if (value === undefined || value.startsWith('--')) throw argumentError(`missing value for ${argument}`, command)
       index += 1
       if (argument === '--root') root = resolve(value)
       else if (argument === '--config') configPath = value
       else if (argument === '--scope') scopeName = value
       else scenarioId = value
     } else {
-      throw new Error(`unknown argument ${String(argument)}\n${USAGE}`)
+      throw argumentError(`unknown argument ${String(argument)}`, command)
     }
   }
 
   if (command === 'validate' && (allowSkip || scenarioId !== undefined)) {
-    throw new Error(`--allow-skip and --scenario are valid only for run\n${USAGE}`)
+    throw argumentError('--allow-skip and --scenario are valid only for run', command)
   }
-  if (command === 'run' && (strict || syntaxOnly)) throw new Error(`run is always strict and cannot be syntax-only\n${USAGE}`)
+  if (command === 'run' && (strict || syntaxOnly)) {
+    throw argumentError('run is always strict and cannot be syntax-only', command)
+  }
   return {
     command,
     root,
@@ -220,6 +310,11 @@ function validationCounts(documents: readonly SpecDocument[], plan: ExecutionPla
 
 async function main(argumentsList: readonly string[]): Promise<number> {
   const totalStarted = performance.now()
+  const help = requestedHelp(argumentsList)
+  if (help !== undefined) {
+    process.stdout.write(help)
+    return 0
+  }
   const options = parseArguments(argumentsList)
   const context = options.command === 'run' ? runContext(options) : validationContext(options)
   const projectRoot = isAbsolute(options.root) ? options.root : resolve(options.root)

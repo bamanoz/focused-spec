@@ -22,6 +22,6 @@
 - Repository checks: [Development guide](development/README.md)
 - npm package release: [Release process](development/releasing.md)
 - Agent evals: [Agent evals](development/agent-evals.md)
-- Behavioral baseline: [scenario authoring](../openspec/specs/scenario-authoring/spec.md), [configuration](../openspec/specs/project-configuration/spec.md), [validation](../openspec/specs/validation/spec.md), [runner protocol](../openspec/specs/runner-protocol/spec.md), [execution](../openspec/specs/scenario-execution/spec.md), [distribution](../openspec/specs/distribution/spec.md), [agent workflow](../openspec/specs/agent-workflow/spec.md)
+- Behavioral baseline: [scenario authoring](../openspec/specs/scenario-authoring/spec.md), [configuration](../openspec/specs/project-configuration/spec.md), [validation](../openspec/specs/validation/spec.md), [CLI help](../openspec/specs/cli-help/spec.md), [runner protocol](../openspec/specs/runner-protocol/spec.md), [execution](../openspec/specs/scenario-execution/spec.md), [distribution](../openspec/specs/distribution/spec.md), [agent workflow](../openspec/specs/agent-workflow/spec.md)
 
 Root `README.md` is the short project entrypoint. Detailed normative documentation lives here. `AGENTS.md` contains durable coding-agent rules, not product documentation.
