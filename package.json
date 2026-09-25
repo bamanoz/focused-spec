@@ -1,6 +1,6 @@
 {
   "name": "focused-spec",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Executable evidence for focused behavioral specifications",
   "repository": {
     "type": "git",
