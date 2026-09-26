@@ -1,6 +1,6 @@
 ---
 name: focused-spec
-description: Requires executable evidence when authoring or changing behavioral specifications: add focused scenarios during planning and execute their exact tests before completion. Use alongside any host specification workflow.
+description: "Requires executable evidence when authoring or changing behavioral specifications: add focused scenarios during planning and execute their exact tests before completion. Use alongside any host specification workflow."
 ---
 
 # Focused Spec

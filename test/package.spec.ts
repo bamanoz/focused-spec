@@ -1,9 +1,10 @@
 import { spawnSync } from 'node:child_process'
-import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { parseDocument } from 'yaml'
 
 const repository = fileURLToPath(new URL('..', import.meta.url))
 let root: string
@@ -39,6 +40,15 @@ describe('package distribution', () => {
     expect(installedEntries).not.toContain('.agents')
     expect(installedEntries).not.toContain('.omp')
     expect(installedEntries).not.toContain('focused-spec.yaml')
+  })
+
+  it('ships installer-readable skill metadata', async () => {
+    const markdown = await readFile(join(consumer, 'node_modules/focused-spec/skills/focused-spec/SKILL.md'), 'utf8')
+    const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(markdown)?.[1]
+    expect(frontmatter).toBeDefined()
+    const document = parseDocument(frontmatter!)
+    expect(document.errors).toEqual([])
+    expect(document.toJS()).toMatchObject({ name: 'focused-spec', description: expect.any(String) })
   })
 
   it('installs and executes the packed CLI from a consumer project', async () => {
