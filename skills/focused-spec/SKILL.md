@@ -31,7 +31,7 @@ Evidence is `[planned:]<runner-id>::<opaque selector>`; only the first `::` sepa
 
 ## Configure when first needed
 
-Create `.focused-spec/config.yaml` when the first scenario names evidence. Select only scenario-bearing Markdown and exclude archives explicitly; do not create root-level `focused-spec.yaml`.
+Create `.focused-spec/config.yaml` when the first scenario names evidence. Select Markdown that contains focused scenarios or is being adopted incrementally, and exclude archives explicitly; do not create root-level `focused-spec.yaml`.
 
 ```yaml
 version: 2
@@ -48,6 +48,21 @@ runners:
 ```
 
 Every document layout either has `scope: <name>` and no `{scope}` token, or has exactly one `{scope}` token and no `scope` property. Scope names are path-safe and uniform; `baseline` has no reserved behavior. Patterns and exclusions are project-relative. The CLI does not infer evidence or archive exclusions from the surrounding framework. Register every evidence runner under `.focused-spec/runners/`; its module must stay inside the project and use `.ts`, `.mts`, `.js`, or `.mjs`.
+
+## Adopt native scenarios incrementally
+
+Enrollment is per scenario block. Any labeled `ID`, `EVIDENCE`, or `REVISES` row enrolls that block, even when the row is malformed; once marked, invalid focused metadata must fail validation rather than being treated as native prose. A configured document may mix enrolled blocks with native scenario blocks that contain none of those markers.
+
+Unenrolled native blocks are ignored for focused validation and execution, but full validation and `run` count them as `unenrolledScenarios`. Keep that count visible and describe coverage honestly: passing focused evidence proves only the enrolled selection that ran. With no `--scope`, legacy-only scopes may coexist with enrolled scopes, but a discovered all-native document set is an error. Explicitly selecting a native-only scope is also an error.
+
+For an existing specification, adopt one independently failing scenario at a time:
+
+1. Before the host workflow changes or moves documents, inventory focused IDs, evidence references, and the unmarked owner plus `REVISES` edges for reused IDs.
+2. Enroll the chosen scenario. Put its unmarked owner in a durable document that will remain discoverable; if a working scope repeats the ID, revise that owner explicitly.
+3. Choose the exact runner and selector, using `planned:` only until the real test exists. Implement the test and replace the planned row.
+4. Let the host framework perform whatever document transformation it owns. No particular framework lifecycle is required.
+5. Compare the discovered after-state with the inventory: IDs and evidence remain, revision edges resolve, and every reused ID still reaches one durable unmarked owner after any working document leaves discovery.
+6. Run the final selected scenario or scope. A structural or native-framework check is not a substitute for executing its evidence.
 
 ## Implement a runner only when evidence needs one
 

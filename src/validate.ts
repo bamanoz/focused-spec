@@ -34,6 +34,9 @@ export function validateDocuments(
       if (scenario.scope !== document.scope) {
         violations.push(diagnostic(scenario, `scenario scope ${scenario.scope} does not match document scope ${document.scope}`))
       }
+      for (const line of scenario.malformedIdLines) {
+        violations.push({ ...diagnostic(scenario, 'malformed ID row; expected - **ID**: `<lowercase.dotted-id>`'), line })
+      }
       if (scenario.ids.length !== 1) {
         violations.push(diagnostic(scenario, `expected exactly one ID row, found ${scenario.ids.length}`))
       } else {
@@ -176,6 +179,7 @@ export interface ValidationOptions {
 
 export interface ValidationOutput {
   readonly violations: readonly Violation[]
+  readonly unenrolledScenarios: number
   readonly targetDocuments: readonly SpecDocument[]
   readonly resolutionDocuments: readonly SpecDocument[]
 }
@@ -186,7 +190,7 @@ export async function validateFocusedSpecs(
   options: ValidationOptions = {},
 ): Promise<ValidationOutput> {
   if (options.scopeName !== undefined && !isScopeName(options.scopeName)) {
-    return { violations: [{ path: '.focused-spec/config.yaml', message: `invalid scope name ${options.scopeName}` }], targetDocuments: [], resolutionDocuments: [] }
+    return { violations: [{ path: '.focused-spec/config.yaml', message: `invalid scope name ${options.scopeName}` }], targetDocuments: [], resolutionDocuments: [], unenrolledScenarios: 0 }
   }
 
   const discovery = await discoverDocuments(projectRoot, config, options.scopeName)
@@ -212,13 +216,9 @@ export async function validateFocusedSpecs(
     })
   documents.sort((left, right) => left.scope.localeCompare(right.scope) || left.path.localeCompare(right.path))
 
-  if (options.scopeName === undefined) {
-    for (const [name, scopedDocuments] of discovery.scopes) {
-      if (options.scenarioId === undefined && scopedDocuments.every(document => document.scenarios.length === 0)) {
-        violations.push({ path: name, message: `scope has no focused scenarios: ${name}` })
-      }
-    }
-  } else if (options.scenarioId === undefined && selected.length > 0 && selected.every(document => document.scenarios.length === 0)) {
+  if (options.scopeName === undefined && options.scenarioId === undefined && selected.length > 0 && selected.every(document => document.scenarios.length === 0)) {
+    violations.push({ path: '.focused-spec/config.yaml', message: 'no enrolled focused scenarios in discovered documents' })
+  } else if (options.scopeName !== undefined && options.scenarioId === undefined && selected.length > 0 && selected.every(document => document.scenarios.length === 0)) {
     violations.push({ path: options.scopeName, message: `scope has no focused scenarios: ${options.scopeName}` })
   }
   violations.push(...validateDocuments(documents, config, { allowPlanned: !options.strict }).violations)
@@ -228,6 +228,7 @@ export async function validateFocusedSpecs(
     violations: deduplicate(violations),
     targetDocuments: documents,
     resolutionDocuments: documents,
+    unenrolledScenarios: selected.reduce((sum, document) => sum + document.unenrolledScenarios, 0),
   }
 }
 

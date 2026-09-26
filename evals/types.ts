@@ -22,7 +22,9 @@ export interface EvalCase {
   readonly turns: readonly EvalTurn[]
   readonly expectedScenarioId: string
   readonly expectedEvidenceCount: number
+  readonly maximumEvidenceCount?: number
   readonly expectedSelectorFragments: readonly string[]
+  readonly expectedSelectorAlternatives?: readonly string[]
 }
 
 export interface AgentRequest {

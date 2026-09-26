@@ -24,6 +24,14 @@ Example:
 - **THEN** authentication is rejected
 ```
 
+### Incremental enrollment
+
+Enrollment is per scenario block, not per document or framework scope. A scenario block is focused when it contains any labeled `ID`, `EVIDENCE`, or `REVISES` row. The marker enrolls the block even when the row's value or surrounding focused shape is malformed, so malformed focused metadata produces a validation error instead of silently falling back to native prose.
+
+Configured documents may mix focused scenarios with the owning framework's native scenario blocks. Native blocks without an enrollment marker remain unenrolled: focused-spec ignores their contents for focused validation and execution, while full `validate` and every successful `run` count them across the selected document scopes as `unenrolledScenarios`, including a scenario-narrowed run. This count makes partial adoption visible; it is not evidence that those native scenarios are covered.
+
+When all discovered scopes are selected, a legacy-only scope may coexist with an enrolled scope. The selection is invalid if discovered documents contain no enrolled focused scenario. Explicitly selecting a scope that contains only unenrolled scenarios is also invalid. This permits scenario-by-scenario adoption without letting an all-native selection report focused coverage.
+
 ## Uniform scopes
 
 Every configured Markdown document belongs to an ordinary, path-safe scope. A document layout either names that scope explicitly with `scope: <name>` or captures exactly one `{scope}` fragment from its match pattern; it never does both or neither. Names such as `current`, `release-7`, and `baseline` have identical semantics.

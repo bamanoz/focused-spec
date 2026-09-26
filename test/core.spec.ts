@@ -75,4 +75,38 @@ describe('focused specification parsing', () => {
       expect.objectContaining({ message: 'expected at least one EVIDENCE row' }),
     )
   })
+  it('rejects evidence without a scenario ID in a mixed document', () => {
+    const source = [
+      '#### Scenario: Historical outcome',
+      '- **WHEN** historical input is supplied',
+      '- **THEN** historical output is observed',
+      '#### Scenario: Evidence without identity',
+      '- **EVIDENCE**: `unit::auth test`',
+      '- **WHEN** input is supplied',
+      '- **THEN** output is observed',
+    ].join('\n')
+    const document = parseFocusedSpecDocument('specs/auth.md', source, 'current')
+    expect(document.unenrolledScenarios).toBe(1)
+    expect(document.scenarios).toHaveLength(1)
+    expect(validateDocuments([document], config, { allowPlanned: false }).violations).toContainEqual(
+      expect.objectContaining({ line: 4, message: 'expected exactly one ID row, found 0' }),
+    )
+  })
+
+  it('rejects malformed ID evidence and revision markers', () => {
+    for (const marker of ['- **ID**: auth.blocked', '- **EVIDENCE**: unit::auth', '- **REVISES**:']) {
+      const document = parseFocusedSpecDocument('specs/auth.md', [
+        '#### Scenario: Incomplete enrollment',
+        marker,
+        '- **WHEN** input is supplied',
+        '- **THEN** output is observed',
+      ].join('\n'), 'current')
+      expect(document.unenrolledScenarios).toBe(0)
+      expect(document.scenarios).toHaveLength(1)
+      const violations = validateDocuments([document], config, { allowPlanned: false }).violations
+      expect(violations).toContainEqual(expect.objectContaining({ message: 'expected exactly one ID row, found 0' }))
+      expect(violations).toContainEqual(expect.objectContaining({ line: 2, message: expect.stringContaining(`malformed ${marker.match(/\*\*(\w+)\*\*/u)?.[1]} row`) }))
+    }
+  })
+
 })

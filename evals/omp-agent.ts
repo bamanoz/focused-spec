@@ -1,3 +1,4 @@
+import { delimiter, join } from 'node:path'
 import type { AgentDriver, AgentRequest } from './types.ts'
 import { runProcess } from './process.ts'
 
@@ -19,7 +20,11 @@ export class OmpAgentDriver implements AgentDriver {
       ...(request.model === undefined ? [] : ['--model', request.model]),
       request.prompt,
     ]
-    const result = await runProcess('omp', args, { cwd: request.workspace, timeoutMs: request.timeoutMs + 30_000 })
+    const result = await runProcess('omp', args, {
+      cwd: request.workspace,
+      timeoutMs: request.timeoutMs + 30_000,
+      env: { ...process.env, PATH: `${join(request.workspace, 'node_modules', '.bin')}${delimiter}${process.env.PATH ?? ''}` },
+    })
     return {
       success: result.code === 0,
       output: `${result.stdout}${result.stderr === '' ? '' : `\n[stderr]\n${result.stderr}`}`,

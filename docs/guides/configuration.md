@@ -31,9 +31,9 @@ runners:
 
 An `exclude` list narrows only its own entry. There are no implicit archive exclusions, framework defaults, default scopes, or fallback locations. Multiple entries may contribute documents to one scope, but each document must match exactly one entry and scope; overlapping claims are errors. `baseline` is permitted as an ordinary scope name and receives no special behavior.
 
-Configure files that contain focused scenarios, not every artifact understood by the surrounding specification-driven development (SDD) framework. `focused-spec` does not interpret native requirements prose, infer evidence from Given/When/Then, or validate the framework's own schema. If the native format cannot contain focused scenarios, point a layout at an explicit companion Markdown document produced or maintained through that framework's workflow.
+Configure documents that contain focused scenarios or are being adopted incrementally, not every artifact understood by the surrounding specification-driven development (SDD) framework. `focused-spec` does not interpret native requirements prose, infer evidence from Given/When/Then, or validate the framework's own schema. If the native format cannot contain focused scenarios, point a layout at an explicit companion Markdown document produced or maintained through that framework's workflow.
 
-A project whose layouts match no documents has a valid empty selection when no scope is explicitly requested. In contrast, `--scope <name>` is an assertion that the named scope exists: no matching documents is an error. Every discovered scope must contain at least one focused scenario. A broad or incorrect glob is never widened to hide an absent or empty scope.
+A project whose layouts match no documents has a valid empty selection when no scope is explicitly requested. Once documents are discovered, an all-scope selection must contain at least one enrolled focused scenario, but legacy-only scopes may coexist with enrolled scopes during incremental adoption. In contrast, `--scope <name>` is an assertion that the named scope exists and contains an enrolled focused scenario: no matching documents or a native-only scope is an error. A broad or incorrect glob is never widened to hide an absent scope or all-native selection.
 
 A runner ID names one execution environment. Runner modules are project-relative `.ts`, `.mts`, `.js`, or `.mjs` files. `timeoutMs` is an optional positive integer per runner, at most `2147482647` ms. The limit leaves room for the host's one-second shutdown grace period within Node's timer range. The complete runner contract is in the [runner API reference](../reference/runner-api.md).
 
@@ -59,6 +59,10 @@ execution:
 
 Keep each scenario to one request and one independently failing outcome. Put independently failing behavior in separate scenarios. Evidence has the form `[planned:]<runner-id>::<opaque selector>`; multiple rows form an AND contract.
 
+Enrollment is per scenario block. A scenario is enrolled as soon as it contains any labeled `ID`, `EVIDENCE`, or `REVISES` row, including a malformed row. Once marked, the whole block must satisfy the focused scenario contract; malformed focused metadata is a validation error and never makes the block native again.
+
+The same configured document may contain focused and native scenario blocks. Native blocks with none of those markers are ignored for focused validation and execution, but successful full validation and `run` report them as `unenrolledScenarios`. Treat that number as an honest measure of remaining adoption work, not as passing evidence or a claim of coverage. See the [concepts](../concepts/README.md) for selection semantics and the [CLI reference](../reference/cli.md) for exact output.
+
 Stable IDs are repository-wide through explicit ownership. A scenario that intentionally reuses an ID from another scope keeps the ID and declares its source scope:
 
 ```markdown
@@ -73,6 +77,19 @@ Stable IDs are repository-wide through explicit ownership. A scenario that inten
 `REVISES` is optional and may appear exactly once. Its value is the path-safe name of another scope containing the same ID. Within one scope an ID is always unique. Across scopes, one unmarked scenario owns the ID; every additional occurrence must point to an existing same-ID scenario in another scope, and each chain must reach that single owner. Self-revisions, missing sources, cycles, multiple unmarked owners, and unmarked collisions are errors. Branches are valid, so two scopes may independently revise the same source. Framework headings such as OpenSpec `MODIFIED Requirements` and names such as `baseline` grant no ownership.
 
 `planned:` is temporary planning evidence allowed in every scope during non-strict validation. Choose the real runner and selector contract before adding a planned row, then remove `planned:` when that exact test target exists. Strict validation and `run` reject planned evidence in every scope.
+
+## Adopt existing specifications incrementally
+
+Adopt one independently failing native scenario at a time; a document-wide rewrite is unnecessary:
+
+1. Before changing or moving specification documents, inventory the enrolled IDs, their evidence references, and each ID's unmarked owner and `REVISES` edges. Record the current `unenrolledScenarios` count separately; it describes remaining native blocks, not verified coverage.
+2. Add focused markers to the chosen scenario. If the behavior appears in more than one scope, establish its single unmarked owner in a durable document that will remain discoverable, then point working copies to that owner with `REVISES`. Do not rely on a temporary document becoming the owner implicitly.
+3. Choose an exact runner and selector. Use `planned:` only until that target exists, implement the real test, then replace the planned reference with concrete evidence.
+4. Perform the surrounding framework's normal document operation, if any. This can be a merge, publish, promotion, or another transformation; OpenSpec sync and archive are examples, not required lifecycle steps.
+5. Discover the resulting documents and compare the after-state with the before-state: the intended IDs and evidence references still exist, revision edges still resolve, and every repeated ID still reaches one unmarked owner. In particular, the durable owner must remain after a working document leaves discovery.
+6. Finish by running the final selected scenario or scope so its concrete evidence actually executes. Structural validation, a native SDD check, or a lower `unenrolledScenarios` count cannot replace this run.
+
+This workflow proves only the enrolled selection that ran. Continue reporting unenrolled native scenarios honestly until each behavior is deliberately enrolled and backed by evidence.
 
 ## Scope and verification
 

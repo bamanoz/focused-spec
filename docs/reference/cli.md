@@ -21,15 +21,18 @@ No command, an unknown command or option, a missing option value, or an unknown 
 
 ## Validation
 
+A scenario block is enrolled when it contains any labeled `ID`, `EVIDENCE`, or `REVISES` row. This test is deliberately marker-based: a malformed marker still enrolls the block and causes a focused validation violation instead of making the block native. Blocks with none of these markers are unenrolled native scenarios.
+
 `validate --syntax-only` checks document syntax and ownership without loading runners. Full `validate` loads runners and resolves concrete evidence but does not execute tests. A successful full validation reports:
 
-- `scenarios`: every parsed scenario in the validation scope, including scenarios whose evidence is entirely planned;
+- `scenarios`: every enrolled focused scenario in the validation scope, including scenarios whose evidence is entirely planned;
 - `plannedEvidence`: the number of `planned:` evidence rows;
-- `targets`: unique resolved executable targets. Planned evidence is not resolved and does not contribute to this count.
+- `targets`: unique resolved executable targets. Planned evidence is not resolved and does not contribute to this count;
+- `unenrolledScenarios`: native scenario blocks in all documents belonging to the selected scope(s). They are counted but not focused-validated or resolved.
 
-Without `--scope`, validation covers every discovered scope. With `--scope <name>`, it covers only that scope; unrelated scopes are not otherwise validated or resolved, though repository ownership checks may inspect their scenario IDs and revision links without resolving evidence. A requested scope with no matching documents is an error. Any discovered scope with documents but no focused scenarios is also an error. A project whose layouts match no documents is valid and reports zero counts when no scope is selected.
+Without `--scope`, validation covers every discovered scope. Legacy-only scopes may coexist with enrolled scopes in this all-scope selection, but discovered documents with no enrolled focused scenario anywhere fail with `no enrolled focused scenarios in discovered documents`. With `--scope <name>`, validation covers only that scope; unrelated scopes are not otherwise validated or resolved, though repository ownership checks may inspect their focused scenario IDs and revision links without resolving evidence. A requested scope with no matching documents is an error; a native-only scope fails with `scope has no focused scenarios: <name>`. A project whose layouts match no documents is valid and reports zero counts when no scope is selected.
 
-Validation text starts with `validation scope: all discovered scopes` or `validation scope: selected scope <name>`, followed by the success summary or violations. Successful full-validation JSON carries that same context:
+Validation text starts with `validation scope: all discovered scopes` or `validation scope: selected scope <name>`, followed by the success summary or violations. A successful full-validation summary ends with `; N unenrolled native scenarios`. Successful full-validation JSON carries the same count and context:
 
 ```json
 {
@@ -39,11 +42,12 @@ Validation text starts with `validation scope: all discovered scopes` or `valida
   },
   "scenarios": 1,
   "plannedEvidence": 1,
-  "targets": 0
+  "targets": 0,
+  "unenrolledScenarios": 3
 }
 ```
 
-`validate --syntax-only --json` omits evidence counts but retains the context because it checks the same document set:
+`validate --syntax-only --json` omits evidence and unenrolled-scenario counts but retains the context because it checks the same document set:
 
 ```json
 {
@@ -55,7 +59,7 @@ Validation text starts with `validation scope: all discovered scopes` or `valida
 }
 ```
 
-Validation failures report `valid: false`, the same `validationScope`, and a machine-readable `violations` array. They do not report successful counts.
+Validation failures report `valid: false`, the same `validationScope`, and a machine-readable `violations` array. They do not report successful counts, including `unenrolledScenarios`.
 
 Non-strict validation permits `planned:` evidence in every scope and skips resolving those rows. `--strict` rejects all planned evidence. Use syntax-only or non-strict validation while planning any scope; use strict validation only after its exact tests exist.
 
@@ -65,7 +69,7 @@ Non-strict validation permits `planned:` evidence in every scope and skips resol
 
 - without `--scope`, both select all discovered scopes;
 - with `--scope <name>`, both select only that scope;
-- `run --scenario <id>` narrows strict validation, evidence resolution, and execution to occurrences of that ID in the selected scope(s). With no `--scope`, matching revisions across scopes are all selected. Without `--scenario`, full selected-scope validation and execution remain unchanged.
+- `run --scenario <id>` narrows strict validation, evidence resolution, and execution to occurrences of that ID in the selected scope(s). With no `--scope`, matching revisions across scopes are all selected. Without `--scenario`, full selected-scope validation and execution remain unchanged. `unenrolledScenarios` still counts native blocks across all documents in the selected scope(s), not just the selected scenario.
 
 Strict `run` resolves concrete evidence for exactly its validation selection once, then executes those already-resolved targets. Malformed, planned, or unresolved evidence in the selected scenario prevents execution; evidence errors in unrelated scenarios do not block `run --scenario`. Plain `validate`, including `validate --strict`, still checks all scenarios in its selected scope(s) but never executes tests.
 
@@ -84,7 +88,7 @@ execution selection: all discovered scopes
 execution selection: selected scope add-search, scenario search.results.empty
 ```
 
-JSON output includes these stable neutral context objects:
+JSON output includes these stable neutral context objects and the top-level native-scenario count:
 
 ```json
 {
@@ -96,13 +100,14 @@ JSON output includes these stable neutral context objects:
   "executionSelection": {
     "scopes": { "mode": "selected", "name": "add-search" },
     "scenario": "search.results.empty"
-  }
+  },
+  "unenrolledScenarios": 3
 }
 ```
 
-For a run without `--scope`, both context objects contain `scopes: { "mode": "all" }`; `--scenario` adds the same `scenario` ID to both. When `--scenario` is absent, both scenario properties are omitted. Every scenario result includes its `scope`. In multi-scope text output, scenario rows use `PASS [<scope>] <scenario-id>` (and the corresponding non-pass status); selected-scope rows omit the bracketed prefix. Completed run JSON also retains `success`, `scenarios`, and `targetCount`. A successful run with no discovered scopes has `executionStarted: false`, `scenarios: []`, and `targetCount: 0`: no test was executed and no scenario is reported as passing.
+For a run without `--scope`, both context objects contain `scopes: { "mode": "all" }`; `--scenario` adds the same `scenario` ID to both. When `--scenario` is absent, both scenario properties are omitted. Every scenario result includes its `scope`. In multi-scope text output, scenario rows use `PASS [<scope>] <scenario-id>` (and the corresponding non-pass status); selected-scope rows omit the bracketed prefix. The successful run summary ends with `; N unenrolled native scenarios`. Completed run JSON also retains `success`, `scenarios`, `targetCount`, and `unenrolledScenarios`. A successful run with no discovered scopes has `executionStarted: false`, `scenarios: []`, `targetCount: 0`, and `unenrolledScenarios: 0`: no test was executed and no scenario is reported as passing.
 
-If configuration, discovery, selected-scenario validation, or evidence resolution fails before tests run, text output says `execution did not start`. JSON reports `valid: false`, `executionStarted: false`, the actual `validationScope` and `executionSelection`, and the machine-readable `violations` array. It omits execution result fields, so it never claims that the selection ran. An explicitly missing or empty selected scope, or a scenario ID absent from the selected scope(s), follows this failure contract. Scope-wide validation is not implied by a successful scenario-only run.
+If configuration, discovery, selected-scenario validation, or evidence resolution fails before tests run, text output says `execution did not start`. JSON reports `valid: false`, `executionStarted: false`, the actual `validationScope` and `executionSelection`, and the machine-readable `violations` array. It omits execution result fields and `unenrolledScenarios`, so it never claims that the selection ran. An explicitly missing or native-only selected scope, an all-scope selection whose discovered documents are all native, or a scenario ID absent from the selected scope(s) follows this failure contract. Scope-wide validation is not implied by a successful scenario-only run.
 
 `--allow-skip` is valid only for `run`. It permits a skipped scenario to produce a successful process exit without relabelling it as passed. Scenario and target statuses are `PASS`, `FAIL`, `SKIP`, and `ERROR`; only `PASS` is successful by default.
 

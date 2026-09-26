@@ -95,6 +95,30 @@ async function fixture(): Promise<string> {
   return root
 }
 
+async function adoptionFixture(): Promise<string> {
+  const root = await fixture()
+  await rm(join(root, 'openspec/changes'), { recursive: true })
+  await put(root, 'result.txt', 'accepted')
+  await put(root, 'runner.ts', [
+    "import { readFile } from 'node:fs/promises'",
+    "import { join } from 'node:path'",
+    'export default {',
+    '  apiVersion: 1,',
+    '  async resolve(request) { return { targets: request.selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] } },',
+    '  async run(request) {',
+    "    const value = await readFile(join(request.projectRoot, 'result.txt'), 'utf8')",
+    '    return { results: request.targets.map(target => ({ targetId: target.targetId, status: target.selector === "current" && value === "accepted" ? "pass" : "fail" })) }',
+    '  },',
+    '}',
+  ].join('\n'))
+  return root
+}
+
+const nativeScenario = [
+  '#### Scenario: Historical outcome',
+  '- **WHEN** a historical request arrives',
+  '- **THEN** the historical response is returned',
+].join('\n')
 function json(stdout: string): Record<string, unknown> {
   return JSON.parse(stdout) as Record<string, unknown>
 }
@@ -207,6 +231,7 @@ describe('focused-spec CLI', () => {
       validationScope: { scopes: { mode: 'all' } },
       scenarios: 3,
       plannedEvidence: 1,
+      unenrolledScenarios: 0,
       targets: 1,
     })
 
@@ -301,6 +326,7 @@ describe('focused-spec CLI', () => {
       validationScope: { scopes: { mode: 'all' } },
       scenarios: 2,
       plannedEvidence: 2,
+      unenrolledScenarios: 0,
       targets: 0,
     })
 
@@ -326,6 +352,7 @@ describe('focused-spec CLI', () => {
       validationScope: { scopes: { mode: 'all' } },
       scenarios: 0,
       plannedEvidence: 0,
+      unenrolledScenarios: 0,
       targets: 0,
     })
     const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json'], { encoding: 'utf8' })
@@ -1074,4 +1101,58 @@ describe('focused-spec CLI', () => {
     expect(text.stderr).toContain('execution did not start')
     expect(text.stderr).toMatch(/^timings: validation [\d.]+ ms, resolution [\d.]+ ms, total [\d.]+ ms$/m)
   })
+  it('runs enrolled outcomes beside untouched native scenarios', async () => {
+    const root = await adoptionFixture()
+    await put(root, 'openspec/specs/current/spec.md', `${nativeScenario}\n\n${focusedScenario('fixture.current.passes', 'fixture::current')}`)
+    const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(run.status).toBe(0)
+    expect(json(run.stdout)).toMatchObject({ unenrolledScenarios: 1, scenarios: [{ id: 'fixture.current.passes', status: 'PASS' }], targetCount: 1 })
+    await put(root, 'result.txt', 'rejected')
+    const changed = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(changed.status).toBe(1)
+    expect(json(changed.stdout)).toMatchObject({ unenrolledScenarios: 1, scenarios: [{ id: 'fixture.current.passes', status: 'FAIL' }] })
+  })
+
+  it('runs enrolled scope without excluding legacy-only scope', async () => {
+    const root = await adoptionFixture()
+    await put(root, 'openspec/changes/legacy/specs/native/spec.md', nativeScenario)
+    const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(run.status).toBe(0)
+    expect(json(run.stdout)).toMatchObject({ unenrolledScenarios: 1, scenarios: [{ scope: 'current', id: 'fixture.current.passes', status: 'PASS' }] })
+    const selected = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scope', 'legacy', '--json'], { encoding: 'utf8' })
+    expect(selected.status).toBe(1)
+    expect(json(selected.stdout)).toMatchObject({ executionStarted: false, violations: [expect.objectContaining({ message: expect.stringContaining('scope has no focused scenarios') })] })
+  })
+
+  it('refuses to claim coverage when all discovered documents are legacy-only', async () => {
+    const root = await adoptionFixture()
+    await put(root, 'openspec/specs/current/spec.md', nativeScenario)
+    for (const command of ['validate', 'run']) {
+      const outcome = spawnSync(process.execPath, [cli, command, '--root', root, '--json'], { encoding: 'utf8' })
+      expect(outcome.status).toBe(1)
+      expect(json(outcome.stdout)).toMatchObject({ valid: false, violations: [expect.objectContaining({ message: expect.stringContaining('no enrolled focused scenarios') })] })
+      expect(json(outcome.stdout)).not.toHaveProperty('scenarios')
+    }
+  })
+
+  it('reports unenrolled native outcomes separately from passing evidence', async () => {
+    const root = await adoptionFixture()
+    await put(root, 'openspec/specs/current/spec.md', `${nativeScenario}\n\n${focusedScenario('fixture.current.passes', 'fixture::current')}`)
+    const validate = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(validate.status).toBe(0)
+    expect(json(validate.stdout)).toMatchObject({ scenarios: 1, unenrolledScenarios: 1, targets: 1 })
+    const run = spawnSync(process.execPath, [cli, 'run', '--root', root], { encoding: 'utf8' })
+    expect(run.status).toBe(0)
+    expect(run.stdout).toContain('summary: 1 PASS, 0 FAIL, 0 SKIP, 0 ERROR; 1 unique targets; 1 unenrolled native scenarios')
+    expect(run.stdout.match(/^PASS /gmu)).toHaveLength(1)
+  })
+
+  it('distinguishes selected evidence from unenrolled scenarios', async () => {
+    const root = await adoptionFixture()
+    await put(root, 'openspec/specs/current/spec.md', `${nativeScenario}\n\n${focusedScenario('fixture.current.passes', 'fixture::current')}`)
+    const run = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scenario', 'fixture.current.passes', '--json'], { encoding: 'utf8' })
+    expect(run.status).toBe(0)
+    expect(json(run.stdout)).toMatchObject({ unenrolledScenarios: 1, validationScope: { scenario: 'fixture.current.passes' }, executionSelection: { scenario: 'fixture.current.passes' }, scenarios: [{ id: 'fixture.current.passes', status: 'PASS' }] })
+  })
+
 })

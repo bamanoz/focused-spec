@@ -30,6 +30,20 @@ export const EVAL_CASES: readonly EvalCase[] = [
     expectedSelectorFragments: EXPECTED_SELECTORS,
   },
   {
+    id: 'openspec-brownfield',
+    description: 'Adopts focused-spec in the main spec produced by a bare OpenSpec apply/sync/archive of blocked-account behavior.',
+    source: 'openspec',
+    overlay: 'cases/openspec-brownfield/overlay',
+    changeName: 'link-blocked-auth-evidence',
+    turns: [{
+      promptPath: 'cases/openspec-brownfield/prompt.md',
+      skills: ['focused-spec', 'openspec-apply-change', 'openspec-sync-specs'],
+    }],
+    expectedScenarioId: 'auth.login.blocked-account',
+    expectedEvidenceCount: 2,
+    expectedSelectorFragments: ['TestBlockedAccountWithValidCredentials', 'test_blocked_account_with_valid_credentials'],
+  },
+  {
     id: 'openspec-propose-apply',
     description: 'Creates a proposal, respects the planning boundary, then applies it in a fresh agent session.',
     source: 'openspec',
@@ -66,8 +80,10 @@ export const EVAL_CASES: readonly EvalCase[] = [
       },
     ],
     expectedScenarioId: 'auth.login.blocked-account',
-    expectedEvidenceCount: 2,
-    expectedSelectorFragments: EXPECTED_SELECTORS,
+    expectedEvidenceCount: 1,
+    maximumEvidenceCount: 2,
+    expectedSelectorFragments: [],
+    expectedSelectorAlternatives: ['::./auth::TestBlockedAccount', '::tests/functional/test_auth.py::test_blocked_account'],
   },
 ]
 

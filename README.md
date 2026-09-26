@@ -69,6 +69,10 @@ npx --yes skills add bamanoz/focused-spec --skill focused-spec
 
 For any in-progress scope, use `validate --scope <name>` without `--strict` while evidence is `planned:`, then `validate --scope <name> --strict` and `run --scope <name>` once it is executable. Without `--scope`, both commands select every discovered scope. [Scope and CLI details](docs/reference/cli.md).
 
+## Adopt in an existing project
+
+You do **not** need to rewrite your codebase or backfill every historical spec. Keep your current SDD workflow and tests; start with the next behavior you change. Enroll just its scenario with an `ID` and exact `EVIDENCE`, configure the existing Markdown location and a project-local runner, then run that evidence. Native scenarios without focused metadata stay untouched and are reported as **unenrolled**, not passed. Add coverage outcome by outcome as you work. See [incremental adoption](docs/guides/configuration.md#adopt-existing-specifications-incrementally) and [OpenSpec's brownfield guide](https://github.com/Fission-AI/OpenSpec/blob/main/docs/existing-projects.md).
+
 ## Bring your own SDD layout
 
 Document discovery is explicit, not tied to a framework or inferred from its folders:

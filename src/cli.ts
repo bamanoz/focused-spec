@@ -271,9 +271,9 @@ function printViolations(
   if (timings !== undefined) process.stderr.write(displayTimings(timings))
 }
 
-function printExecution(result: ExecutionResult, json: boolean, context: RunContext, timings?: PhaseTimings): void {
+function printExecution(result: ExecutionResult, json: boolean, context: RunContext, unenrolledScenarios: number, timings?: PhaseTimings): void {
   if (json) {
-    process.stdout.write(`${JSON.stringify({ ...result, executionStarted: result.targetCount > 0, ...context, ...(timings === undefined ? {} : { timings }) }, null, 2)}\n`)
+    process.stdout.write(`${JSON.stringify({ ...result, unenrolledScenarios, executionStarted: result.targetCount > 0, ...context, ...(timings === undefined ? {} : { timings }) }, null, 2)}\n`)
     return
   }
   process.stdout.write(displayRunContext(context))
@@ -287,7 +287,7 @@ function printExecution(result: ExecutionResult, json: boolean, context: RunCont
   }
   const counts = { PASS: 0, FAIL: 0, SKIP: 0, ERROR: 0 }
   for (const scenario of result.scenarios) counts[scenario.status] += 1
-  process.stdout.write(`summary: ${counts.PASS} PASS, ${counts.FAIL} FAIL, ${counts.SKIP} SKIP, ${counts.ERROR} ERROR; ${result.targetCount} unique targets\n`)
+  process.stdout.write(`summary: ${counts.PASS} PASS, ${counts.FAIL} FAIL, ${counts.SKIP} SKIP, ${counts.ERROR} ERROR; ${result.targetCount} unique targets; ${unenrolledScenarios} unenrolled native scenarios\n`)
   if (timings !== undefined) process.stdout.write(displayTimings(timings))
 }
 
@@ -361,8 +361,8 @@ async function main(argumentsList: readonly string[]): Promise<number> {
   if (options.command === 'validate') {
     const counts = validationCounts(validation.resolutionDocuments, resolution.plan)
     const timings = reportedTimings()
-    if (options.json) process.stdout.write(`${JSON.stringify({ valid: true, ...counts, ...context, ...(timings === undefined ? {} : { timings }) }, null, 2)}\n`)
-    else process.stdout.write(`${displayValidationContext(context)}focused specifications are valid: ${counts.scenarios} scenarios, ${counts.plannedEvidence} planned evidence, ${counts.targets} unique targets\n${timings === undefined ? '' : displayTimings(timings)}`)
+    if (options.json) process.stdout.write(`${JSON.stringify({ valid: true, ...counts, unenrolledScenarios: validation.unenrolledScenarios, ...context, ...(timings === undefined ? {} : { timings }) }, null, 2)}\n`)
+    else process.stdout.write(`${displayValidationContext(context)}focused specifications are valid: ${counts.scenarios} scenarios, ${counts.plannedEvidence} planned evidence, ${counts.targets} unique targets; ${validation.unenrolledScenarios} unenrolled native scenarios\n${timings === undefined ? '' : displayTimings(timings)}`)
     return 0
   }
 
@@ -379,7 +379,7 @@ async function main(argumentsList: readonly string[]): Promise<number> {
     maxConcurrentGroups: loaded.config.execution?.maxConcurrentGroups ?? 1,
   })
   phases.executionMs = elapsed(executionStarted)
-  printExecution(result, options.json, context as RunContext, reportedTimings())
+  printExecution(result, options.json, context as RunContext, validation.unenrolledScenarios, reportedTimings())
   return result.success ? 0 : 1
 }
 

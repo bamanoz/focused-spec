@@ -34,7 +34,7 @@ The CLI SHALL load a version-2 `.focused-spec/config.yaml` from the selected pro
 - **THEN** configuration fails before reading or executing documents
 
 ### Requirement: Specification sources
-The CLI SHALL discover focused scenarios from configured project-relative Markdown document patterns without requiring a named SDD framework. Every pattern SHALL assign exactly one path-safe scope: either an arbitrary explicit `scope: <name>` without `{scope}`, or exactly one `{scope}` capture without an explicit scope. No scope name, including `baseline`, SHALL receive special behavior. Optional per-pattern exclusions SHALL narrow matches without creating fallback locations. Multiple patterns MAY contribute documents to the same scope. A document SHALL belong to exactly one configured location and scope. Configuration SHALL support nested capability specs, a spec adjacent to planning artifacts, and projects whose layouts match no documents. An explicitly requested scope with no matching documents or any discovered scope whose documents contain no focused scenarios SHALL fail. No pattern SHALL be silently widened when a configured location is absent.
+The CLI SHALL discover focused scenarios from configured project-relative Markdown document patterns without requiring a named SDD framework. Every pattern SHALL assign exactly one path-safe scope: either an arbitrary explicit `scope: <name>` without `{scope}`, or exactly one `{scope}` capture without an explicit scope. No scope name, including `baseline`, SHALL receive special behavior. Optional per-pattern exclusions SHALL narrow matches without creating fallback locations. Multiple patterns MAY contribute documents to the same scope. A document SHALL belong to exactly one configured location and scope. Configuration SHALL support nested capability specs, a spec adjacent to planning artifacts, and projects whose layouts match no documents. Configured documents and scopes MAY contain only unenrolled native scenarios alongside other scopes containing enrolled scenarios. An explicitly requested scope with no matching documents or no enrolled focused scenarios SHALL fail. If documents match an all-scope selection but none has an enrolled focused scenario, validation and execution SHALL fail rather than reporting executable coverage. No pattern SHALL be silently widened when a configured location is absent.
 
 #### Scenario: File globs match no specifications
 - **ID**: `config.source.empty-files`
@@ -63,7 +63,7 @@ The CLI SHALL discover focused scenarios from configured project-relative Markdo
 #### Scenario: Scope document without focused scenarios
 - **ID**: `config.source.empty-scope-document`
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects a selected scope with no focused scenarios`
-- **WHEN** the selected scope has Markdown documents but none contain a focused scenario
+- **WHEN** the explicitly selected scope has Markdown documents but none contain an enrolled focused scenario
 - **THEN** validation fails rather than treating native prose or zero targets as executable proof
 
 #### Scenario: Overlapping document patterns
@@ -71,3 +71,15 @@ The CLI SHALL discover focused scenarios from configured project-relative Markdo
 - **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects a document claimed by multiple layouts`
 - **WHEN** the same document matches multiple configured patterns or would belong to different scopes
 - **THEN** discovery fails with its path and conflicting locations instead of silently deduplicating or choosing one
+
+#### Scenario: Legacy-only scope beside enrolled scope
+- **ID**: `config.source.mixed-scope-enrollment`
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > runs enrolled scope without excluding legacy-only scope`
+- **WHEN** all-scope execution discovers a legacy-only scope and a different scope with executable enrolled scenarios
+- **THEN** it executes only enrolled scenarios without excluding the legacy-only scope or reporting its native outcomes as passed
+
+#### Scenario: All discovered documents are legacy-only
+- **ID**: `config.source.legacy-only-selection`
+- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > refuses to claim coverage when all discovered documents are legacy-only`
+- **WHEN** configured globs discover native scenarios but no enrolled scenarios anywhere and no scope is selected
+- **THEN** validation and run fail with an actionable no-enrolled-scenarios error rather than reporting executable success

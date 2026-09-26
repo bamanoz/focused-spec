@@ -1,6 +1,7 @@
 import type { EvidenceReference, SpecDocument } from './model.js'
 
 const ID = /^- \*\*ID\*\*: `([^`]+)`$/u
+const ID_ROW = /^\s*-\s*\*\*ID\*\*/u
 const EVIDENCE = /^- \*\*EVIDENCE\*\*: `([^`]+)`$/u
 const EVIDENCE_ROW = /^\s*-\s*\*\*EVIDENCE\*\*/u
 const REVISION = /^- \*\*REVISES\*\*: (\S+)$/u
@@ -16,6 +17,7 @@ export const STABLE_ID = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u
 export function parseFocusedSpecDocument(path: string, source: string, scope: string): SpecDocument {
   const lines = source.split('\n')
   const scenarios: SpecDocument['scenarios'][number][] = []
+  let unenrolledScenarios = 0
   const malformedScenarioHeadings: number[] = []
   let requirement: string | undefined
 
@@ -29,13 +31,21 @@ export function parseFocusedSpecDocument(path: string, source: string, scope: st
     if (scenarioMatch?.[1] === undefined) continue
     const body: string[] = []
     const malformedEvidenceLines: number[] = []
+    const malformedIdLines: number[] = []
     const malformedRevisionLines: number[] = []
+    let enrolled = false
     for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
       const candidate = lines[cursor] ?? ''
       if (SCENARIO.test(candidate) || REQUIREMENT.test(candidate) || candidate.startsWith('## ')) break
+      if (ID_ROW.test(candidate) || EVIDENCE_ROW.test(candidate) || REVISION_ROW.test(candidate)) enrolled = true
+      if (ID_ROW.test(candidate) && !ID.test(candidate)) malformedIdLines.push(cursor + 1)
       if (EVIDENCE_ROW.test(candidate) && !EVIDENCE.test(candidate)) malformedEvidenceLines.push(cursor + 1)
       if (REVISION_ROW.test(candidate) && !REVISION.test(candidate)) malformedRevisionLines.push(cursor + 1)
       body.push(candidate)
+    }
+    if (!enrolled) {
+      unenrolledScenarios += 1
+      continue
     }
     scenarios.push({
       scope,
@@ -45,6 +55,7 @@ export function parseFocusedSpecDocument(path: string, source: string, scope: st
       ...(requirement === undefined ? {} : { requirement }),
       revisions: body.flatMap(value => REVISION.exec(value)?.[1] ?? []),
       malformedRevisionLines,
+      malformedIdLines,
       ids: body.flatMap(value => ID.exec(value)?.[1] ?? []),
       evidence: body.flatMap(value => EVIDENCE.exec(value)?.[1] ?? []),
       malformedEvidenceLines,
@@ -53,7 +64,7 @@ export function parseFocusedSpecDocument(path: string, source: string, scope: st
     })
   }
 
-  return { path, scope, scenarios, malformedScenarioHeadings }
+  return { path, scope, scenarios, unenrolledScenarios, malformedScenarioHeadings }
 }
 
 export function parseEvidenceReference(raw: string): EvidenceReference | { readonly error: string } {

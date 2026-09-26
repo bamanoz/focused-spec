@@ -9,6 +9,7 @@ export interface Scenario {
   readonly requirement?: string
   readonly revisions: readonly string[]
   readonly malformedRevisionLines: readonly number[]
+  readonly malformedIdLines: readonly number[]
   readonly ids: readonly string[]
   readonly evidence: readonly string[]
   readonly malformedEvidenceLines: readonly number[]
@@ -20,6 +21,7 @@ export interface SpecDocument {
   readonly path: string
   readonly scope: string
   readonly scenarios: readonly Scenario[]
+  readonly unenrolledScenarios: number
   readonly malformedScenarioHeadings: readonly number[]
 }
 
