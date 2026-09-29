@@ -67,7 +67,7 @@ export const EVAL_CASES: readonly EvalCase[] = [
     id: 'full-skill-routing',
     description: 'Selects the correct proposal and apply workflows while every OpenSpec skill is available.',
     source: 'openspec',
-    changeName: 'add-blocked-account-focused-spec',
+    changeName: 'reject-blocked-login',
     turns: [
       {
         promptPath: 'cases/full-skill-routing/propose.md',

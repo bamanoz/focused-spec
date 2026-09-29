@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentDriver, EvalGate, EvalResult, EvalRunOptions } from './types.ts'
 import { evalCase } from './cases.ts'
-import { judgeCompletedWorkspace, judgeProposalCheckpoint, snapshotProtectedFiles } from './judge.ts'
+import { judgeCompletedWorkspace, judgeProposalCheckpoint, skillActivationGate, snapshotProtectedFiles } from './judge.ts'
 import { OmpAgentDriver } from './omp-agent.ts'
 import { evalRepositoryRoot, provisionWorkspace, readEvalPrompt } from './provision.ts'
 
@@ -37,6 +37,8 @@ export async function runEval(
         detail: `exit=${String(result.exitCode)} durationMs=${result.durationMs}`,
       })
       if (!result.success) break
+      gates.push(skillActivationGate(result.output))
+      if (gates.some(item => !item.passed)) break
       if (turn.checkpoint === 'proposal') gates.push(...await judgeProposalCheckpoint(workspace.path, selected))
       if (gates.some(item => !item.passed)) break
     }

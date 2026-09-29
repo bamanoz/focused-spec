@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentDriver, AgentRequest, AgentResult, EvalCase } from '../evals/types.ts'
 import { runEval } from '../evals/harness.ts'
-import { brownfieldGate, integrityGate, judgeProposalCheckpoint, mutationGate, snapshotProtectedFiles } from '../evals/judge.ts'
+import { brownfieldGate, integrityGate, judgeProposalCheckpoint, mutationGate, skillActivationGate, snapshotProtectedFiles } from '../evals/judge.ts'
 
 const roots: string[] = []
 const repository = fileURLToPath(new URL('..', import.meta.url))
@@ -119,6 +119,27 @@ describe('agent eval harness', () => {
     const result = await runEval({ caseId: 'files-source-bootstrap' }, new FakeDriver())
     expect(result.passed).toBe(false)
     expect(result.gates).toEqual([{ name: 'agent-turn-1', passed: false, detail: 'exit=17 durationMs=1' }])
+  }, 30_000)
+
+  it('rejects agent turns that never load the focused-spec skill', () => {
+    const read = (path: string) => JSON.stringify({ type: 'tool_execution_start', toolName: 'read', args: { path } })
+    expect(skillActivationGate(read('skill://openspec-propose'))).toMatchObject({ passed: false })
+    expect(skillActivationGate(read('skill://focused-spec/references/runners.md'))).toMatchObject({ passed: false })
+    expect(skillActivationGate(read('skill://focused-spec'))).toMatchObject({ passed: true })
+  })
+
+  it('stops an OpenSpec turn before judging artifacts if the agent skipped the skill', async () => {
+    const driver: AgentDriver = {
+      async run() {
+        return { success: true, output: JSON.stringify({ type: 'tool_execution_start', toolName: 'read', args: { path: 'skill://openspec-propose' } }), exitCode: 0, durationMs: 1 }
+      },
+    }
+    const result = await runEval({ caseId: 'full-skill-routing', openspecSkillsDir: join(repository, '.omp/skills') }, driver)
+    expect(result.passed).toBe(false)
+    expect(result.gates).toEqual([
+      { name: 'agent-turn-1', passed: true, detail: 'exit=0 durationMs=1' },
+      { name: 'focused-skill-loaded', passed: false, detail: 'agent did not read skill://focused-spec' },
+    ])
   }, 30_000)
   it('rejects a proposal that creates runner or product implementation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-eval-proposal-'))

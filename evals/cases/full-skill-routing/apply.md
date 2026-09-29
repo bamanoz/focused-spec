@@ -1,1 +1,1 @@
-Now implement the planned change `add-blocked-account-focused-spec` completely. Choose the appropriate workflow from the available skills and verify the result.
+Now implement the OpenSpec change `reject-blocked-login` completely and verify the result.

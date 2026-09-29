@@ -25,6 +25,18 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+export function skillActivationGate(transcript: string): EvalGate {
+  const loaded = transcript.split('\n').some(line => {
+    try {
+      const event = JSON.parse(line) as { type?: string; toolName?: string; args?: { path?: string } }
+      return event.type === 'tool_execution_start' && event.toolName === 'read' && event.args?.path === 'skill://focused-spec'
+    } catch {
+      return false
+    }
+  })
+  return gate('focused-skill-loaded', loaded, loaded ? 'agent read skill://focused-spec' : 'agent did not read skill://focused-spec')
+}
+
 export async function snapshotProtectedFiles(workspace: string): Promise<ReadonlyMap<string, string>> {
   const snapshots = new Map<string, string>()
   for (const path of PROTECTED_PATHS) snapshots.set(path, await readFile(join(workspace, path), 'utf8'))

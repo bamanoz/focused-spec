@@ -1,13 +1,15 @@
 ---
 name: focused-spec
-description: "Requires executable evidence when authoring or changing behavioral specifications: add focused scenarios during planning and execute their exact tests before completion. Use alongside any host specification workflow."
+description: "Use whenever an agent authors, revises, publishes, moves, or completes behavioral specifications in any specification-driven workflow. Load alongside the host workflow skill even if the user does not name focused-spec; plan exact executable evidence for changed outcomes and run it before completion."
 ---
 
 # Focused Spec
 
 Author small scenarios in the host framework's file, but use focused-spec's own IDs, evidence, and execution contract. The installed CLI and this bundled skill are sufficient; do not assume access to this skill's source repository.
 
-When this skill is active in a workflow that creates or changes a behavioral specification, author a focused scenario for each independently failing outcome before treating the specification as ready. Do not wait for implementation or infer evidence from the host's acceptance prose. If the host's file cannot contain focused scenario blocks without violating its format or generation rules, put them in an adjacent Markdown companion and register that companion through the host's normal authoring workflow. Keep the host's requirement as the source of intent; the companion records the focused outcome and exact evidence, not a second copy of the entire specification. Never hand-edit a generated host artifact outside its owning workflow. Name the intended runner and selector using `planned:` when the target does not yet exist, and validate the planning scope non-strictly. Do not declare the implementation complete until all planned rows have been replaced and `focused-spec run` executes the selected tests successfully.
+Load this skill alongside the host workflow skill whenever the work creates, changes, publishes, or moves behavioral scenarios, even if the user never names focused-spec. Apply the host framework's authoring and lifecycle rules; its structural validation does not establish executable focused evidence.
+
+Author a focused scenario for each independently failing new or changed outcome before treating the specification as ready; do not bulk-enroll unrelated historical outcomes. Do not wait for implementation or infer evidence from the host's acceptance prose. If the host's file cannot contain focused scenario blocks without violating its format or generation rules, put them in an adjacent Markdown companion and register that companion through the host's normal authoring workflow. Keep the host's requirement as the source of intent; the companion records the focused outcome and exact evidence, not a second copy of the entire specification. Never hand-edit a generated host artifact outside its owning workflow. Name the intended runner and selector using `planned:` when the target does not yet exist, and validate the planning scope non-strictly. Do not declare the implementation complete until all planned rows have been replaced and `focused-spec run` executes the selected tests successfully.
 
 ## Discover CLI commands and options
 
