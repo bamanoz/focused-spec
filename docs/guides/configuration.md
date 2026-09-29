@@ -80,18 +80,9 @@ Stable IDs are repository-wide through explicit ownership. A scenario that inten
 
 ## Adopt existing specifications incrementally
 
-Adopt one independently failing native scenario at a time; a document-wide rewrite is unnecessary:
+Enrollment is per independently failing outcome, not per document: existing native scenarios can remain untouched and cannot be reported as passed focused evidence. A selected document transition must preserve the IDs, evidence, and `REVISES` ownership of enrolled outcomes that remain relevant, even when a working document leaves discovery. The [installed skill's incremental-adoption workflow](../../skills/focused-spec/SKILL.md#adopt-native-scenarios-incrementally) owns the agent's before/after inventory and execution steps; it works without this documentation in consuming projects.
 
-1. Before changing or moving specification documents, inventory the enrolled IDs, their evidence references, and each ID's unmarked owner and `REVISES` edges. Record the current `unenrolledScenarios` count separately; it describes remaining native blocks, not verified coverage.
-2. Add focused markers to the chosen scenario. If the behavior appears in more than one scope, establish its single unmarked owner in a durable document that will remain discoverable, then point working copies to that owner with `REVISES`. Do not rely on a temporary document becoming the owner implicitly.
-3. Choose an exact runner and selector. Use `planned:` only until that target exists, implement the real test, then replace the planned reference with concrete evidence.
-4. Perform the surrounding framework's normal document operation, if any. This can be a merge, publish, promotion, or another transformation; OpenSpec sync and archive are examples, not required lifecycle steps.
-5. Discover the resulting documents and compare the after-state with the before-state: the intended IDs and evidence references still exist, revision edges still resolve, and every repeated ID still reaches one unmarked owner. In particular, the durable owner must remain after a working document leaves discovery.
-6. Finish by running the final selected scenario or scope so its concrete evidence actually executes. Structural validation, a native SDD check, or a lower `unenrolledScenarios` count cannot replace this run.
-
-When adding or changing evidence, prove that each selected test detects the corresponding `THEN` outcome, not just that it currently passes. Run the exact evidence, introduce a reversible regression in the product behavior in a disposable workspace, and run the same evidence again. It must execute and fail on the expected behavioral assertion, not because resolution failed, a runner errored, or an unrelated test failed. Restore the behavior and confirm the evidence passes again. Do not rewrite the test or runner to force the failure. If the probe cannot be performed safely, report the missing sensitivity check instead of claiming it passed. `focused-spec run` does not perform this mutation automatically.
-
-This workflow proves only the enrolled selection that ran. Continue reporting unenrolled native scenarios honestly until each behavior is deliberately enrolled and backed by evidence.
+A green run alone does not establish that a selected test detects its claimed `THEN` outcome. The [skill's controlled product-regression check](../../skills/focused-spec/SKILL.md#prove-new-or-changed-evidence-detects-failure) owns the procedure for new or changed evidence, including when the selector points to an existing test. `focused-spec run` does not introduce mutations automatically. If a safe regression check is unavailable, disclose that sensitivity was not verified; passing enrolled evidence never certifies unrelated native scenarios.
 
 ## Scope and verification
 

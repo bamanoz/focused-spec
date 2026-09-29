@@ -6,11 +6,9 @@ These instructions govern work in the `focused-spec` repository.
 
 `focused-spec` connects small behavioral scenarios to exact executable evidence. The product boundary is the CLI result and the behavior of project-local runner plugins. Keep the core language- and framework-agnostic.
 
-- `src/` owns parsing, configuration, planning, runner isolation, validation, execution, and the public API.
-- `skills/focused-spec/SKILL.md` owns the agent workflow for authoring scenarios and runners.
-- `evals/` owns black-box agent evaluation harnesses and fixtures.
-- `docs/` owns current documentation, with one authoritative owner per topic.
-- `examples/` owns runnable examples; `test/` owns behavioral tests.
+- `src/` owns the CLI and public API; `evals/` owns black-box evaluations; `examples/` and `test/` own runnable examples and behavioral tests.
+- `skills/focused-spec/SKILL.md` and its bundled references own the portable agent workflow. They must work without this repository's documentation or source.
+- `docs/README.md` maps human-facing concepts, guides, references, and repository workflows. `openspec/specs/` records executable behavioral requirements, not agent procedures.
 
 ## Operating principles
 
@@ -24,19 +22,9 @@ These instructions govern work in the `focused-spec` repository.
 
 ## Documentation contract
 
-At the start of every task, reread `docs/README.md` and keep its progressive-disclosure map in working context. Before changing behavior, also read the owning page for the affected topic.
+At the start of every task, read `docs/README.md` for topic ownership. Before changing behavior, read its owning page and the governing contract. Update the owning documentation with every new or changed behavior; do not duplicate the installed skill's agent procedure in repository docs.
 
-Documentation uses progressive disclosure:
-
-1. `docs/README.md` gives the map and the shortest orientation.
-2. `docs/concepts/` explains the model and boundaries.
-3. `docs/guides/` explains common tasks.
-4. `docs/reference/` records exact CLI, configuration, and API contracts.
-5. `docs/development/` records implementation and verification workflows.
-
-Every new or changed behavior must update its owning documentation in the same change. Every new, moved, renamed, or removed documentation page MUST update `docs/README.md` and the relevant nested section index in the same change. A page that is not reachable from `docs/README.md` through the nested indexes is incomplete.
-
-Before handoff, verify documentation links and the documentation tree. Do not claim documentation work complete while the map or an affected index is stale. Keep one normative owner per topic; link to it instead of duplicating prose. Root `README.md` is only the project entrypoint and quick start; detailed documentation belongs under `docs/`.
+For a new, moved, renamed, or removed documentation page, update `docs/README.md` and the relevant section index in the same change. Before handoff, verify documentation links and that each page is reachable through the indexes. Root `README.md` is only the entrypoint and quick start; detailed documentation belongs under `docs/`.
 
 ## TypeScript and package conventions
 
@@ -45,39 +33,16 @@ Before handoff, verify documentation links and the documentation tree. Do not cl
 - Keep public contracts exported from `src/index.ts` or the declared `./runner` subpath.
 - Preserve `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, and strict diagnostics.
 - Values crossing YAML, CLI, runner IPC, and JSON boundaries must remain JSON-compatible and be validated at the boundary.
-- Runner modules are trusted project code, not security sandboxes. Still use executable/argument arrays, `shell: false`, bounded diagnostics, deterministic target IDs, and abort-aware child processes.
+- For runner work, follow the public [runner API](docs/reference/runner-api.md) and the [bundled runner workflow](skills/focused-spec/references/runners.md); runner modules are trusted project code, not security sandboxes.
 
-## Focused-spec invariants
+## Product and evaluation contracts
 
-- A scenario has one repository-unique lowercase dotted ID, exactly one `WHEN`, and one independently failing `THEN` outcome.
-- Evidence is `<runner-id>::<opaque selector>`. Every selector resolves to exactly one target or one actionable error.
-- Every resolved target produces exactly one `pass`, `fail`, or `skip` result. Never report `pass` without executing and interpreting the selected test.
-- `run` performs strict validation first. `SKIP` and `ERROR` are not success unless the explicit CLI policy allows skips.
-- OpenSpec `planned:` evidence is temporary and must be replaced before a completed change passes strict validation and execution.
-- Preserve lexical and structural identity of selectors; do not silently normalize away user-authored evidence.
+Use the [concepts](docs/concepts/README.md), [CLI reference](docs/reference/cli.md), [runner API](docs/reference/runner-api.md), and [capability specs](docs/README.md#topic-ownership) for product behavior. Use the [installed skill](skills/focused-spec/SKILL.md) for scenario authoring and evidence checks; this repository's OpenSpec lifecycle belongs to the [development workflow](docs/development/workflow.md).
 
-## Agent evaluations
-
-The eval harness is black-box by design. An evaluated agent receives the installed package and public skill/API, not this repository's implementation source.
-
-- Keep eval workspaces isolated and disposable.
-- Do not modify product code or product tests to make evidence pass.
-- Do not inspect `focused-spec` implementation source or installed JavaScript implementation during an eval. Public declarations and README contracts are allowed.
-- Project-local runners must execute the existing product tests; fake `pass` results are invalid.
-- Integrity gates must detect protected-file changes, implementation inspection, and `shell: true`.
-- Test both positive execution and controlled mutations that must fail.
-- OpenSpec proposal turns are planning-only; apply turns implement and verify the change.
+Agent evaluations are black-box: the evaluated agent receives the installed package and public skill/API, not this repository's implementation. Follow [agent evals](docs/development/agent-evals.md) for the cases and integrity gates; never inspect the implementation or change protected product tests during an eval.
 
 ## Verification
 
-Use the narrowest relevant check while iterating:
+Use the narrowest relevant check while iterating; for permanent changes run `npm test` and exercise the affected CLI or installer path. For runner changes, execute the real example or an isolated eval. For documentation-only changes, validate links and command examples without claiming unexercised runtime behavior. The [development workflow](docs/development/workflow.md) owns the commands.
 
-```sh
-npm test
-npm run smoke
-npm run eval:agent -- --list
-```
-
-For permanent changes, run `npm test` and exercise the affected CLI or installer path. For runner changes, execute the real example or an isolated eval. For documentation-only changes, validate links and command examples without claiming runtime behavior that was not exercised.
-
-A final handoff must state the files changed, the commands actually run, observed results, and any remaining limitation. Do not hide a timeout, skipped optional dependency, or model-specific eval result behind a green partial check.
+Report files changed, commands actually run, observed results, and any limitations. Do not hide a timeout, skipped optional dependency, or model-specific eval result behind a green partial check.

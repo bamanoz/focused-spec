@@ -1,24 +1,10 @@
 # Project-local runners
 
-Use the public `focused-spec/runner` contract. Do not depend on internal package modules or implementation details.
+Use the public [runner API contract](../reference/runner-api.md), not internal package modules or implementation details. It defines `RunnerPlugin`, selector resolution, target results, request context, and optional partitioning. A runner is project-local and must distinguish an executed selected test from a skipped, missing, or unreported test; a successful framework process exit alone may not establish `pass`.
 
-A runner must:
+For an agent implementing or repairing a runner, the [bundled runner workflow](../../skills/focused-spec/references/runners.md) owns the exact selector, collection, report-interpretation, and verification steps. It ships with the skill and needs no access to this repository's docs. Start with serial execution; only add partitioning after auditing shared resources.
 
-1. export a default `RunnerPlugin` with `apiVersion: 1`;
-2. resolve every selector to exactly one stable target or one actionable error;
-3. execute every target and return exactly one `pass`, `fail`, or `skip` result;
-4. use executable and argument arrays with `shell: false`;
-5. honor the supplied project root, working directory, options, and abort signal;
-6. keep diagnostics bounded and paths deterministic.
-
-Build the smallest runner that can prove the chosen selector contract:
-
-1. Start without `partition` and leave `execution.maxConcurrentGroups` at 1. Choose a framework-native selector that can identify one test; do not implement a parser for test source unless the selector contract requires one.
-2. In `resolve`, use the framework's collection mechanism to reject missing or ambiguous selectors. Give the selected test a stable `targetId`.
-3. In `run`, execute only the selected test and interpret its reported result. A zero exit code is insufficient if the framework also exits zero when no test matched or every test skipped. Report a missing test or unreadable report as `fail`, not `pass`.
-4. Prove the runner boundary: the selected test passes, an unrelated failing test is not executed, a deliberately skipped selected test is not `pass`, and a missing selector produces an actionable resolution error. Separately, check that the evidence detects a controlled product regression as described in the [configuration guide](configuration.md#adopt-existing-specifications-incrementally); changing a test or runner cannot prove that boundary.
-
-The [Go](../../examples/openspec/.focused-spec/runners/go-test.ts) and [pytest](../../examples/openspec/.focused-spec/runners/pytest.ts) examples illustrate framework-specific collection and invocation, not a production result parser: both classify by process exit code and need adaptation to detect skipped or unexecuted selected tests. Do not copy another project's source parser or resource policy. Add `partition` only after the selected tests' shared filesystem, database, ports, processes, and time-sensitive behavior have been reviewed.
+The [Go](../../examples/openspec/.focused-spec/runners/go-test.ts) and [pytest](../../examples/openspec/.focused-spec/runners/pytest.ts) examples illustrate framework-specific collection and invocation, not a production result parser: both classify by process exit code and need adaptation to detect skipped or unexecuted selected tests. Do not copy another project's source parser or resource policy.
 
 ## Optional execution groups
 

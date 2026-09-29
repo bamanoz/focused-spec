@@ -17,11 +17,11 @@
 - Installation and skill setup: [Installation guide](guides/install.md)
 - Configuration and scenarios: [Configuration guide](guides/configuration.md)
 - Runner implementation: [Runner guide](guides/runners.md)
-- CLI contract: [CLI reference](reference/cli.md)
+- Agent authoring and evidence workflow: [installed skill](../skills/focused-spec/SKILL.md) and its [runner reference](../skills/focused-spec/references/runners.md); these ship independently of repository documentation
 - Runner API contract: [Runner API reference](reference/runner-api.md)
 - Repository checks: [Development guide](development/README.md)
 - npm package release: [Release process](development/releasing.md)
 - Agent evals: [Agent evals](development/agent-evals.md)
 - Behavioral contract: [scenario authoring](../openspec/specs/scenario-authoring/spec.md), [configuration](../openspec/specs/project-configuration/spec.md), [validation](../openspec/specs/validation/spec.md), [CLI help](../openspec/specs/cli-help/spec.md), [runner protocol](../openspec/specs/runner-protocol/spec.md), [execution](../openspec/specs/scenario-execution/spec.md), [distribution](../openspec/specs/distribution/spec.md), [agent workflow](../openspec/specs/agent-workflow/spec.md)
 
-Root `README.md` is the short project entrypoint. Detailed normative documentation lives here. `AGENTS.md` contains durable coding-agent rules, not product documentation.
+Root `README.md` is the short project entrypoint. Human-facing documentation lives here; the installed skill owns portable agent procedures, while `AGENTS.md` contains repository-only coding-agent rules and pointers to the owners.
