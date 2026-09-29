@@ -13,3 +13,4 @@ __pycache__/
 !.env.example
 .omp
 .agents
+/skills-lock.json
