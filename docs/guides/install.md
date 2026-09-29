@@ -22,6 +22,8 @@ Node.js 22.16 and 22.17 need the experimental type-stripping flag to load projec
 
 ## Agent skill
 
+The CLI can validate and run manually authored scenarios without an installed skill. For agent-led scenario authoring and evidence verification, install the skill for the agent doing that work; npm installation alone does not activate it.
+
 Install the skill separately from GitHub in the consuming project:
 
 ```sh

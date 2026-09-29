@@ -52,7 +52,7 @@ Requires **Node.js 22.16.0+**. In the project you want to verify:
 npm install --save-dev focused-spec@latest
 ```
 
-Optionally install the [agent skill](skills/focused-spec/SKILL.md) separately to guide scenario authoring:
+If an agent will author or update behavioral scenarios, also install the [agent skill](skills/focused-spec/SKILL.md) for that agent. The CLI works without the skill when you maintain scenarios and runners yourself; the skill supplies the agent workflow, not the executable:
 
 ```sh
 npx --yes skills add bamanoz/focused-spec --skill focused-spec
