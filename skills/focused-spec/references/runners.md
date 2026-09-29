@@ -45,7 +45,7 @@ Audit actual shared writes and dependencies: test databases/schemas, filesystem 
 ## Prove the integration from the consumer's side
 
 - Resolve one existing selector and reject a missing or ambiguous selector. Preserve its exact `targetId` across repeated resolutions.
-- Run it alongside an unrelated failing test: the selected test must pass without executing the unrelated one. Mutate **the selected test's behavior** and prove it fails; deliberately skip the selected test and prove it is not `pass`.
+- Run it alongside an unrelated failing test: the selected test must pass without executing the unrelated one. Deliberately skip the selected test and prove it is not `pass`. To check that the evidence itself protects the claimed outcome, follow the [main skill's controlled product-regression check](../SKILL.md#prove-new-or-changed-evidence-detects-failure), not a mutation of the test or runner.
 - Confirm spawn failure and missing/unreadable per-test output cannot produce `pass`. Verify abort and temporary fixture cleanup.
 - If partitioned, verify each selected target appears once, independent groups can overlap, conflicting groups do not overlap, and a group executes just its assigned targets. Compare the **complete scenario/target outcomes** against serial execution using the same required external services; speed without extra failures is the acceptance criterion.
 

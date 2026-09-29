@@ -70,6 +70,10 @@ For an existing specification, adopt one independently failing scenario at a tim
 
 **Read [the bundled runner workflow](references/runners.md) when creating or changing a runner.** It is part of this skill, not a link into the focused-spec repository. Start sequentially with `resolve` and `run` using the public `focused-spec/runner` types. Prove one selected test really executed before claiming `pass`; do not use a pretend runner or copy another project's test-source parser. Add optional `partition` and `execution.maxConcurrentGroups > 1` only after auditing the selected tests' shared resources and proving every group reports its own actual results. The default concurrency limit is 1.
 
+## Prove new or changed evidence detects failure
+
+When implementing a new or changed evidence reference, including one that points to an existing test, check that the selected test fails for the outcome it claims to protect. First run that exact evidence and observe `PASS`. In a disposable workspace or with a reversible change that preserves user work, introduce one controlled regression in the product behavior described by its `THEN` (not in the test, selector, runner, or assertion). Run the same evidence again: the selected test must execute and `FAIL` on its behavioral assertion. A missing target, runner error, skip, or unrelated test failure does not prove sensitivity. Restore the original behavior even if the probe fails, then rerun the same evidence and observe `PASS`. Do this for each independently failing new or changed outcome; a runner that fabricates `pass` or a vacuous test must not pass this check. If the regression cannot be introduced safely, explain what was not checked and why; do not claim the evidence is mutation-verified.
+
 ## Verify
 
 While any scope intentionally contains `planned:` evidence, run `focused-spec validate --scope <name>`; add `--syntax-only` to check authoring shape alone. Do not use strict validation or execution as a planning check.

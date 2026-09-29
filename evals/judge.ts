@@ -4,6 +4,7 @@ import fg from 'fast-glob'
 import { parseFocusedSpecDocument } from '../src/parser.ts'
 import type { EvalCase, EvalGate } from './types.ts'
 import { runProcess } from './process.ts'
+import { judgeEvidenceRepair } from './evidence-repair.ts'
 
 const PROTECTED_PATHS = [
   'auth/auth.go',
@@ -37,9 +38,12 @@ export function skillActivationGate(transcript: string): EvalGate {
   return gate('focused-skill-loaded', loaded, loaded ? 'agent read skill://focused-spec' : 'agent did not read skill://focused-spec')
 }
 
-export async function snapshotProtectedFiles(workspace: string): Promise<ReadonlyMap<string, string>> {
+export async function snapshotProtectedFiles(workspace: string, editablePaths: readonly string[] = []): Promise<ReadonlyMap<string, string>> {
   const snapshots = new Map<string, string>()
-  for (const path of PROTECTED_PATHS) snapshots.set(path, await readFile(join(workspace, path), 'utf8'))
+  const paths = new Set([...PROTECTED_PATHS, ...await fg(['tests/**/*', 'specs/**/*', '.focused-spec/**/*'], { cwd: workspace, onlyFiles: true, dot: true })])
+  for (const path of paths) {
+    if (!editablePaths.includes(path)) snapshots.set(path, await readFile(join(workspace, path), 'utf8'))
+  }
   for (const path of await fg('openspec/changes/archive/2026-09-26-reject-blocked-accounts/**/*', { cwd: workspace, onlyFiles: true, dot: true })) {
     snapshots.set(path, await readFile(join(workspace, path), 'utf8'))
   }
@@ -361,7 +365,8 @@ export async function judgeCompletedWorkspace(
   gates.push(await scenarioGate(workspace, evalCase))
   gates.push(await behaviorGate(workspace))
   gates.push(await integrityGate(workspace, snapshots, transcripts))
-  if (strict.code === 0 && run.code === 0) gates.push(await mutationGate(workspace, evalCase))
+  if (evalCase.id === 'vacuous-evidence') gates.push(...await judgeEvidenceRepair(workspace, transcripts))
+  else if (strict.code === 0 && run.code === 0) gates.push(await mutationGate(workspace, evalCase))
   else gates.push(gate('mutation-sensitivity', false, 'focused validation or execution failed'))
   if (evalCase.id === 'openspec-brownfield') {
     gates.push(...await brownfieldGate(workspace, evalCase))

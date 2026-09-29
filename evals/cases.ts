@@ -16,6 +16,18 @@ export const EVAL_CASES: readonly EvalCase[] = [
     expectedSelectorFragments: EXPECTED_SELECTORS,
   },
   {
+    id: 'vacuous-evidence',
+    description: 'Changes Python authentication while repairing existing falsely green evidence and proving its sensitivity.',
+    source: 'files',
+    overlay: 'cases/vacuous-evidence/overlay',
+    turns: [{ promptPath: 'cases/vacuous-evidence/prompt.md', skills: FOCUSED }],
+    editablePaths: ['app/auth.py', 'tests/functional/test_auth.py'],
+    expectedScenarioId: 'auth.login.blocked-account',
+    expectedEvidenceCount: 1,
+    expectedSelectorFragments: ['tests/functional/test_auth.py::test_blocked_account'],
+    expectedSelectorAlternatives: ['pytest-functional::tests/functional/test_auth.py::test_blocked_account'],
+  },
+  {
     id: 'openspec-apply',
     description: 'Applies an existing OpenSpec change and replaces planned Go and pytest evidence.',
     overlay: 'cases/openspec-apply/overlay',

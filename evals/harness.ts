@@ -13,7 +13,7 @@ export async function runEval(
   const selected = evalCase(options.caseId)
   if (selected === undefined) throw new Error(`unknown eval case ${options.caseId}`)
   const workspace = await provisionWorkspace(selected, options.openspecSkillsDir)
-  const snapshots = await snapshotProtectedFiles(workspace.path)
+  const snapshots = await snapshotProtectedFiles(workspace.path, selected.editablePaths)
   const turns = []
   const gates: EvalGate[] = []
   const transcripts: string[] = []

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentDriver, AgentRequest, AgentResult, EvalCase } from '../evals/types.ts'
 import { runEval } from '../evals/harness.ts'
 import { brownfieldGate, integrityGate, judgeProposalCheckpoint, mutationGate, skillActivationGate, snapshotProtectedFiles } from '../evals/judge.ts'
+import { judgeEvidenceRepair } from '../evals/evidence-repair.ts'
 
 const roots: string[] = []
 const repository = fileURLToPath(new URL('..', import.meta.url))
@@ -201,6 +202,30 @@ describe('agent eval harness', () => {
     expect(gate).toMatchObject({ name: 'integrity', passed: false, detail: expect.stringContaining('auth/auth_test.go') })
     expect(gate.detail).toContain('node_modules/focused-spec/dist/cli.js')
   })
+
+  it('rejects vacuous evidence even after product repair and requires an agent sensitivity probe', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-eval-vacuous-'))
+    roots.push(root)
+    await cp(join(repository, 'evals/fixtures/polyglot'), root, { recursive: true })
+    await cp(join(repository, 'evals/cases/vacuous-evidence/overlay'), root, { recursive: true, force: true })
+    await mkdir(join(root, 'node_modules'))
+    await symlink(repository, join(root, 'node_modules/focused-spec'), 'junction')
+    const editable = ['app/auth.py', 'tests/functional/test_auth.py']
+    const snapshots = await snapshotProtectedFiles(root, editable)
+    await put(root, 'app/auth.py', 'def authenticate(blocked: bool, credentials_valid: bool) -> bool:\n    return credentials_valid and not blocked\n')
+    const source = await readFile(join(root, 'app/auth.py'), 'utf8')
+    const vacuous = await judgeEvidenceRepair(root, [])
+    expect(vacuous.find(gate => gate.name === 'authentication-contract')).toMatchObject({ passed: true })
+    expect(vacuous.find(gate => gate.name === 'repaired-evidence-sensitivity')).toMatchObject({ passed: false })
+    await put(root, 'tests/functional/test_auth.py', 'from app.auth import authenticate\n\ndef test_blocked_account() -> None:\n    assert authenticate(blocked=True, credentials_valid=True) is False\n')
+    const repaired = await judgeEvidenceRepair(root, [])
+    expect(repaired.find(gate => gate.name === 'repaired-evidence-sensitivity'), JSON.stringify(repaired)).toMatchObject({ passed: true })
+    expect(repaired.find(gate => gate.name === 'agent-sensitivity-probe')).toMatchObject({ passed: false })
+    expect(await readFile(join(root, 'app/auth.py'), 'utf8')).toBe(source)
+    expect(await integrityGate(root, snapshots, [])).toMatchObject({ passed: true })
+    await put(root, 'tests/functional/test_existing_auth.py', '')
+    expect(await integrityGate(root, snapshots, [])).toMatchObject({ passed: false })
+  }, 120_000)
 
   it('rejects applied evidence that misses a controlled product regression', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-eval-mutation-'))

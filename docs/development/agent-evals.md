@@ -9,6 +9,7 @@ npm run eval:agent -- --list
 ```
 
 - `files-source-bootstrap`: create file-backed scenario and Go/pytest runners.
+- `vacuous-evidence`: change Python authentication to reject blocked accounts while keeping its pre-existing evidence selector. The initial product permits blocked accounts, and its falsely green test only checks that the returned value is a boolean. The prompt does not reveal the test defect or prescribe a mutation probe. The agent may change only the relevant Python implementation and test; Go, unrelated Python tests, the preconfigured runner, installed skills, and package files stay protected. Gates independently check all four authentication outcomes, require the repaired selected test and focused evidence to fail when blocked-account protection is removed, verify restoration, and require the agent's own transcript to contain focused PASS → selected assertion FAIL → restored PASS.
 - `openspec-apply`: apply an existing OpenSpec change.
 - `openspec-propose-apply`: proposal turn followed by a fresh apply turn.
 - `full-skill-routing`: with all OpenSpec skills available and no mention of focused-spec in the prompts or change name, choose both the host workflow and the focused-spec skill, plan at least one exact test for the existing behavior, and execute its focused evidence. Either the Go unit test or the pytest functional test is valid; if both are chosen, both must pass.
@@ -30,7 +31,7 @@ npm run eval:agent -- \
 - every successful agent turn reads the focused-spec skill, so a coincidental pass without loading it does not certify skill routing;
 - OpenSpec validation and tasks are complete when applicable;
 - selected Go and/or pytest evidence actually executes and passes; cases that explicitly require both languages check both;
-- existing Go and Python product tests remain unchanged and pass;
+- existing product tests remain unchanged and pass, except the explicitly editable Python test and implementation in `vacuous-evidence`; its unrelated tests and runner remain protected;
 - controlled regressions in every selected implementation make its focused evidence fail;
 - the agent does not inspect implementation source or use `shell: true`;
 - proposal turns do not start implementation.

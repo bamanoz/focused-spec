@@ -25,6 +25,7 @@ export interface EvalCase {
   readonly maximumEvidenceCount?: number
   readonly expectedSelectorFragments: readonly string[]
   readonly expectedSelectorAlternatives?: readonly string[]
+  readonly editablePaths?: readonly string[]
 }
 
 export interface AgentRequest {

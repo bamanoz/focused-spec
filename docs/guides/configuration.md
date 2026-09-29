@@ -89,6 +89,8 @@ Adopt one independently failing native scenario at a time; a document-wide rewri
 5. Discover the resulting documents and compare the after-state with the before-state: the intended IDs and evidence references still exist, revision edges still resolve, and every repeated ID still reaches one unmarked owner. In particular, the durable owner must remain after a working document leaves discovery.
 6. Finish by running the final selected scenario or scope so its concrete evidence actually executes. Structural validation, a native SDD check, or a lower `unenrolledScenarios` count cannot replace this run.
 
+When adding or changing evidence, prove that each selected test detects the corresponding `THEN` outcome, not just that it currently passes. Run the exact evidence, introduce a reversible regression in the product behavior in a disposable workspace, and run the same evidence again. It must execute and fail on the expected behavioral assertion, not because resolution failed, a runner errored, or an unrelated test failed. Restore the behavior and confirm the evidence passes again. Do not rewrite the test or runner to force the failure. If the probe cannot be performed safely, report the missing sensitivity check instead of claiming it passed. `focused-spec run` does not perform this mutation automatically.
+
 This workflow proves only the enrolled selection that ran. Continue reporting unenrolled native scenarios honestly until each behavior is deliberately enrolled and backed by evidence.
 
 ## Scope and verification

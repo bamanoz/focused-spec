@@ -1,0 +1,8 @@
+version: 2
+specifications:
+  documents:
+    - match: specs/**/*.md
+      scope: current
+runners:
+  pytest-functional:
+    module: ./.focused-spec/runners/pytest.ts
