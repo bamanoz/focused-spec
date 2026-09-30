@@ -33,7 +33,7 @@ Evidence is `[planned:]<runner-id>::<opaque selector>`; only the first `::` sepa
 
 ## Configure when first needed
 
-Create `.focused-spec/config.yaml` when the first scenario names evidence. Select Markdown that contains focused scenarios or is being adopted incrementally, and exclude archives explicitly; do not create root-level `focused-spec.yaml`.
+When the first scenario names evidence, configure `.focused-spec/config.yaml` as soon as the host workflow permits project setup; do not create root-level `focused-spec.yaml`. Select Markdown that contains focused scenarios or is being adopted incrementally, and exclude archives explicitly. A real project-local runner can be implemented as soon as its selector contract is known, including during planning if the host workflow permits it; no fixed implementation phase is required. Follow the host workflow's proposal/implementation boundary. Register a functional runner for that evidence type, not a placeholder just to make validation pass; `planned:` selectors need not resolve until their tests exist.
 
 ```yaml
 version: 2
@@ -76,6 +76,6 @@ When implementing a new or changed evidence reference, including one that points
 
 ## Verify
 
-While any scope intentionally contains `planned:` evidence, run `focused-spec validate --scope <name>`; add `--syntax-only` to check authoring shape alone. Do not use strict validation or execution as a planning check.
+While any scope intentionally contains `planned:` evidence, run `focused-spec validate --scope <name>`; add `--syntax-only` to check authoring shape alone. This requires project configuration with the referenced runner registered. If the host workflow does not permit creating the necessary configuration and real runner yet, validate the proposal with the host's own command and report focused-spec validation as deferred; do not claim that planned evidence ran. Do not use strict validation or execution as a planning check.
 
 After replacing planned evidence, run `focused-spec run --scope <name>` for one completed scope or `focused-spec run` for every discovered scope. `run` performs strict validation before execution. `focused-spec validate --scope <name> --strict` is an optional validation-only preflight, not a substitute for execution. Without `--scope`, validation and execution both select all discovered scopes; with it, both select only that scope. `run --scenario <id>` strictly validates and executes only matching scenarios in the selected scope(s), including all matching revisions if `--scope` is absent. It does not certify unrelated scenarios; run the full scope after replacing their planned evidence. Use `--allow-skip` only for an explicit project policy; `SKIP` and `ERROR` are not success otherwise. A native SDD check cannot replace focused-spec validation or execution.
