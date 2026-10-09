@@ -1,0 +1,11 @@
+{
+  "name": "focused-spec-worktree-consumer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "evidence": "focused-spec run --scope current"
+  },
+  "devDependencies": {
+    "focused-spec": "0.6.0"
+  }
+}
