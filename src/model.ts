@@ -1,28 +1,43 @@
 import type { JsonValue, ResolvedTarget, TargetResult } from './runner-api.js'
 
 
-export interface Scenario {
+export interface NativeItem {
   readonly scope: string
   readonly path: string
   readonly line: number
   readonly name: string
-  readonly requirement?: string
-  readonly revisions: readonly string[]
-  readonly malformedRevisionLines: readonly number[]
-  readonly malformedIdLines: readonly number[]
-  readonly ids: readonly string[]
+  readonly markerId?: string
+  readonly nativeIds: readonly string[]
+}
+
+export interface NativeDocument {
+  readonly path: string
+  readonly scope: string
+  readonly items: readonly NativeItem[]
+  readonly violations: readonly Violation[]
+}
+
+export interface EvidenceEntry {
+  readonly scope: string
+  readonly id: string
+  readonly line: number
   readonly evidence: readonly string[]
-  readonly malformedEvidenceLines: readonly number[]
-  readonly whenCount: number
-  readonly thenCount: number
+  readonly source?: { readonly path: string; readonly nativeId: string }
+}
+
+export interface Scenario {
+  readonly id: string
+  readonly scope: string
+  readonly path: string
+  readonly line: number
+  readonly name: string
+  readonly evidence: readonly string[]
 }
 
 export interface SpecDocument {
   readonly path: string
   readonly scope: string
   readonly scenarios: readonly Scenario[]
-  readonly unenrolledScenarios: number
-  readonly malformedScenarioHeadings: readonly number[]
 }
 
 export interface Violation {
@@ -46,7 +61,7 @@ export interface DocumentLayout {
 }
 
 export interface FocusedSpecConfig {
-  readonly version: 2
+  readonly version: 3
   readonly specifications: {
     readonly documents: readonly DocumentLayout[]
   }

@@ -1,8 +1,9 @@
 import { readFile, realpath } from 'node:fs/promises'
 import { isAbsolute, relative, sep } from 'node:path'
 import fg from 'fast-glob'
-import type { DocumentLayout, FocusedSpecConfig, SpecDocument, Violation } from './model.js'
-import { parseFocusedSpecDocument } from './parser.js'
+import type { DocumentLayout, FocusedSpecConfig, NativeDocument, NativeItem, Scenario, SpecDocument, Violation } from './model.js'
+import { parseNativeDocument } from './parser.js'
+import { loadEvidenceRegistry } from './registry.js'
 
 const SCOPE_TOKEN = '{scope}'
 const SCOPE_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$/u
@@ -100,6 +101,7 @@ export async function discoverDocuments(
   projectRoot: string,
   config: FocusedSpecConfig,
   selectedScope?: string,
+  selectedScenarioId?: string,
 ): Promise<{
   scopes: ReadonlyMap<string, readonly SpecDocument[]>
   violations: readonly Violation[]
@@ -135,6 +137,7 @@ export async function discoverDocuments(
   }
 
   const scopes = new Map<string, SpecDocument[]>()
+  const nativeDocuments: NativeDocument[] = []
   const canonicalClaims = new Map<string, Claim>()
   for (const [path, pathClaims] of claimsByPath) {
     if (pathClaims.length > 1) {
@@ -171,16 +174,76 @@ export async function discoverDocuments(
     }
     canonicalClaims.set(canonicalPath, claim)
 
-    let document: SpecDocument
+    if (selectedScope !== undefined && claim.scope !== selectedScope) continue
+    let document: NativeDocument
     try {
-      document = parseFocusedSpecDocument(path, await readFile(claim.absolutePath, 'utf8'), claim.scope)
+      document = parseNativeDocument(path, await readFile(claim.absolutePath, 'utf8'), claim.scope)
     } catch (error) {
       if (selectedScope === undefined || claim.scope === selectedScope) violations.push({ path, message: `cannot read document: ${error instanceof Error ? error.message : String(error)}` })
       continue
     }
+    nativeDocuments.push(document)
+    // Documents establish scope existence even if no item is enrolled.
     const existing = scopes.get(claim.scope)
-    if (existing === undefined) scopes.set(claim.scope, [document])
-    else existing.push(document)
+    const bound: SpecDocument = { path: document.path, scope: document.scope, scenarios: [] }
+    if (existing === undefined) scopes.set(claim.scope, [bound])
+    else existing.push(bound)
+  }
+
+  const registry = await loadEvidenceRegistry(projectRoot, selectedScope, selectedScenarioId)
+  violations.push(...registry.violations)
+  const byMarker = new Map<string, NativeItem[]>()
+  const byDocument = new Map<string, NativeDocument>()
+  const boundByDocument = new Map<string, Scenario[]>()
+  for (const document of nativeDocuments) {
+    byDocument.set(`${document.scope}\u0000${document.path}`, document)
+    if (selectedScenarioId === undefined) violations.push(...document.violations)
+    else violations.push(...document.violations.filter(violation => violation.scenarioId === selectedScenarioId || violation.message.includes('obsolete inline')))
+    for (const item of document.items) {
+      if (item.markerId === undefined || (selectedScenarioId !== undefined && item.markerId !== selectedScenarioId)) continue
+      const key = `${item.scope}\u0000${item.markerId}`
+      const previous = byMarker.get(key)
+      if (previous === undefined) byMarker.set(key, [item])
+      else previous.push(item)
+    }
+  }
+  const registeredMarkers = new Set<string>()
+  const boundItems = new Set<string>()
+  for (const entry of registry.entries) {
+    const key = `${entry.scope}\u0000${entry.id}`
+    registeredMarkers.add(key)
+    const matches = entry.source === undefined
+      ? byMarker.get(key) ?? []
+      : (byDocument.get(`${entry.scope}\u0000${entry.source.path}`)?.items ?? []).filter(item => item.nativeIds.includes(entry.source!.nativeId))
+    if (matches.length !== 1) {
+      violations.push({ path: '.focused-spec/evidence.yaml', line: entry.line, scenarioId: entry.id,
+        message: `registry binding ${entry.scope}/${entry.id} must resolve uniquely to one native item; found ${matches.length}` })
+      continue
+    }
+    const item = matches[0]!
+    if (entry.source !== undefined && item.markerId !== undefined) {
+      violations.push({ path: item.path, line: item.line, scenarioId: entry.id, message: 'external native-ID binding requires an unmarked native item' })
+      continue
+    }
+    const itemKey = `${item.scope}\u0000${item.path}\u0000${item.line}`
+    if (boundItems.has(itemKey)) {
+      violations.push({ path: item.path, line: item.line, scenarioId: entry.id, message: 'native item is bound more than once within its scope' })
+      continue
+    }
+    boundItems.add(itemKey)
+    const documentKey = `${item.scope}\u0000${item.path}`
+    const scenario: Scenario = { id: entry.id, scope: item.scope, path: item.path, line: item.line, name: item.name, evidence: entry.evidence }
+    const previous = boundByDocument.get(documentKey)
+    if (previous === undefined) boundByDocument.set(documentKey, [scenario])
+    else previous.push(scenario)
+  }
+  for (const [key, items] of byMarker) {
+    const item = items[0]!
+    if (items.length > 1) violations.push({ path: item.path, line: item.line, scenarioId: item.markerId!, message: `duplicate focused marker within scope ${item.scope}` })
+    if (!registeredMarkers.has(key)) violations.push({ path: item.path, line: item.line, scenarioId: item.markerId!, message: 'focused marker has no evidence registry entry' })
+  }
+  for (const [scope, documents] of scopes) {
+    scopes.set(scope, documents.map(document => ({ ...document, scenarios: boundByDocument.get(`${scope}\u0000${document.path}`) ?? [] })))
   }
 
   const sortedScopes = new Map<string, readonly SpecDocument[]>()

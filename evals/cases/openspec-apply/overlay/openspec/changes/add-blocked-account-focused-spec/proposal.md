@@ -4,15 +4,15 @@ The repository has Go unit and pytest functional coverage for blocked authentica
 
 ## What Changes
 
-- Add language-agnostic focused-spec configuration.
+- Add language-agnostic focused-spec configuration and scope-local evidence registry.
 - Add project-local TypeScript runners for Go tests and pytest.
-- Add one focused scenario backed by both existing tests.
+- Mark one native scenario and bind it to both existing tests.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `authentication-policy`: Executable focused ownership for blocked-account authentication.
+- `authentication-policy`: Executable focused evidence for blocked-account authentication.
 
 ## Impact
 

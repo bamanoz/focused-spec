@@ -1,12 +1,17 @@
 export { loadConfig } from './config.js'
 export { executePlan } from './executor.js'
-export { parseEvidenceReference, parseFocusedSpecDocument } from './parser.js'
+export { parseEvidenceReference, parseNativeDocument } from './parser.js'
+export { loadEvidenceRegistry, parseEvidenceRegistry } from './registry.js'
+export { discoverDocuments } from './sources.js'
 export { planEvidence } from './planner.js'
 export type {
   DocumentLayout,
   ExecutionPlan,
   ExecutionResult,
   FocusedSpecConfig,
+  EvidenceEntry,
+  NativeDocument,
+  NativeItem,
   Scenario,
   SpecDocument,
   Violation,

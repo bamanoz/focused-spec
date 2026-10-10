@@ -4,45 +4,44 @@
 
 **Make each behavioral promise answerable by a test result.**
 
-SDD workflows produce requirements and plans; projects run tests. A green suite alone does not say which test checks a particular outcome, or whether a newly written scenario has any executable check at all. `focused-spec` keeps that link explicit: a small scenario names exact test targets, and `run` executes them before reporting the scenario as passed.
-
-Keep your existing specification workflow and tests. The agent skill asks for scenarios while authoring a spec, allows `planned:` targets until implementation, and requires real evidence before completion. The CLI finds those scenarios in configured Markdown; project-local runners execute the selected tests. It does not replace OpenSpec, Spec Kit, BMad, or their native validation.
+`focused-spec` binds a stable ID on a framework's native checkable item to exact executable evidence. The native item remains the only copy of the behavior; `.focused-spec/evidence.yaml` records identity and tests, and project-local runners execute those tests. OpenSpec, Spec Kit, BMad, Gherkin, and other authoring systems keep ownership of their document rules and validation.
 
 ## See the contract
 
-A scenario names one behavior and the exact tests that prove it. This one lives in the [runnable OpenSpec example (Go + pytest)](examples/openspec/openspec/specs/auth/spec.md):
+An editable Markdown item carries an adjacent marker:
 
 ```markdown
+<!-- focused-spec:id=auth.login.blocked-account -->
 #### Scenario: Blocked account submits valid credentials
-- **ID**: `auth.login.blocked-account`
-- **EVIDENCE**: `go-unit::./go/auth::TestBlockedAccount`
-- **EVIDENCE**: `pytest-functional::tests/functional/test_auth.py::test_blocked_account`
 - **WHEN** a blocked account submits otherwise valid credentials
 - **THEN** authentication is rejected
 ```
 
-From a checkout of this repository, `npm run smoke` executes both targets rather than treating the scenario text as proof. Its CLI output:
+Its evidence lives in the required registry rather than in the specification:
 
-```text
-validation scope: all discovered scopes
-execution selection: all discovered scopes
-PASS auth.login.blocked-account
-  PASS go-unit::./go/auth::TestBlockedAccount
-  PASS pytest-functional::tests/functional/test_auth.py::test_blocked_account
-summary: 1 PASS, 0 FAIL, 0 SKIP, 0 ERROR; 2 unique targets
+```yaml
+# .focused-spec/evidence.yaml
+scopes:
+  current:
+    auth.login.blocked-account:
+      evidence:
+        - go-unit::./go/auth::TestBlockedAccount
+        - pytest-functional::tests/functional/test_auth.py::test_blocked_account
 ```
+
+Every evidence selector must resolve to one real target. Multiple entries form an AND contract: the scenario passes only when every selected target runs and passes.
 
 ## Where it fits
 
 ```text
-Your SDD framework or Markdown files
-             ↓
-Focused scenario (ID · WHEN · THEN · EVIDENCE)
-             ↓
+Native checkable item + stable focused ID
+                    ↓
+Required evidence registry
+                    ↓
 Project-local runner → exact test → observed result
 ```
 
-Your SDD tool owns proposals, requirements, and native document rules. `focused-spec` owns the checkable link from one outcome to one or more independent tests, even across languages. Its core is language- and framework-neutral; project-local runners select and execute the tests. If a Gherkin scenario already runs through Cucumber/Godog, that scenario is itself an executable specification—you do not need a second focused scenario merely to run it again.
+The core is language- and framework-neutral. It does not derive behavior from prose, impose a source framework, or create a second scenario merely to make evidence executable. A Gherkin Scenario that already runs through Cucumber or Godog can carry a focused tag and use that execution as evidence.
 
 ## Get started
 
@@ -52,53 +51,52 @@ Requires **Node.js 22.16.0+**. In the project you want to verify:
 npm install --save-dev focused-spec@latest
 ```
 
-If an agent will author or update behavioral scenarios, also install the [agent skill](skills/focused-spec/SKILL.md) for that agent. The CLI works without the skill when you maintain scenarios and runners yourself; the skill supplies the agent workflow, not the executable:
+If an agent will author or revise behavioral specifications, also install the [agent loader skill](skills/focused-spec/SKILL.md). The CLI works without it; once loaded, the skill obtains the workflow matching the project's installed CLI rather than keeping a separate copy.
 
 ```sh
 npx --yes skills add bamanoz/focused-spec --skill focused-spec
 ```
 
-1. [Configure your scenario-bearing Markdown files](docs/guides/configuration.md) in `.focused-spec/config.yaml` and [implement a project-local runner](docs/guides/runners.md) for each evidence type you use. Installing the CLI alone does not provide runners or tests.
-2. Write a scenario with a stable `ID`, one `WHEN`, one `THEN`, and one or more exact `EVIDENCE` selectors. Multiple evidence rows must **all** pass.
-3. Validate and run the completed project. Validation resolves evidence but never executes tests; `run` performs strict validation and then executes the same selected scopes:
+1. Create a [version-3 configuration](docs/guides/configuration.md) that selects the native `.md` and `.feature` documents and registers each project-local runner.
+2. Attach one focused ID to each in-scope native item and add the matching `(scope, ID)` entry to `.focused-spec/evidence.yaml`.
+3. Validate and run the completed selection:
 
    ```sh
    npx focused-spec validate --strict
    npx focused-spec run
    ```
 
-For any in-progress scope, use `validate --scope <name>` without `--strict` while evidence is `planned:`, then `validate --scope <name> --strict` and `run --scope <name>` once it is executable. Without `--scope`, both commands select every discovered scope. [Scope and CLI details](docs/reference/cli.md).
+While a test is not yet available, prefix its registry reference with `planned:` and use non-strict validation. Strict validation and `run` reject planned evidence.
 
-## Adopt in an existing project
+## Identity bindings
 
-You do **not** need to rewrite your codebase or backfill every historical spec. Keep your current SDD workflow and tests; start with the next behavior you change. Enroll just its scenario with an `ID` and exact `EVIDENCE`, configure the existing Markdown location and a project-local runner, then run that evidence. Native scenarios without focused metadata stay untouched and are reported as **unenrolled**, not passed. Add coverage outcome by outcome as you work. See [incremental adoption](docs/guides/configuration.md#adopt-existing-specifications-incrementally) and [OpenSpec's brownfield guide](https://github.com/Fission-AI/OpenSpec/blob/main/docs/existing-projects.md).
+- **Markdown:** place `<!-- focused-spec:id=<lowercase.dotted.id> -->` immediately before a heading, paragraph, or list item, or inline after a paragraph or list item.
+- **Gherkin:** place `@focused.<lowercase.dotted.id>` on a `Scenario` or `Scenario Outline`, never on `Feature`, `Rule`, `Background`, or `Examples`.
+- **Generated or metadata-hostile documents:** do not edit generated output. Add `source: { path, nativeId }` to the registry entry; `nativeId` must be an explicit host-owned ID that resolves uniquely in that document. Never guess from a heading, line number, or behavior wording.
 
-## Bring your own SDD layout
+A missing, detached, duplicate, ambiguous, or multiply bound ID is a validation error. Marked native content without a registry entry fails, as does a registry entry that does not bind one native item. Unmarked native content remains owned by its host framework; focused-spec neither counts it nor claims coverage for it.
 
-Document discovery is explicit, not tied to a framework or inferred from its folders:
+## Scopes and selection
 
-Every layout assigns exactly one ordinary, path-safe scope, either explicitly with `scope: <name>` or by capturing one `{scope}` fragment. There is no default or privileged scope; even the name `baseline` is ordinary. Reusing a scenario ID across scopes requires `REVISES: <source-scope>`.
+Every document layout assigns exactly one ordinary, path-safe scope, either explicitly with `scope: <name>` or by capturing one `{scope}` fragment. Identity is the pair `(scope, ID)`. The same ID may appear in different scopes, but every occurrence needs its own binding and evidence; evidence never inherits.
 
-| Workflow | Runnable example | Focused scenario location |
+Without `--scope`, validation and execution select all discovered scopes. `run --scenario <id>` narrows binding, evidence resolution, and execution to matching entries in the selected scope or scopes, so unrelated registry or evidence failures do not block that selected run.
+
+## Shipped examples
+
+| Workflow | Runnable example | Native binding |
 | --- | --- | --- |
-| [OpenSpec](https://github.com/Fission-AI/OpenSpec) | [Go + pytest](examples/openspec/) | `openspec/specs/**/spec.md` |
-| [Spec Kit](https://github.com/github/spec-kit) | [Spec Kit-style feature](examples/spec-kit/) | `specs/{scope}/spec.md` |
-| [BMad](https://github.com/bmad-code-org/BMAD-METHOD) | [BMad-style spec](examples/bmad/) | `_bmad-output/specs/spec-{scope}/scenarios.md` companion |
+| [OpenSpec](https://github.com/Fission-AI/OpenSpec) | [Go + pytest](examples/openspec/) | Marker on the existing Scenario |
+| [Spec Kit](https://github.com/github/spec-kit) | [Spec Kit-style feature](examples/spec-kit/) | Marker on the existing numbered acceptance item |
+| [BMad](https://github.com/bmad-code-org/BMAD-METHOD) | [BMad-style spec](examples/bmad/) | External binding to generated `SPEC.md` ID `CAP-1` |
+| Plain Markdown | [Standalone worktree consumer](examples/worktree-consumer/) | Marker on its native scenario heading |
 
-Each example includes its own configuration, real tests, and project-local runner. [Run the examples](docs/guides/configuration.md#runnable-framework-examples) from this repository's checkout; plain Markdown works with the same configured document patterns.
-
-A document pattern selects a location; it does not translate a framework's prose into focused scenarios. Framework-native validation remains the framework's job. [Configuration guide](docs/guides/configuration.md).
-
-## What a result means
-
-- Each evidence selector must resolve to exactly one target or an actionable error.
-- `PASS` means the selected test ran and passed. A scenario passes only when **all** its evidence passes.
-- `planned:` is temporary evidence allowed in any scope during non-strict validation, not a passing test. `SKIP` and `ERROR` are not success by default; `run` validates strictly before execution.
+Each example retains a real runner and test. [Run the examples](docs/guides/configuration.md#runnable-framework-examples) from this repository's checkout.
 
 ## Learn more
 
 - [Concepts and evidence semantics](docs/concepts/README.md)
-- [Installation and agent skill](docs/guides/install.md) · [Configuration and scenario authoring](docs/guides/configuration.md)
+- [Installation and agent skill](docs/guides/install.md) · [Configuration, authoring, and migration](docs/guides/configuration.md)
 - [Project-local runners](docs/guides/runners.md) · [CLI reference](docs/reference/cli.md)
 - [Documentation map](docs/README.md) · [Development workflow](docs/development/README.md)
 

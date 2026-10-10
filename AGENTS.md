@@ -7,7 +7,7 @@ These instructions govern work in the `focused-spec` repository.
 `focused-spec` connects small behavioral scenarios to exact executable evidence. The product boundary is the CLI result and the behavior of project-local runner plugins. Keep the core language- and framework-agnostic.
 
 - `src/` owns the CLI and public API; `evals/` owns black-box evaluations; `examples/` and `test/` own runnable examples and behavioral tests.
-- `skills/focused-spec/SKILL.md` and its bundled references own the portable agent workflow. They must work without this repository's documentation or source.
+- `skills/focused-spec/SKILL.md` owns the thin loader; CLI-owned `guidance/workflow.md` and `guidance/runners.md` own the authoritative portable procedures. The installed loader and packed CLI must work offline without this repository's documentation or source.
 - `docs/README.md` maps human-facing concepts, guides, references, and repository workflows. `openspec/specs/` records executable behavioral requirements, not agent procedures.
 
 ## Operating principles
@@ -33,11 +33,11 @@ For a new, moved, renamed, or removed documentation page, update `docs/README.md
 - Keep public contracts exported from `src/index.ts` or the declared `./runner` subpath.
 - Preserve `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, and strict diagnostics.
 - Values crossing YAML, CLI, runner IPC, and JSON boundaries must remain JSON-compatible and be validated at the boundary.
-- For runner work, follow the public [runner API](docs/reference/runner-api.md) and the [bundled runner workflow](skills/focused-spec/references/runners.md); runner modules are trusted project code, not security sandboxes.
+- For runner work, follow the public [runner API](docs/reference/runner-api.md) and the [CLI-owned runner guidance](guidance/runners.md); runner modules are trusted project code, not security sandboxes.
 
 ## Product and evaluation contracts
 
-Use the [concepts](docs/concepts/README.md), [CLI reference](docs/reference/cli.md), [runner API](docs/reference/runner-api.md), and [capability specs](docs/README.md#topic-ownership) for product behavior. Use the [installed skill](skills/focused-spec/SKILL.md) for scenario authoring and evidence checks; this repository's OpenSpec lifecycle belongs to the [development workflow](docs/development/workflow.md).
+Use the [concepts](docs/concepts/README.md), [CLI reference](docs/reference/cli.md), [runner API](docs/reference/runner-api.md), and [capability specs](docs/README.md#topic-ownership) for product behavior. The [installed loader](skills/focused-spec/SKILL.md) obtains authoritative scenario-authoring and evidence procedures from the project's installed CLI; this repository's OpenSpec lifecycle belongs to the [development workflow](docs/development/workflow.md).
 
 Agent evaluations are black-box: the evaluated agent receives the installed package and public skill/API, not this repository's implementation. Follow [agent evals](docs/development/agent-evals.md) for the cases and integrity gates; never inspect the implementation or change protected product tests during an eval.
 

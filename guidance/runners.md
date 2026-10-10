@@ -1,12 +1,12 @@
 # Project-local runner workflow
 
-Read this only when creating, repairing, or parallelizing an evidence runner. It ships **with the skill**; use the consuming project's tests, the installed CLI (`focused-spec --help`), and public types from `focused-spec/runner`. Do not rely on the focused-spec source repository or copy a runner from another project.
+This is the complete runner guidance served on demand by the installed `focused-spec` package for guidance protocol 1. Use it only when creating, repairing, or parallelizing an evidence runner, and follow it alongside the workflow topic obtained from the same package. Use the consuming project's tests, the same explicitly resolved project-local CLI that served this guidance, and public types from `focused-spec/runner`. Do not rely on the focused-spec source repository, a skill-local reference, a global or downloaded CLI, or a runner copied from another project.
 
 ## Choose an exact selector
 
 1. Inspect the project's test framework and existing test invocation. Define the evidence after you know how the framework identifies an individual test (for example, a pytest node ID). Keep the selector opaque to focused-spec; choose one stable `targetId` for one exact selected test or a documented AND-set of generated cases.
 2. Prefer the framework's discovery/collection and machine-readable result APIs. A title substring, regex, file path, or source line alone may select zero or several tests. If the framework has no exact collection mechanism, use a parser appropriate to **that project's** test syntax and reject dynamic or ambiguous declarations rather than guessing. A full test-source AST parser is not the default.
-3. Write the project-local module under `.focused-spec/runners/`, register it in `.focused-spec/config.yaml`, and import **types only** from `focused-spec/runner`. Use `satisfies RunnerPlugin` on a default export with `apiVersion: 1`, `resolve`, and `run`. Directly loaded TypeScript helpers should use their actual `.ts` paths; built helpers use emitted `.js` paths. Keep syntax erasable and verify imports through the installed CLI.
+3. Write the project-local module under `.focused-spec/runners/`, register it in `.focused-spec/config.yaml`, and import **types only** from `focused-spec/runner`. Use `satisfies RunnerPlugin` on a default export with `apiVersion: 1`, `resolve`, and `run`. Directly loaded TypeScript helpers should use their actual `.ts` paths; built helpers use emitted `.js` paths. Keep syntax erasable and verify imports through the installed project-local CLI.
 
 ## Resolve without executing
 
@@ -45,8 +45,10 @@ Audit actual shared writes and dependencies: test databases/schemas, filesystem 
 ## Prove the integration from the consumer's side
 
 - Resolve one existing selector and reject a missing or ambiguous selector. Preserve its exact `targetId` across repeated resolutions.
-- Run it alongside an unrelated failing test: the selected test must pass without executing the unrelated one. Deliberately skip the selected test and prove it is not `pass`. To check that the evidence itself protects the claimed outcome, follow the [main skill's controlled product-regression check](../SKILL.md#prove-new-or-changed-evidence-detects-failure), not a mutation of the test or runner.
+- Run it alongside an unrelated failing test: the selected test must pass without executing the unrelated one. Deliberately skip the selected test and prove it is not `pass`. To check that the evidence itself protects the claimed outcome, follow the controlled product-regression check in the workflow topic served by this same installed package, not a mutation of the test or runner.
 - Confirm spawn failure and missing/unreadable per-test output cannot produce `pass`. Verify abort and temporary fixture cleanup.
 - If partitioned, verify each selected target appears once, independent groups can overlap, conflicting groups do not overlap, and a group executes just its assigned targets. Compare the **complete scenario/target outcomes** against serial execution using the same required external services; speed without extra failures is the acceptance criterion.
 
-Use `focused-spec validate` to check discovered evidence and `focused-spec run` to execute it. Strict validation happens before `run` starts tests. `SKIP`/`ERROR` need an explicit CLI skip policy or they prevent success. Keep a concise regression test for an independently failing boundary, not one that asserts only field forwarding or source text.
+Use the same explicitly resolved project-local CLI to run `validate` for discovered evidence and `run` to execute it. Strict validation happens before `run` starts tests. `SKIP`/`ERROR` need an explicit CLI skip policy or they prevent success. Keep a concise regression test for an independently failing boundary, not one that asserts only field forwarding or source text.
+
+When runner work is complete, return to the workflow topic obtained from the same installed package. Before a later workflow step, follow the loader contract and request fresh protocol-1 workflow guidance from the consuming project's explicit local installation.

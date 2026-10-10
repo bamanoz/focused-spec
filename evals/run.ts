@@ -66,6 +66,7 @@ try {
       keepWorkspace: options.keepWorkspace,
     })
     for (const gate of result.gates) process.stdout.write(`${gate.passed ? 'PASS' : 'FAIL'} ${gate.name}: ${gate.detail}\n`)
+    if (result.diagnostic !== null) process.stdout.write(`DIAGNOSTIC ${result.caseId} ${result.diagnostic.status}: ${result.diagnostic.detail}\n`)
     process.stdout.write(`workspace: ${result.workspace}${options.keepWorkspace ? '' : ' (removed)'}\n`)
     process.exitCode = result.passed ? 0 : 1
   }

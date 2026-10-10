@@ -1,6 +1,6 @@
 ## Context
 
-The main OpenSpec spec contains historical scenarios without focused-spec metadata. Go and Python tests already exercise the new focused outcome.
+The main OpenSpec spec contains historical native scenarios without focused-spec markers or registry bindings. Go and Python tests already exercise the newly selected outcome.
 
 ## Decisions
 

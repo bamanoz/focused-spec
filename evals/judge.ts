@@ -1,7 +1,7 @@
 import { access, readFile, rename, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import fg from 'fast-glob'
-import { parseFocusedSpecDocument } from '../src/parser.ts'
+import { discoverDocuments, loadConfig, loadEvidenceRegistry, parseNativeDocument } from '../dist/index.js'
 import type { EvalCase, EvalGate } from './types.ts'
 import { runProcess } from './process.ts'
 import { judgeEvidenceRepair } from './evidence-repair.ts'
@@ -13,10 +13,6 @@ const PROTECTED_PATHS = [
   'tests/functional/test_auth.py',
 ]
 
-function gate(name: string, passed: boolean, detail: string): EvalGate {
-  return { name, passed, detail }
-}
-
 async function exists(path: string): Promise<boolean> {
   try {
     await access(path)
@@ -26,16 +22,222 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-export function skillActivationGate(transcript: string): EvalGate {
-  const loaded = transcript.split('\n').some(line => {
+type ObjectValue = Record<string, unknown>
+
+function object(value: unknown): value is ObjectValue {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function transcriptEvents(transcript: string): ObjectValue[] {
+  const events: ObjectValue[] = []
+  for (const line of transcript.split('\n')) {
     try {
-      const event = JSON.parse(line) as { type?: string; toolName?: string; args?: { path?: string } }
-      return event.type === 'tool_execution_start' && event.toolName === 'read' && event.args?.path === 'skill://focused-spec'
+      const value: unknown = JSON.parse(line)
+      if (object(value)) events.push(value)
     } catch {
-      return false
+      // Only structured tool events establish activation.
     }
-  })
-  return gate('focused-skill-loaded', loaded, loaded ? 'agent read skill://focused-spec' : 'agent did not read skill://focused-spec')
+  }
+  return events
+}
+
+function successfulToolCompletion(event: ObjectValue): boolean {
+  if (event.isError === true || !object(event.result) || event.result.isError === true) return false
+  const details = event.result.details
+  return !object(details) || typeof details.exitCode !== 'number' || details.exitCode === 0
+}
+
+function isFocusedSkillPath(path: string): boolean {
+  return path === 'skill://focused-spec'
+    || /^skill:\/\/focused-spec:(?:raw|-?\d+(?:[-+]\d*)?(?:,\d+(?:[-+]\d*)?)*)$/u.test(path)
+}
+
+function gate(name: string, passed: boolean, detail: string): EvalGate {
+  return { name, passed, detail }
+}
+
+export function skillActivationGate(transcript: string): EvalGate {
+  const starts = new Set<string>()
+  let loaded = false
+  for (const event of transcriptEvents(transcript)) {
+    if (event.type === 'tool_execution_start' && event.toolName === 'read' && typeof event.toolCallId === 'string'
+      && object(event.args) && typeof event.args.path === 'string' && isFocusedSkillPath(event.args.path)) {
+      starts.add(event.toolCallId)
+      continue
+    }
+    if (event.type === 'tool_execution_end' && event.toolName === 'read' && typeof event.toolCallId === 'string'
+      && starts.has(event.toolCallId) && successfulToolCompletion(event)) {
+      loaded = true
+      break
+    }
+  }
+  return gate('focused-skill-loaded', loaded, loaded ? 'agent completed reading skill://focused-spec' : 'agent did not complete reading skill://focused-spec')
+}
+
+function shellTokens(command: string): string[] | undefined {
+  const tokens: string[] = []
+  let token = ''
+  let quote: '"' | "'" | undefined
+  let escaped = false
+  const finish = () => {
+    if (token !== '') tokens.push(token)
+    token = ''
+  }
+  for (const character of command) {
+    if (escaped) {
+      token += character
+      escaped = false
+      continue
+    }
+    if (quote === '"' && character === '\\') {
+      escaped = true
+      continue
+    }
+    if (quote !== undefined) {
+      if (character === quote) quote = undefined
+      else token += character
+      continue
+    }
+    if (character === '"' || character === "'") {
+      quote = character
+      continue
+    }
+    if (/\s/u.test(character)) {
+      finish()
+      continue
+    }
+    if (';&|<>()\n'.includes(character)) return undefined
+    if (character === '\\') {
+      escaped = true
+      continue
+    }
+    token += character
+  }
+  if (quote !== undefined || escaped) return undefined
+  finish()
+  return tokens
+}
+
+function isPath(path: string, expected: string, workspace: string): boolean {
+  return !path.includes('\0') && resolve(workspace, path) === expected
+}
+
+function isLocalGuideCommand(command: string, workspace: string): boolean {
+  const tokens = shellTokens(command)
+  if (tokens === undefined) return false
+  const localBin = join(workspace, 'node_modules', '.bin', 'focused-spec')
+  const localDist = join(workspace, 'node_modules', 'focused-spec', 'dist', 'cli.js')
+  let offset: number
+  if (tokens[0] !== undefined && (isPath(tokens[0], localBin, workspace) || isPath(tokens[0], `${localBin}.cmd`, workspace))) {
+    offset = 1
+  } else if (tokens[0] !== undefined && tokens[1] !== undefined
+    && /^(?:node|node\.exe)$/u.test(basename(tokens[0])) && isPath(tokens[1], localDist, workspace)) {
+    offset = 2
+  } else {
+    return false
+  }
+  const args = tokens.slice(offset)
+  if (args[0] !== 'agent-guide') return false
+  let protocol: string | undefined
+  let topic: string | undefined
+  let json = false
+  for (let index = 1; index < args.length; index++) {
+    const argument = args[index]
+    if (argument === '--protocol' && protocol === undefined && args[index + 1] !== undefined) protocol = args[++index]
+    else if (argument === '--topic' && topic === undefined && args[index + 1] !== undefined) topic = args[++index]
+    else if (argument === '--json' && !json) json = true
+    else return false
+  }
+  return protocol === '1' && topic === 'workflow' && json
+}
+
+function toolText(event: ObjectValue): string | undefined {
+  if (!object(event.result)) return undefined
+  const content = event.result.content
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return undefined
+  const parts: string[] = []
+  for (const part of content) {
+    if (!object(part) || part.type !== 'text' || typeof part.text !== 'string') return undefined
+    parts.push(part.text)
+  }
+  return parts.join('\n')
+}
+
+interface PackageIdentity {
+  readonly name: 'focused-spec'
+  readonly version: string
+  readonly workflow: string
+}
+
+async function installedPackageIdentity(workspace: string): Promise<PackageIdentity | undefined> {
+  try {
+    const [metadata, workflow] = await Promise.all([
+      readFile(join(workspace, 'node_modules', 'focused-spec', 'package.json'), 'utf8'),
+      readFile(join(workspace, 'node_modules', 'focused-spec', 'guidance', 'workflow.md'), 'utf8'),
+    ])
+    const value: unknown = JSON.parse(metadata)
+    if (!object(value) || value.name !== 'focused-spec' || typeof value.version !== 'string' || value.version.trim() === ''
+      || workflow.trim() === '') return undefined
+    return { name: 'focused-spec', version: value.version, workflow }
+  } catch {
+    return undefined
+  }
+}
+
+function validGuideResponse(output: string, identity: PackageIdentity): boolean {
+  const text = output.trim().replace(/\n\nWall time: [^\n]+$/u, '').trim()
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch {
+    return false
+  }
+  if (!object(value) || Object.keys(value).sort().join(',') !== 'content,package,protocolVersion,topic'
+    || value.protocolVersion !== 1 || value.topic !== 'workflow' || value.content !== identity.workflow
+    || !object(value.package) || Object.keys(value.package).sort().join(',') !== 'name,version') return false
+  return value.package.name === identity.name && value.package.version === identity.version
+}
+
+function stepHasLocalGuidance(transcript: string, workspace: string, identity: PackageIdentity): boolean {
+  const commands = new Set<string>()
+  const artifacts = new Set<string>()
+  const reads = new Set<string>()
+  for (const event of transcriptEvents(transcript)) {
+    if (typeof event.toolCallId !== 'string') continue
+    if (event.type === 'tool_execution_start' && object(event.args)) {
+      if (event.toolName === 'bash' && typeof event.args.command === 'string'
+        && isLocalGuideCommand(event.args.command, workspace)) {
+        commands.add(event.toolCallId)
+      } else if (event.toolName === 'read' && typeof event.args.path === 'string') {
+        const artifact = event.args.path.match(/^(artifact:\/\/[A-Za-z0-9_-]+)(?::|$)/u)?.[1]
+        if (artifact !== undefined && artifacts.has(artifact)) reads.add(event.toolCallId)
+      }
+      continue
+    }
+    if (event.type !== 'tool_execution_end') continue
+    if (event.toolName === 'bash' && commands.delete(event.toolCallId) && successfulToolCompletion(event)) {
+      const output = toolText(event)
+      if (output === undefined) continue
+      if (validGuideResponse(output, identity)) return true
+      const artifact = output.match(/\n\[[^\n]*Read (artifact:\/\/[A-Za-z0-9_-]+) for full output\]$/u)?.[1]
+      if (artifact !== undefined) artifacts.add(artifact)
+    } else if (event.toolName === 'read' && reads.delete(event.toolCallId) && successfulToolCompletion(event)) {
+      const output = toolText(event)
+      if (output !== undefined && validGuideResponse(output, identity)) return true
+    }
+  }
+  return false
+}
+
+export async function guidanceActivationGate(workspace: string, workflowSteps: readonly string[]): Promise<EvalGate> {
+  const identity = await installedPackageIdentity(workspace)
+  if (identity === undefined) return gate('focused-workflow-acquired', false, 'project-local focused-spec package metadata or workflow guidance is missing or invalid')
+  const failedStep = workflowSteps.findIndex(transcript => !stepHasLocalGuidance(transcript, workspace, identity))
+  const passed = workflowSteps.length > 0 && failedStep === -1
+  return gate('focused-workflow-acquired', passed, passed
+    ? `completed valid project-local workflow guidance for ${workflowSteps.length} workflow step${workflowSteps.length === 1 ? '' : 's'}`
+    : `workflow step ${failedStep === -1 ? 1 : failedStep + 1} did not complete valid project-local workflow guidance`)
 }
 
 export async function snapshotProtectedFiles(workspace: string, editablePaths: readonly string[] = []): Promise<ReadonlyMap<string, string>> {
@@ -63,26 +265,61 @@ function expectedSelectorsPresent(evidence: readonly string[], evalCase: EvalCas
 function expectedEvidenceCountValid(count: number, evalCase: EvalCase): boolean {
   return count >= evalCase.expectedEvidenceCount && count <= (evalCase.maximumEvidenceCount ?? evalCase.expectedEvidenceCount)
 }
+function configuredMainScope(config: { readonly specifications: { readonly documents: readonly { readonly match: string; readonly scope?: string }[] } }): string | undefined {
+  return config.specifications.documents.find(layout => layout.scope !== undefined && layout.match.startsWith('openspec/specs/'))?.scope
+}
 
-export async function judgeProposalCheckpoint(workspace: string, evalCase: EvalCase): Promise<EvalGate[]> {
-  if (evalCase.changeName === undefined) return [gate('proposal-checkpoint', false, 'case has no change name')]
+async function configuredWorkingScope(workspace: string, evalCase: EvalCase): Promise<string | undefined> {
+  if (evalCase.changeName === undefined) return 'current'
+  const loaded = await loadConfig(workspace)
+  if (loaded.config === undefined) return undefined
+  const discovery = await discoverDocuments(workspace, loaded.config)
+  const prefix = `openspec/changes/${evalCase.changeName}/specs/`
+  const scopes = [...discovery.scopes].filter(([, documents]) => documents.some(document => document.path.startsWith(prefix)))
+  return scopes.length === 1 ? scopes[0]?.[0] : undefined
+}
+
+export interface IdentityCheckpoint {
+  readonly gates: readonly EvalGate[]
+  readonly selectedScenarioId?: string
+}
+
+export async function judgeProposalCheckpoint(workspace: string, evalCase: EvalCase): Promise<IdentityCheckpoint> {
+  if (evalCase.changeName === undefined) return { gates: [gate('proposal-checkpoint', false, 'case has no change name')] }
   const root = join(workspace, 'openspec', 'changes', evalCase.changeName)
   const required = ['proposal.md', 'design.md', 'tasks.md', '.openspec.yaml']
   const missing = []
   for (const path of required) if (!await exists(join(root, path))) missing.push(path)
   const specs = await fg(['specs/**/spec.md'], { cwd: root, onlyFiles: true })
-  const implementationPaths = [join(workspace, '.focused-spec/config.yaml'), join(workspace, '.focused-spec')]
+  const implementationPaths = [join(workspace, '.focused-spec')]
   const implementationStarted = (await Promise.all(implementationPaths.map(exists))).some(Boolean)
-  const specSources = await Promise.all(specs.map(path => readFile(join(root, path), 'utf8')))
-  const references = specSources.flatMap(source => [...source.matchAll(/^- \*\*EVIDENCE\*\*: `([^`]+)`/gmu)].map(match => match[1] ?? ''))
-  const plannedCount = references.filter(reference => reference.startsWith('planned:')).length
-  const selectorsPresent = expectedSelectorsPresent(references, evalCase)
-  const evidenceContractValid = (expectedEvidenceCountValid(plannedCount, evalCase) || (plannedCount === 0 && expectedEvidenceCountValid(references.length, evalCase))) && selectorsPresent
-  return [
+  const nativeDocuments = await Promise.all(specs.map(async relativePath => {
+    const path = `openspec/changes/${evalCase.changeName}/${relativePath}`
+    return parseNativeDocument(path, await readFile(join(root, relativePath), 'utf8'), evalCase.changeName!)
+  }))
+  const violations = nativeDocuments.flatMap(document => document.violations)
+  const marked = nativeDocuments.flatMap(document => document.items.filter(item => item.markerId !== undefined))
+  const legacyRows = (await Promise.all(specs.map(path => readFile(join(root, path), 'utf8'))))
+    .some(source => /\*\*(?:ID|EVIDENCE)\*\*|planned:/u.test(source))
+  const selectedScenarioId = marked.length === 1 ? marked[0]?.markerId : undefined
+  const prescribedIdentityValid = evalCase.prescribedScenarioId === undefined
+    || selectedScenarioId === evalCase.prescribedScenarioId
+  const nativePlanValid = violations.length === 0 && selectedScenarioId !== undefined
+    && prescribedIdentityValid && !legacyRows
+  const expectedIdentity = evalCase.prescribedScenarioId === undefined
+    ? 'one valid native marker'
+    : `one valid native marker ${evalCase.prescribedScenarioId}`
+  const gates = [
     gate('proposal-artifacts', missing.length === 0 && specs.length > 0, missing.length === 0 ? `${specs.length} delta specs created` : `missing ${missing.join(', ')}`),
-    gate('planning-boundary', !implementationStarted, implementationStarted ? 'runner/config implementation started during proposal turn' : 'no implementation files created'),
-    gate('planned-evidence', evidenceContractValid, plannedCount === 0 && selectorsPresent ? 'proposal carries resolvable selectors directly' : `found ${plannedCount} planned evidence rows`),
+    gate('planning-boundary', !implementationStarted, implementationStarted ? 'configuration or registry implementation started during proposal turn' : 'no focused-spec implementation files created'),
+    gate('planned-evidence', nativePlanValid, nativePlanValid
+      ? `native item ${selectedScenarioId} marked; registry evidence correctly deferred to apply`
+      : `expected ${expectedIdentity}; found ${marked.map(item => item.markerId).join(', ') || 'none'}${legacyRows ? '; legacy ID/EVIDENCE rows found' : ''}`),
   ]
+  return {
+    gates,
+    ...(gates.every(item => item.passed) && selectedScenarioId !== undefined ? { selectedScenarioId } : {}),
+  }
 }
 
 async function focusedCommand(workspace: string, args: readonly string[]) {
@@ -99,40 +336,106 @@ async function openspecCommand(workspace: string, args: readonly string[]) {
   })
 }
 
-async function scenarioGate(workspace: string, evalCase: EvalCase): Promise<EvalGate> {
-  const paths = await fg(['**/*.md', '!node_modules/**', '!README.md', '!**/SKILL.md'], { cwd: workspace, onlyFiles: true })
-  const matches = []
-  for (const path of paths) {
-    if (evalCase.id === 'openspec-brownfield' && path !== 'openspec/specs/account-authentication/spec.md') continue
-    const document = parseFocusedSpecDocument(path, await readFile(join(workspace, path), 'utf8'), evalCase.changeName ?? 'current')
-    matches.push(...document.scenarios.filter(scenario => scenario.ids.includes(evalCase.expectedScenarioId)))
+interface ScenarioCheckpoint {
+  readonly gate: EvalGate
+  readonly selectedScenarioId?: string
+}
+
+async function judgeScenarioCheckpoint(
+  workspace: string,
+  evalCase: EvalCase,
+  scopeOverride?: string,
+  selectedScenarioId?: string,
+): Promise<ScenarioCheckpoint> {
+  const requestedScope = scopeOverride ?? (evalCase.id === 'openspec-brownfield' ? undefined : await configuredWorkingScope(workspace, evalCase))
+  const loaded = await loadConfig(workspace)
+  if (loaded.config === undefined) {
+    return { gate: gate('scenario-contract', false, loaded.violations.map(violation => `${violation.path}: ${violation.message}`).join('\n')) }
   }
-  if (matches.length !== 1) return gate('scenario-contract', false, `expected one ${evalCase.expectedScenarioId} owner, found ${matches.length}`)
-  const scenario = matches[0]
-  const evidence = scenario?.evidence ?? []
+  const selectedScope = requestedScope ?? (evalCase.id === 'openspec-brownfield' ? configuredMainScope(loaded.config) : undefined)
+  if (selectedScope === undefined && evalCase.id !== 'openspec-brownfield') {
+    return { gate: gate('scenario-contract', false, 'named change has no unique configured working scope') }
+  }
+  const discovery = await discoverDocuments(workspace, loaded.config, selectedScope)
+  if (discovery.violations.length > 0) {
+    return { gate: gate('scenario-contract', false, discovery.violations.map(violation => `${violation.path}: ${violation.message}`).join('\n')) }
+  }
+  const scope = selectedScope ?? [...discovery.scopes].find(([, documents]) =>
+    documents.some(document => document.path === 'openspec/specs/account-authentication/spec.md'))?.[0]
+  if (scope === undefined) return { gate: gate('scenario-contract', false, 'expected configured main document openspec/specs/account-authentication/spec.md') }
+  const documents = discovery.scopes.get(scope) ?? []
+  const bindings = documents.flatMap(document => document.scenarios)
+  const requiredScenarioId = selectedScenarioId ?? evalCase.prescribedScenarioId
+  const scenario = bindings.length === 1 ? bindings[0] : undefined
+  if (scenario === undefined || (requiredScenarioId !== undefined && scenario.id !== requiredScenarioId)) {
+    const expected = requiredScenarioId === undefined ? 'one valid native binding' : `one valid native binding ${requiredScenarioId}`
+    return { gate: gate('scenario-contract', false,
+      `expected ${expected} in scope ${scope}; found ${bindings.map(binding => binding.id).join(', ') || 'none'}`) }
+  }
+  if (evalCase.id === 'openspec-brownfield' && scopeOverride === undefined && scenario.path !== 'openspec/specs/account-authentication/spec.md') {
+    return { gate: gate('scenario-contract', false, `expected ${scenario.id} in openspec/specs/account-authentication/spec.md, found ${scenario.path}`) }
+  }
+  if (evalCase.changeName !== undefined && evalCase.id !== 'openspec-brownfield'
+    && !scenario.path.startsWith(`openspec/changes/${evalCase.changeName}/specs/`)) {
+    return { gate: gate('scenario-contract', false, `selected item is outside the named change: ${scenario.path}`) }
+  }
+  const evidence = scenario.evidence
   const distinctRunners = new Set(evidence.map(value => value.replace(/^planned:/u, '').split('::')[0]))
   const selectorsPresent = expectedSelectorsPresent(evidence, evalCase)
   const passed = expectedEvidenceCountValid(evidence.length, evalCase)
     && distinctRunners.size === evidence.length
     && selectorsPresent
     && evidence.every(value => !value.startsWith('planned:'))
-  return gate('scenario-contract', passed, `${evidence.length} evidence rows across ${distinctRunners.size} runners: ${evidence.join(', ')}`)
+  return {
+    gate: gate('scenario-contract', passed, `${evidence.length} registry evidence references across ${distinctRunners.size} runners: ${evidence.join(', ')}`),
+    ...(passed ? { selectedScenarioId: scenario.id } : {}),
+  }
 }
 
-function inspectionTargets(transcripts: readonly string[]): string[] {
+export async function scenarioGate(
+  workspace: string,
+  evalCase: EvalCase,
+  scopeOverride?: string,
+  selectedScenarioId?: string,
+): Promise<EvalGate> {
+  return (await judgeScenarioCheckpoint(workspace, evalCase, scopeOverride, selectedScenarioId)).gate
+}
+
+function inspectionCommands(command: string, workspace: string): string[] {
+  const commands: string[] = []
+  let start = 0
+  let quote: '"' | "'" | undefined
+  for (let index = 0; index < command.length; index++) {
+    const character = command[index]
+    if (character === '\\' && quote !== "'") {
+      index++
+    } else if (quote !== undefined) {
+      if (character === quote) quote = undefined
+    } else if (character === '"' || character === "'") {
+      quote = character
+    } else if (character !== undefined && ';&|\n'.includes(character)) {
+      commands.push(command.slice(start, index))
+      start = index + 1
+    }
+  }
+  commands.push(command.slice(start))
+  const cli = join(workspace, 'node_modules', 'focused-spec', 'dist', 'cli.js')
+  return commands.map(part => {
+    const tokens = shellTokens(part)
+    return tokens !== undefined && tokens[0] !== undefined && tokens[1] !== undefined
+      && /^(?:node|node\.exe)$/u.test(basename(tokens[0])) && isPath(tokens[1], cli, workspace)
+      ? tokens.slice(2).join(' ') : part
+  })
+}
+
+function inspectionTargets(workspace: string, transcripts: readonly string[]): string[] {
   const targets: string[] = []
   for (const transcript of transcripts) {
-    for (const line of transcript.split('\n')) {
-      let event: { type?: string; toolName?: string; args?: { path?: string; command?: string } }
-      try {
-        event = JSON.parse(line) as typeof event
-      } catch {
-        continue
-      }
-      if (event.type !== 'tool_execution_start') continue
-      if (event.toolName === 'read' && event.args?.path !== undefined) targets.push(event.args.path)
-      if (event.toolName === 'bash' && event.args?.command !== undefined && !event.args.command.includes('require.resolve(')) {
-        targets.push(event.args.command)
+    for (const event of transcriptEvents(transcript)) {
+      if (event.type !== 'tool_execution_start' || !object(event.args)) continue
+      if ((event.toolName === 'read' || event.toolName === 'grep') && typeof event.args.path === 'string') targets.push(event.args.path)
+      if (event.toolName === 'bash' && typeof event.args.command === 'string') {
+        targets.push(...inspectionCommands(event.args.command, workspace))
       }
     }
   }
@@ -148,7 +451,7 @@ export async function integrityGate(workspace: string, snapshots: ReadonlyMap<st
       changed.push(path)
     }
   }
-  const targets = inspectionTargets(transcripts)
+  const targets = inspectionTargets(workspace, transcripts)
   const inspectedImplementation = targets.some(target => /node_modules[\\/]focused-spec[\\/]dist[\\/][^\s"'`]+\.m?js|src[\\/](?:runner-client|runner-host|planner|executor)\.ts/u.test(target))
   const inspectedPackageReferences = targets.some(target => /(?:node_modules[\\/]focused-spec|[\\/]focused-spec)[\\/](?:README\.md|docs[\\/]|examples[\\/])/u.test(target))
   const runnerSources = await fg(['.focused-spec/**/*.{ts,mts,js,mjs}'], { cwd: workspace, onlyFiles: true })
@@ -170,7 +473,12 @@ async function behaviorGate(workspace: string): Promise<EvalGate> {
   return gate('product-behavior', passed, `go=${String(go.code)} pytest=${String(pytest.code)}`)
 }
 
-export async function mutationGate(workspace: string, evalCase: EvalCase): Promise<EvalGate> {
+export async function mutationGate(
+  workspace: string,
+  evalCase: EvalCase,
+  scope = evalCase.changeName,
+  selectedScenarioId = evalCase.prescribedScenarioId,
+): Promise<EvalGate> {
   const goPath = join(workspace, 'auth', 'auth.go')
   const pythonPath = join(workspace, 'app', 'auth.py')
   const goSource = await readFile(goPath, 'utf8')
@@ -184,21 +492,25 @@ export async function mutationGate(workspace: string, evalCase: EvalCase): Promi
   let checkGo = true
   let checkPython = true
   if (evalCase.id === 'full-skill-routing') {
-    const specPaths = await fg(`openspec/changes/${evalCase.changeName}/specs/**/spec.md`, { cwd: workspace, onlyFiles: true })
-    const matches = (await Promise.all(specPaths.map(async path => parseFocusedSpecDocument(
-      path, await readFile(join(workspace, path), 'utf8'), evalCase.changeName ?? 'current',
-    ).scenarios))).flat().filter(scenario => scenario.ids.includes(evalCase.expectedScenarioId))
-    const evidence = matches.length === 1 ? matches[0]?.evidence ?? [] : []
-    checkGo = evidence.some(reference => reference.endsWith('::./auth::TestBlockedAccount'))
+    if (selectedScenarioId === undefined) return gate('mutation-sensitivity', false, 'no scenario identity was selected')
+    const loaded = await loadConfig(workspace)
+    if (loaded.config === undefined) return gate('mutation-sensitivity', false, loaded.violations.map(item => item.message).join('; '))
+    const selectedScope = scope ?? await configuredWorkingScope(workspace, evalCase)
+    if (selectedScope === undefined) return gate('mutation-sensitivity', false, 'named change has no unique configured working scope')
+    const discovery = await discoverDocuments(workspace, loaded.config, selectedScope, selectedScenarioId)
+    const matches = [...discovery.scopes.values()].flat().flatMap(document => document.scenarios)
+      .filter(scenario => scenario.scope === selectedScope && scenario.id === selectedScenarioId)
+    const evidence = discovery.violations.length === 0 && matches.length === 1 ? matches[0]?.evidence ?? [] : []
+    checkGo = evidence.some(reference => /(?:::|\/)TestBlockedAccount$/u.test(reference))
     checkPython = evidence.some(reference => reference.endsWith('::tests/functional/test_auth.py::test_blocked_account'))
     if (!expectedEvidenceCountValid(evidence.length, evalCase) || evidence.length !== Number(checkGo) + Number(checkPython)) {
-      return gate('mutation-sensitivity', false, 'selected evidence is not supported independent product tests')
+      return gate('mutation-sensitivity', false, 'selected registry evidence is not supported by independent product tests')
     }
   }
   if ((checkGo && goMutated === goSource) || (checkPython && pythonMutated === pythonSource)) {
     return gate('mutation-sensitivity', false, 'fixture mutation target was not found')
   }
-  const args = ['run', ...(evalCase.changeName === undefined ? [] : ['--scope', evalCase.changeName])]
+  const args = ['run', ...(scope === undefined ? [] : ['--scope', scope])]
   try {
     let goCode: number | null | undefined
     if (checkGo) {
@@ -258,83 +570,192 @@ function matchingPassedScenario(
     && result.evidence.length === expectedEvidence.length
     && expectedEvidence.every(reference => result.evidence.includes(reference)))
 }
+interface RegistryCheckpoint {
+  readonly scope: string
+  readonly id: string
+  readonly evidence: readonly string[]
+  readonly source?: { readonly path: string; readonly nativeId: string }
+}
 
-export async function brownfieldGate(workspace: string, evalCase: EvalCase): Promise<EvalGate[]> {
+async function registryCheckpoint(workspace: string, scope: string, id: string): Promise<{
+  readonly checkpoint?: RegistryCheckpoint
+  readonly violations: readonly { readonly path: string; readonly message: string }[]
+}> {
+  const registry = await loadEvidenceRegistry(workspace, scope, id)
+  const entries = registry.entries.filter(entry => entry.scope === scope && entry.id === id)
+  return {
+    ...(entries.length === 1 ? { checkpoint: {
+      scope,
+      id,
+      evidence: entries[0]!.evidence,
+      ...(entries[0]!.source === undefined ? {} : { source: entries[0]!.source }),
+    } } : {}),
+    violations: registry.violations,
+  }
+}
+
+export interface WorkingEvidenceCheckpoint {
+  readonly gates: readonly EvalGate[]
+  readonly selectedScenarioId?: string
+  readonly registry?: RegistryCheckpoint
+  readonly source?: string
+}
+
+export async function judgeWorkingCheckpoint(
+  workspace: string,
+  evalCase: EvalCase,
+  selectedScenarioId?: string,
+): Promise<WorkingEvidenceCheckpoint> {
+  const scope = evalCase.changeName
+  if (scope === undefined) return { gates: [gate('working-evidence', false, 'case has no working scope')] }
+  const contract = await judgeScenarioCheckpoint(workspace, evalCase, scope, selectedScenarioId)
+  const scenarioId = contract.selectedScenarioId
+  const strict = await focusedCommand(workspace, ['validate', '--strict', '--scope', scope])
+  const run = scenarioId === undefined
+    ? undefined
+    : await focusedCommand(workspace, ['run', '--scope', scope, '--scenario', scenarioId, '--json'])
+  const matches = run?.code === 0 ? passedScenarios(run.stdout).filter(result => result.scope === scope && result.id === scenarioId) : []
+  const selectedRegistry: {
+    readonly checkpoint?: RegistryCheckpoint
+    readonly violations: readonly { readonly path: string; readonly message: string }[]
+  } = scenarioId === undefined
+    ? { violations: [] }
+    : await registryCheckpoint(workspace, scope, scenarioId)
+  const sourcePath = join(workspace, 'openspec', 'changes', scope, 'specs', 'account-authentication', 'spec.md')
+  const source = await exists(sourcePath) ? await readFile(sourcePath, 'utf8') : undefined
+  const parsed = source === undefined ? undefined : parseNativeDocument(`openspec/changes/${scope}/specs/account-authentication/spec.md`, source, scope)
+  const marked = parsed?.items.filter(item => item.markerId !== undefined) ?? []
+  const registryMatchesRun = selectedRegistry.checkpoint !== undefined && matches.length === 1
+    && matches[0]!.evidence.length === selectedRegistry.checkpoint.evidence.length
+    && selectedRegistry.checkpoint.evidence.every(reference => matches[0]!.evidence.includes(reference))
+  const snapshotValid = source !== undefined && parsed?.violations.length === 0 && marked.length === 1
+    && marked[0]?.markerId === scenarioId && selectedRegistry.violations.length === 0 && registryMatchesRun
+  const gates = [
+    gate('working-validation', strict.code === 0, (strict.stdout || strict.stderr).trim()),
+    gate('working-execution', run?.code === 0 && contract.gate.passed && snapshotValid,
+      contract.gate.passed && snapshotValid && run !== undefined
+        ? (run.stdout || run.stderr).trim()
+        : [contract.gate.detail, ...selectedRegistry.violations.map(item => item.message)].join('; ')),
+  ]
+  return {
+    gates,
+    ...(gates.every(item => item.passed) && scenarioId !== undefined ? { selectedScenarioId: scenarioId } : {}),
+    ...(selectedRegistry.checkpoint === undefined ? {} : { registry: selectedRegistry.checkpoint }),
+    ...(source === undefined ? {} : { source }),
+  }
+}
+
+export async function brownfieldGate(
+  workspace: string,
+  evalCase: EvalCase,
+  checkpoint?: WorkingEvidenceCheckpoint,
+  selectedScenarioId = checkpoint?.selectedScenarioId ?? evalCase.prescribedScenarioId,
+): Promise<EvalGate[]> {
   const changeName = evalCase.changeName
   if (changeName === undefined) return [gate('brownfield-contract', false, 'case has no working scope')]
+  if (selectedScenarioId === undefined) return [gate('brownfield-contract', false, 'no scenario identity was selected')]
+  const expectedId = selectedScenarioId
   const mainPath = 'openspec/specs/account-authentication/spec.md'
   const workingPath = `openspec/changes/${changeName}/specs/account-authentication/spec.md`
   const archivePath = 'openspec/changes/archive/2026-09-26-reject-blocked-accounts/specs/account-authentication/spec.md'
-  const [mainSource, workingSource, archiveSource] = await Promise.all([
+  if (!await exists(join(workspace, archivePath))) {
+    return [gate('native-history-preservation', false, `archived native source is missing: ${archivePath}`)]
+  }
+  const loaded = await loadConfig(workspace)
+  if (loaded.config === undefined) return [gate('brownfield-contract', false, loaded.violations.map(violation => violation.message).join('\n'))]
+  const mainScope = configuredMainScope(loaded.config)
+  if (mainScope === undefined) return [gate('brownfield-contract', false, 'main document has no fixed configured scope')]
+  const discovery = await discoverDocuments(workspace, loaded.config, mainScope, expectedId)
+  if (discovery.violations.length > 0) return [gate('brownfield-contract', false, discovery.violations.map(violation => violation.message).join('\n'))]
+  const main = (discovery.scopes.get(mainScope) ?? []).find(document => document.path === mainPath)
+  if (main === undefined) return [gate('brownfield-contract', false, `main document is not selected: ${mainPath}`)]
+  const workingConfigured = loaded.config.specifications.documents.some(layout => layout.scope === undefined && layout.match.includes('{scope}'))
+  const workingDiscovery = workingConfigured ? await discoverDocuments(workspace, loaded.config, changeName, expectedId) : undefined
+  if (workingDiscovery !== undefined && workingDiscovery.violations.length > 0) {
+    return [gate('brownfield-contract', false, workingDiscovery.violations.map(violation => violation.message).join('\n'))]
+  }
+  const workingDocument = workingDiscovery?.scopes.get(changeName)?.find(document => document.path === workingPath)
+  const workingSource = workingDocument === undefined ? checkpoint?.source : await readFile(join(workspace, workingPath), 'utf8')
+  const workingRegistry = workingDocument === undefined
+    ? checkpoint?.registry
+    : (await registryCheckpoint(workspace, changeName, expectedId)).checkpoint
+  if (workingSource === undefined || workingRegistry === undefined) {
+    return [gate('brownfield-contract', false, 'working marker and scope-local registry evidence were not independently checkpointed before discovery ended')]
+  }
+  const [mainSource, archiveSource] = await Promise.all([
     readFile(join(workspace, mainPath), 'utf8'),
-    readFile(join(workspace, workingPath), 'utf8'),
     readFile(join(workspace, archivePath), 'utf8'),
   ])
-  const main = parseFocusedSpecDocument(mainPath, mainSource, 'current')
-  const working = parseFocusedSpecDocument(workingPath, workingSource, changeName)
+  const mainNative = parseNativeDocument(mainPath, mainSource, main.scope)
+  const workingNative = parseNativeDocument(workingPath, workingSource, changeName)
   const originalScenarios = [...archiveSource.matchAll(/^#### Scenario: (.+)\n(- \*\*WHEN\*\* [^\n]+\n- \*\*THEN\*\* [^\n]+)/gmu)]
   const originalOutcome = originalScenarios.find(match => match[1] === 'Blocked account with valid credentials')?.[2]
-  const legacy = originalScenarios.filter(match => match[1] !== 'Blocked account with valid credentials')
-    .map(match => match[0])
-  const preservedLegacy = legacy.filter(scenario => mainSource.includes(scenario)).length
-  const legacyPreserved = legacy.length === 3 && preservedLegacy === legacy.length && main.unenrolledScenarios === legacy.length
-  const expectedId = evalCase.expectedScenarioId
-  const mainOccurrences = main.scenarios.filter(scenario => scenario.ids.includes(expectedId))
-  const workingOccurrences = working.scenarios.filter(scenario => scenario.ids.includes(expectedId))
-  const mainOwner = mainOccurrences.length === 1 ? mainOccurrences[0] : undefined
-  const workingRevision = workingOccurrences.length === 1 ? workingOccurrences[0] : undefined
-  const expectedEvidence = mainOwner?.evidence ?? []
+  const historical = originalScenarios.filter(match => match[1] !== 'Blocked account with valid credentials').map(match => match[0])
+  const preservedHistorical = historical.filter(scenario => mainSource.includes(scenario)).length
+  const mainScopeRegistry = await loadEvidenceRegistry(workspace, main.scope)
+  const mainMarkers = mainNative.items.filter(item => item.markerId !== undefined)
+  const historicalPreserved = historical.length === 3 && preservedHistorical === historical.length
+    && !archiveSource.includes('focused-spec:id=') && !/\*\*(?:ID|EVIDENCE)\*\*/u.test(archiveSource)
+    && mainMarkers.length === 1 && mainMarkers[0]?.markerId === expectedId
+  const mainOccurrences = main.scenarios.filter(scenario => scenario.id === expectedId)
+  const workingMarkers = workingNative.items.filter(item => item.markerId !== undefined)
+  const mainScenario = mainOccurrences.length === 1 ? mainOccurrences[0] : undefined
+  const mainEvidence = mainScenario?.evidence ?? []
+  const mainRegistry = await registryCheckpoint(workspace, main.scope, expectedId)
   const mainContractValid = originalOutcome !== undefined
     && mainSource.includes(originalOutcome)
     && workingSource.includes(originalOutcome)
-    && mainOwner !== undefined
-    && mainOwner.name === 'Blocked account with valid credentials'
-    && mainOwner.whenCount === 1
-    && mainOwner.thenCount === 1
-    && mainOwner.ids.length === 1
-    && mainOwner.revisions.length === 0
-    && mainOwner.malformedIdLines.length === 0
-    && mainOwner.malformedEvidenceLines.length === 0
-    && expectedEvidence.length === evalCase.expectedEvidenceCount
-    && evalCase.expectedSelectorFragments.every(fragment => expectedEvidence.some(reference => reference.includes(fragment)))
-  const all = await focusedCommand(workspace, ['run', '--json'])
-  const results = all.code === 0 ? passedScenarios(all.stdout) : []
-  const mainPasses = mainContractValid
-    ? results.filter(result => result.scope !== changeName
-      && result.id === expectedId
-      && result.evidence.length === expectedEvidence.length
-      && expectedEvidence.every(reference => result.evidence.includes(reference)))
-    : []
-  const mainPass = mainPasses.length === 1 ? mainPasses[0] : undefined
-  const transitionContractValid = mainPass !== undefined
-    && workingRevision !== undefined
-    && workingRevision.ids.length === 1
-    && workingRevision.revisions.length === 1
-    && workingRevision.revisions[0] === mainPass.scope
-    && workingRevision.evidence.length === expectedEvidence.length
-    && expectedEvidence.every(reference => workingRevision.evidence.includes(reference))
+    && mainNative.violations.length === 0
+    && mainScenario?.name === 'Scenario: Blocked account with valid credentials'
+    && mainRegistry.violations.length === 0
+    && mainRegistry.checkpoint !== undefined
+    && mainScopeRegistry.violations.length === 0
+    && mainScopeRegistry.entries.length === 1
+    && mainScopeRegistry.entries[0]?.id === expectedId
+    && mainEvidence.length === evalCase.expectedEvidenceCount
+    && mainRegistry.checkpoint.evidence.length === mainEvidence.length
+    && mainRegistry.checkpoint.evidence.every(reference => mainEvidence.includes(reference))
+    && evalCase.expectedSelectorFragments.every(fragment => mainEvidence.some(reference => reference.includes(fragment)))
+  const workingContractValid = originalOutcome !== undefined
+    && workingSource.includes(originalOutcome)
+    && workingNative.violations.length === 0
+    && workingMarkers.length === 1 && workingMarkers[0]?.markerId === expectedId
+    && workingRegistry.scope === changeName
+    && workingRegistry.id === expectedId
+    && workingRegistry.evidence.length === mainEvidence.length
+    && workingRegistry.evidence.every(reference => mainEvidence.includes(reference))
+
+  const mainRun = await focusedCommand(workspace, ['run', '--scope', main.scope, '--scenario', expectedId, '--json'])
+  const mainResults = mainRun.code === 0 ? passedScenarios(mainRun.stdout) : []
+  const mainPass = mainContractValid ? matchingPassedScenario(mainResults, main.scope, expectedId, mainEvidence) : undefined
+  let workingPassed = checkpoint?.gates.every(item => item.passed) === true && workingContractValid
+  if (checkpoint === undefined && workingDocument !== undefined && workingContractValid) {
+    const workingRun = await focusedCommand(workspace, ['run', '--scope', changeName, '--scenario', expectedId, '--json'])
+    const workingResults = workingRun.code === 0 ? passedScenarios(workingRun.stdout) : []
+    workingPassed = matchingPassedScenario(workingResults, changeName, expectedId, workingRegistry.evidence) !== undefined
+  }
 
   const source = join(workspace, 'openspec', 'changes', changeName)
   const hidden = join(workspace, 'openspec', '.focused-spec-eval-hidden')
-  await rename(source, hidden)
+  const workingPresent = await exists(source)
+  if (workingPresent) await rename(source, hidden)
   let afterTransition
   try {
-    afterTransition = await focusedCommand(workspace, ['run', '--json'])
+    afterTransition = await focusedCommand(workspace, ['run', '--scope', main.scope, '--scenario', expectedId, '--json'])
   } finally {
-    await rename(hidden, source)
+    if (workingPresent) await rename(hidden, source)
   }
   const transitionedResults = afterTransition.code === 0 ? passedScenarios(afterTransition.stdout) : []
-  const transitionedPass = mainPass === undefined
-    ? undefined
-    : matchingPassedScenario(transitionedResults, mainPass.scope, expectedId, expectedEvidence)
-  const evidenceStable = transitionContractValid && mainPass !== undefined && transitionedPass !== undefined
+  const transitionedPass = matchingPassedScenario(transitionedResults, main.scope, expectedId, mainEvidence)
+  const evidenceStable = mainPass !== undefined && workingPassed && transitionedPass !== undefined
   return [
-    gate('legacy-preservation', legacyPreserved, `${preservedLegacy}/${legacy.length} native scenarios preserved and ${main.unenrolledScenarios} remain unenrolled`),
-    gate('main-scope-evidence', mainContractValid && mainPass !== undefined, all.code === 0
-      ? `main owner scope=${mainPass?.scope ?? 'missing'}; owner count=${mainOccurrences.length}; expected ${evalCase.expectedEvidenceCount} evidence; observed ${mainPass?.evidence.length ?? 0} passing evidence`
-      : all.stdout.trim() || all.stderr.trim()),
+    gate('native-history-preservation', historicalPreserved,
+      `${preservedHistorical}/${historical.length} unmarked historical native scenarios preserved directly`),
+    gate('main-scope-evidence', mainContractValid && mainPass !== undefined, mainRun.code === 0
+      ? `main scope=${main.scope}; occurrence count=${mainOccurrences.length}; expected ${evalCase.expectedEvidenceCount} explicit registry references; observed ${mainPass?.evidence.length ?? 0} passing evidence`
+      : mainRun.stdout.trim() || mainRun.stderr.trim()),
     gate('transition-stable-evidence', evidenceStable, afterTransition.code === 0
-      ? `working document absent; ownership ${transitionContractValid ? 'valid' : 'invalid'}; main owner ${transitionedPass === undefined ? 'missing or altered' : 'PASS with unchanged evidence'}`
+      ? `working document absent; checkpointed ${changeName} registry evidence ${workingPassed ? 'PASS and unchanged' : 'missing or altered'}; explicit ${main.scope} registry evidence ${transitionedPass === undefined ? 'missing or altered' : 'PASS with unchanged evidence'}`
       : afterTransition.stdout.trim() || afterTransition.stderr.trim()),
   ]
 }
@@ -344,32 +765,54 @@ export async function judgeCompletedWorkspace(
   evalCase: EvalCase,
   snapshots: ReadonlyMap<string, string>,
   transcripts: readonly string[],
+  checkpoint?: WorkingEvidenceCheckpoint,
+  selectedScenarioId = checkpoint?.selectedScenarioId ?? evalCase.prescribedScenarioId,
 ): Promise<EvalGate[]> {
   const gates: EvalGate[] = []
-  const strictArgs = ['validate', '--strict', ...(evalCase.changeName === undefined ? [] : ['--scope', evalCase.changeName])]
-  const strict = await focusedCommand(workspace, strictArgs)
-  gates.push(gate('focused-validation', strict.code === 0, strict.code === 0 ? strict.stdout.trim() : (strict.stderr || strict.stdout).trim()))
+  let scope = evalCase.changeName === undefined ? undefined : await configuredWorkingScope(workspace, evalCase)
+  if (evalCase.id === 'openspec-brownfield') {
+    const loaded = await loadConfig(workspace)
+    if (loaded.config !== undefined) {
+      scope = configuredMainScope(loaded.config)
+    }
+  }
+  const selectionAvailable = evalCase.changeName === undefined || scope !== undefined
+  const strictArgs = ['validate', '--strict', ...(scope === undefined ? [] : ['--scope', scope])]
+  const strict = selectionAvailable ? await focusedCommand(workspace, strictArgs) : undefined
+  gates.push(gate('focused-validation', strict?.code === 0, strict === undefined ? 'named change has no unique configured working scope'
+    : strict.code === 0 ? strict.stdout.trim() : (strict.stderr || strict.stdout).trim()))
 
-  const runArgs = ['run', ...(evalCase.changeName === undefined ? [] : ['--scope', evalCase.changeName])]
-  const run = await focusedCommand(workspace, runArgs)
-  gates.push(gate('focused-execution', run.code === 0, run.code === 0 ? run.stdout.trim() : (run.stderr || run.stdout).trim()))
+  const runArgs = ['run', ...(scope === undefined ? [] : ['--scope', scope])]
+  const run = selectionAvailable ? await focusedCommand(workspace, runArgs) : undefined
+  gates.push(gate('focused-execution', run?.code === 0, run === undefined ? 'named change has no unique configured working scope'
+    : run.code === 0 ? run.stdout.trim() : (run.stderr || run.stdout).trim()))
 
   if (evalCase.changeName !== undefined) {
-    const openSpec = await openspecCommand(workspace, ['validate', evalCase.changeName, '--strict', '--no-interactive'])
-    gates.push(gate('openspec-validation', openSpec.code === 0, openSpec.code === 0 ? openSpec.stdout.trim() : (openSpec.stderr || openSpec.stdout).trim()))
-    const tasks = await readFile(join(workspace, 'openspec', 'changes', evalCase.changeName, 'tasks.md'), 'utf8').catch(() => '')
-    const incomplete = tasks.match(/^- \[ \]/gmu)?.length ?? 0
-    gates.push(gate('openspec-tasks', incomplete === 0, `${incomplete} incomplete tasks`))
+    const paths = await fg([
+      `openspec/changes/${evalCase.changeName}/tasks.md`,
+      `openspec/changes/archive/*-${evalCase.changeName}/tasks.md`,
+    ], { cwd: workspace, onlyFiles: true })
+    const taskPath = paths.length === 1 ? paths[0] : undefined
+    const archived = taskPath?.startsWith('openspec/changes/archive/') === true
+    const openSpec = await openspecCommand(workspace, archived
+      ? ['validate', '--specs', '--strict', '--no-interactive']
+      : ['validate', evalCase.changeName, '--strict', '--no-interactive'])
+    gates.push(gate('openspec-validation', openSpec.code === 0 && taskPath !== undefined, openSpec.code === 0 ? openSpec.stdout.trim() : (openSpec.stderr || openSpec.stdout).trim()))
+    const tasks = taskPath === undefined ? undefined : await readFile(join(workspace, taskPath), 'utf8')
+    const incomplete = tasks?.match(/^- \[ \]/gmu)?.length ?? 0
+    gates.push(gate('openspec-tasks', tasks !== undefined && incomplete === 0, tasks === undefined ? 'completed change tasks missing or ambiguous' : `${incomplete} incomplete tasks`))
   }
 
-  gates.push(await scenarioGate(workspace, evalCase))
+  const scenario = await judgeScenarioCheckpoint(workspace, evalCase, scope, selectedScenarioId)
+  gates.push(scenario.gate)
   gates.push(await behaviorGate(workspace))
   gates.push(await integrityGate(workspace, snapshots, transcripts))
+  const effectiveScenarioId = scenario.selectedScenarioId ?? selectedScenarioId
   if (evalCase.id === 'vacuous-evidence') gates.push(...await judgeEvidenceRepair(workspace, transcripts))
-  else if (strict.code === 0 && run.code === 0) gates.push(await mutationGate(workspace, evalCase))
+  else if (strict?.code === 0 && run?.code === 0) gates.push(await mutationGate(workspace, evalCase, scope, effectiveScenarioId))
   else gates.push(gate('mutation-sensitivity', false, 'focused validation or execution failed'))
   if (evalCase.id === 'openspec-brownfield') {
-    gates.push(...await brownfieldGate(workspace, evalCase))
+    gates.push(...await brownfieldGate(workspace, evalCase, checkpoint, effectiveScenarioId))
   }
   return gates
 }

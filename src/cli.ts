@@ -2,6 +2,7 @@
 import process from 'node:process'
 import { performance } from 'node:perf_hooks'
 import { isAbsolute, resolve } from 'node:path'
+import { agentGuide, AGENT_GUIDE_HELP } from './agent-guide.js'
 import { loadConfig } from './config.js'
 import { executePlan } from './executor.js'
 import type { ExecutionPlan, ExecutionResult, SpecDocument, Violation } from './model.js'
@@ -22,15 +23,16 @@ interface CliOptions {
   readonly timings: boolean
 }
 
-const ROOT_HELP = `focused-spec — Validate and run focused behavioral specifications against real evidence.
+const ROOT_HELP = `focused-spec — Connect native checkable items to real executable evidence.
 
 Usage:
   focused-spec <command> [options]
   focused-spec help [command]
 
 Commands:
-  validate  Check scenario structure and resolve evidence without running tests
+  validate  Check native bindings and resolve registry evidence without running tests
   run       Strictly validate, then execute selected evidence
+  agent-guide  Read version-compatible agent workflow or runner guidance from this package
 
 Options:
   -h, --help  Show this help
@@ -43,7 +45,7 @@ Examples:
 Run 'focused-spec <command> --help' for command options.
 `
 
-const VALIDATE_HELP = `Validate scenario structure and resolve concrete evidence without running tests.
+const VALIDATE_HELP = `Validate native item bindings and resolve concrete registry evidence without running tests.
 
 Usage:
   focused-spec validate [options]
@@ -53,13 +55,16 @@ Options:
   --config <path>  Configuration file relative to the project root (default: .focused-spec/config.yaml)
   --scope <name>   Validate only this scope (default: all discovered scopes)
   --strict         Reject all planned: evidence; use once exact tests exist
-  --syntax-only    Check document syntax and ownership without loading runners or resolving evidence
+  --syntax-only    Check registry syntax and scoped native identity without loading runners or resolving evidence
   --json           Print the validation result as JSON
   --timings        Include elapsed validation and resolution phase timings
   -h, --help       Show this help
 
 Without --strict, planned: evidence is allowed in every scope and is not resolved.
 Full validation resolves concrete evidence but never executes tests.
+Configuration version 3 selects native Markdown/Gherkin documents.
+Identity and evidence live in .focused-spec/evidence.yaml; behavior stays in the native item.
+This command does not certify host format validity or unregistered native outcomes.
 
 Examples:
   focused-spec validate --scope add-search
@@ -76,7 +81,7 @@ Options:
   --root <path>     Project root (default: current directory)
   --config <path>   Configuration file relative to the project root (default: .focused-spec/config.yaml)
   --scope <name>    Validate and execute only this scope (default: all discovered scopes)
-  --scenario <id>   Narrow validation and execution to matching scenarios
+  --scenario <id>   Narrow validation and execution to matching registered items
                     within the selected scope(s)
   --allow-skip      Allow an overall successful exit with SKIP; never relabel SKIP as PASS
   --json            Print the execution result as JSON
@@ -84,6 +89,9 @@ Options:
   -h, --help        Show this help
 
 Run always validates strictly before starting tests; planned: evidence blocks execution.
+Evidence is declared in .focused-spec/evidence.yaml; behavior stays in the native item.
+Each scope/ID must uniquely bind a native marker, Gherkin scenario tag, or explicit native ID.
+Only registered items and executed evidence are reported; native validation belongs to the host.
 
 Examples:
   focused-spec run
@@ -101,13 +109,14 @@ function requestedHelp(argumentsList: readonly string[]): string | undefined {
     if (command === 'help' && argumentsList.length === 2) {
       if (argumentsList[1] === 'validate') return VALIDATE_HELP
       if (argumentsList[1] === 'run') return RUN_HELP
+      if (argumentsList[1] === 'agent-guide') return AGENT_GUIDE_HELP
       throw argumentError(`unknown help command ${String(argumentsList[1])}`)
     }
     throw argumentError('unexpected arguments for help')
   }
-  if (command === 'validate' || command === 'run') {
+  if (command === 'validate' || command === 'run' || command === 'agent-guide') {
     if (argumentsList.includes('--help') || argumentsList.includes('-h')) {
-      return command === 'validate' ? VALIDATE_HELP : RUN_HELP
+      return command === 'agent-guide' ? AGENT_GUIDE_HELP : command === 'validate' ? VALIDATE_HELP : RUN_HELP
     }
   }
   return undefined
@@ -271,9 +280,9 @@ function printViolations(
   if (timings !== undefined) process.stderr.write(displayTimings(timings))
 }
 
-function printExecution(result: ExecutionResult, json: boolean, context: RunContext, unenrolledScenarios: number, timings?: PhaseTimings): void {
+function printExecution(result: ExecutionResult, json: boolean, context: RunContext, timings?: PhaseTimings): void {
   if (json) {
-    process.stdout.write(`${JSON.stringify({ ...result, unenrolledScenarios, executionStarted: result.targetCount > 0, ...context, ...(timings === undefined ? {} : { timings }) }, null, 2)}\n`)
+    process.stdout.write(`${JSON.stringify({ ...result, executionStarted: result.targetCount > 0, ...context, ...(timings === undefined ? {} : { timings }) }, null, 2)}\n`)
     return
   }
   process.stdout.write(displayRunContext(context))
@@ -287,7 +296,7 @@ function printExecution(result: ExecutionResult, json: boolean, context: RunCont
   }
   const counts = { PASS: 0, FAIL: 0, SKIP: 0, ERROR: 0 }
   for (const scenario of result.scenarios) counts[scenario.status] += 1
-  process.stdout.write(`summary: ${counts.PASS} PASS, ${counts.FAIL} FAIL, ${counts.SKIP} SKIP, ${counts.ERROR} ERROR; ${result.targetCount} unique targets; ${unenrolledScenarios} unenrolled native scenarios\n`)
+  process.stdout.write(`summary: ${counts.PASS} PASS, ${counts.FAIL} FAIL, ${counts.SKIP} SKIP, ${counts.ERROR} ERROR; ${result.targetCount} unique targets\n`)
   if (timings !== undefined) process.stdout.write(displayTimings(timings))
 }
 
@@ -315,6 +324,10 @@ async function main(argumentsList: readonly string[]): Promise<number> {
   const help = requestedHelp(argumentsList)
   if (help !== undefined) {
     process.stdout.write(help)
+    return 0
+  }
+  if (argumentsList[0] === 'agent-guide') {
+    process.stdout.write(await agentGuide(argumentsList.slice(1)))
     return 0
   }
   const options = parseArguments(argumentsList)
@@ -361,8 +374,8 @@ async function main(argumentsList: readonly string[]): Promise<number> {
   if (options.command === 'validate') {
     const counts = validationCounts(validation.resolutionDocuments, resolution.plan)
     const timings = reportedTimings()
-    if (options.json) process.stdout.write(`${JSON.stringify({ valid: true, ...counts, unenrolledScenarios: validation.unenrolledScenarios, ...context, ...(timings === undefined ? {} : { timings }) }, null, 2)}\n`)
-    else process.stdout.write(`${displayValidationContext(context)}focused specifications are valid: ${counts.scenarios} scenarios, ${counts.plannedEvidence} planned evidence, ${counts.targets} unique targets; ${validation.unenrolledScenarios} unenrolled native scenarios\n${timings === undefined ? '' : displayTimings(timings)}`)
+    if (options.json) process.stdout.write(`${JSON.stringify({ valid: true, ...counts, ...context, ...(timings === undefined ? {} : { timings }) }, null, 2)}\n`)
+    else process.stdout.write(`${displayValidationContext(context)}focused specifications are valid: ${counts.scenarios} registered items, ${counts.plannedEvidence} planned evidence, ${counts.targets} unique targets\n${timings === undefined ? '' : displayTimings(timings)}`)
     return 0
   }
 
@@ -379,7 +392,7 @@ async function main(argumentsList: readonly string[]): Promise<number> {
     maxConcurrentGroups: loaded.config.execution?.maxConcurrentGroups ?? 1,
   })
   phases.executionMs = elapsed(executionStarted)
-  printExecution(result, options.json, context as RunContext, validation.unenrolledScenarios, reportedTimings())
+  printExecution(result, options.json, context as RunContext, reportedTimings())
   return result.success ? 0 : 1
 }
 

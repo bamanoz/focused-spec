@@ -20,12 +20,7 @@ As an authentication operator, I need a blocked account to be denied at login so
 
 **Acceptance Scenarios**:
 
-#### Scenario: Blocked account submits valid credentials
-- **ID**: `auth.login.blocked-account`
-- **EVIDENCE**: `pytest-functional::tests/test_auth.py::test_blocked_account`
-- **WHEN** a blocked account submits otherwise valid credentials
-- **THEN** authentication is rejected
-
+<!-- focused-spec:id=auth.login.blocked-account -->
 1. **Given** an account is blocked and its submitted credentials are valid, **When** the account attempts to log in, **Then** authentication is rejected.
 
 ### Edge Cases

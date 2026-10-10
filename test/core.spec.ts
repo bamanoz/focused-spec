@@ -1,36 +1,159 @@
-import { describe, expect, it } from 'vitest'
-import type { FocusedSpecConfig } from '../src/model.js'
-import { parseEvidenceReference, parseFocusedSpecDocument } from '../src/parser.js'
-import { validateDocuments } from '../src/validate.js'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { parseEvidenceReference, parseNativeDocument } from '../src/parser.js'
+import { loadEvidenceRegistry, parseEvidenceRegistry } from '../src/registry.js'
 
-const config: FocusedSpecConfig = {
-  version: 2,
-  specifications: { documents: [{ match: 'specs/**/*.md', scope: 'current' }] },
-  runners: { unit: { module: './runner.ts' } },
-}
+const roots: string[] = []
 
-function scenario(id = 'auth.login.blocked', evidence = 'unit::auth test'): string {
-  return [
-    '### Requirement: Authentication',
-    '#### Scenario: Blocked account logs in',
-    `- **ID**: \`${id}\``,
-    `- **EVIDENCE**: \`${evidence}\``,
-    '- **WHEN** a blocked account supplies valid credentials',
-    '- **THEN** authentication is rejected',
-  ].join('\n')
-}
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
+})
 
-describe('focused specification parsing', () => {
-  it('parses a focused scenario and opaque runner selector', () => {
-    const document = parseFocusedSpecDocument('specs/auth.md', scenario(), 'current')
-    expect(document.scope).toBe('current')
-    expect(document.scenarios).toEqual([expect.objectContaining({
-      name: 'Blocked account logs in',
-      ids: ['auth.login.blocked'],
-      evidence: ['unit::auth test'],
-      whenCount: 1,
-      thenCount: 1,
-    })])
+describe('native specification parsing', () => {
+  it('binds a marker to the immediately following Markdown item', () => {
+    const document = parseNativeDocument('specs/auth.md', [
+      '# Authentication',
+      '<!-- focused-spec:id=auth.login.blocked-account -->',
+      '## Blocked account login',
+      '',
+      'A blocked account is rejected.',
+    ].join('\n'), 'current')
+
+    expect(document).toMatchObject({ path: 'specs/auth.md', scope: 'current', violations: [] })
+    expect(document.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: 'specs/auth.md',
+        scope: 'current',
+        line: 3,
+        name: 'Blocked account login',
+        markerId: 'auth.login.blocked-account',
+      }),
+    ]))
+  })
+
+  it('binds markers to Markdown paragraphs and list items', () => {
+    const document = parseNativeDocument('specs/items.md', [
+      '<!-- focused-spec:id=auth.login.paragraph -->',
+      'A paragraph behavior.',
+      '',
+      '<!-- focused-spec:id=auth.login.list-before -->',
+      '- A list behavior.',
+      '',
+      'An inline paragraph behavior. <!-- focused-spec:id=auth.login.paragraph-inline -->',
+      '',
+      '- An inline list behavior. <!-- focused-spec:id=auth.login.list-inline -->',
+    ].join('\n'), 'current')
+
+    expect(document.violations).toEqual([])
+    expect(document.items.flatMap(item => item.markerId ?? [])).toEqual([
+      'auth.login.paragraph',
+      'auth.login.list-before',
+      'auth.login.paragraph-inline',
+      'auth.login.list-inline',
+    ])
+  })
+
+  it('rejects detached and duplicate Markdown markers', () => {
+    const detached = parseNativeDocument('specs/detached.md', [
+      '<!-- focused-spec:id=auth.login.detached -->',
+      '',
+      '',
+      '## Detached behavior',
+    ].join('\n'), 'current')
+    const duplicate = parseNativeDocument('specs/duplicate.md', [
+      '<!-- focused-spec:id=auth.login.first -->',
+      '<!-- focused-spec:id=auth.login.second -->',
+      '## Duplicate marker target',
+    ].join('\n'), 'current')
+
+    expect(detached.violations.map(value => value.message).join('\n')).toMatch(/marker.*(?:immediate|attach|detached)/iu)
+    expect(duplicate.violations.map(value => value.message).join('\n')).toMatch(/(?:duplicate|multiple).*marker/iu)
+  })
+
+  it('ignores marker-looking text in fenced code blocks', () => {
+    const document = parseNativeDocument('specs/example.md', [
+      '# Literal example',
+      '```md',
+      '<!-- focused-spec:id=auth.login.not-a-marker -->',
+      '## Not a native item',
+      '```',
+    ].join('\n'), 'current')
+
+    expect(document.violations).toEqual([])
+    expect(document.items.some(item => item.markerId === 'auth.login.not-a-marker')).toBe(false)
+  })
+
+  it('attaches Gherkin tags only to Scenario and Scenario Outline', () => {
+    const valid = parseNativeDocument('features/auth.feature', [
+      'Feature: Authentication',
+      '',
+      '  @focused.auth.login.blocked-account',
+      '  Scenario: Blocked account',
+      '    Given a blocked account',
+      '    Then authentication is rejected',
+      '',
+      '  @focused.auth.login.expired-password',
+      '  Scenario Outline: Expired password',
+      '    Given an account named <name>',
+      '    Then authentication is rejected',
+      '',
+      '    Examples:',
+      '      | name |',
+      '      | Ada  |',
+    ].join('\n'), 'current')
+    const invalidSources = [
+      ['@focused.auth.login.feature', 'Feature: Authentication'],
+      ['Feature: Authentication', '', '  @focused.auth.login.rule', '  Rule: Login policy', '    Scenario: Login', '      Given an account'],
+      ['Feature: Authentication', '', '  Scenario Outline: Login', '    Given <account>', '', '    @focused.auth.login.examples', '    Examples:', '      | account |', '      | Ada     |'],
+      ['Feature: Authentication', '', '  @focused.auth.login.background', '  Background:', '    Given an account', '', '  Scenario: Login', '    Then access is decided'],
+      ['Feature: Authentication', '', '  @focused.auth.login.first @focused.auth.login.second', '  Scenario: Duplicate tags', '    Given an account'],
+    ]
+
+    expect(valid.violations).toEqual([])
+    expect(valid.items.filter(item => item.markerId !== undefined).map(item => item.markerId)).toEqual([
+      'auth.login.blocked-account',
+      'auth.login.expired-password',
+    ])
+    for (const [index, source] of invalidSources.entries()) {
+      const invalid = parseNativeDocument(`features/invalid-${index}.feature`, source.join('\n'), 'current')
+      expect(invalid.violations.map(value => value.message).join('\n')).toMatch(/(?:focused.*(?:Scenario|Scenario Outline)|invalid Gherkin)/iu)
+    }
+  })
+
+  it('rejects obsolete focused rows instead of interpreting the legacy format', () => {
+    const document = parseNativeDocument('specs/legacy.md', [
+      '#### Scenario: Legacy enrollment',
+      '- **ID**: `auth.login.legacy`',
+      '- **EVIDENCE**: `unit::legacy`',
+      '- **WHEN** legacy input is supplied',
+      '- **THEN** legacy output is observed',
+    ].join('\n'), 'current')
+
+    expect(document.items.some(item => item.markerId === 'auth.login.legacy')).toBe(false)
+    expect(document.violations.map(value => value.message).join('\n')).toMatch(/(?:obsolete|legacy|migrat)/iu)
+  })
+})
+
+describe('evidence registry parsing', () => {
+  it('parses planned evidence and opaque runner selectors', () => {
+    const registry = parseEvidenceRegistry([
+      'scopes:',
+      '  current:',
+      '    auth.login.blocked-account:',
+      '      evidence:',
+      '        - planned:pytest::tests/test_auth.py::test_blocked',
+    ].join('\n'))
+
+    expect(registry.violations).toEqual([])
+    expect(registry.entries).toEqual([
+      expect.objectContaining({
+        scope: 'current',
+        id: 'auth.login.blocked-account',
+        evidence: ['planned:pytest::tests/test_auth.py::test_blocked'],
+      }),
+    ])
     expect(parseEvidenceReference('planned:pytest::tests/test_auth.py::test_blocked')).toEqual({
       raw: 'planned:pytest::tests/test_auth.py::test_blocked',
       planned: true,
@@ -39,74 +162,34 @@ describe('focused specification parsing', () => {
     })
   })
 
-  it('rejects malformed shape, unknown runners, and duplicate ownership', () => {
-    const first = parseFocusedSpecDocument('specs/one.md', scenario(), 'current')
-    const second = parseFocusedSpecDocument('specs/two.md', scenario('auth.login.blocked', 'missing::target'), 'current')
-    const validation = validateDocuments([first, second], config, { allowPlanned: false })
-    expect(validation.violations.map(item => item.message)).toEqual(expect.arrayContaining([
-      expect.stringContaining('duplicate stable ID'),
-      'unknown evidence runner missing',
-    ]))
+  it('rejects unknown and duplicate registry keys', () => {
+    const duplicate = parseEvidenceRegistry([
+      'scopes:',
+      '  current:',
+      '    auth.login.blocked-account:',
+      '      evidence: ["unit::first"]',
+      '    auth.login.blocked-account:',
+      '      evidence: ["unit::second"]',
+    ].join('\n'))
+    const unknown = parseEvidenceRegistry([
+      'scopes:',
+      '  current:',
+      '    auth.login.blocked-account:',
+      '      evidence: ["unit::first"]',
+      '      behavior: must remain in the native document',
+    ].join('\n'))
+
+    expect(duplicate.violations.map(value => value.message).join('\n')).toMatch(/(?:duplicate|unique)/iu)
+    expect(unknown.violations.map(value => value.message).join('\n')).toMatch(/unknown registry entry key behavior/iu)
   })
 
-  it('allows planned evidence only during non-strict scope validation', () => {
-    const document = parseFocusedSpecDocument('scopes/add/spec.md', scenario('auth.login.new', 'planned:unit::future test'), 'add')
-    expect(validateDocuments([document], config, { allowPlanned: true }).violations).toEqual([])
-    expect(validateDocuments([document], config, { allowPlanned: false }).violations).toContainEqual(
-      expect.objectContaining({ message: expect.stringContaining('planned evidence is not allowed') }),
-    )
-  })
-  it('rejects scenarios without exactly one ID WHEN and THEN', () => {
-    const missing = scenario().split('\n').filter(line => !line.startsWith('- **ID**') && !line.startsWith('- **WHEN**') && !line.startsWith('- **THEN**')).join('\n')
-    const repeated = `${scenario()}\n- **ID**: \`auth.login.other\`\n- **WHEN** again\n- **THEN** another result`
-    const documents = [missing, repeated].map((source, index) => parseFocusedSpecDocument(`specs/${index}.md`, source, 'current'))
-    const violations = validateDocuments(documents, config, { allowPlanned: false }).violations
-    for (const count of [0, 2]) {
-      for (const field of ['ID', 'WHEN', 'THEN']) {
-        expect(violations).toContainEqual(expect.objectContaining({ message: `expected exactly one ${field} row, found ${count}` }))
-      }
-    }
-  })
+  it('reports a missing evidence registry', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-spec-registry-'))
+    roots.push(root)
 
-  it('rejects a scenario without evidence', () => {
-    const source = scenario().split('\n').filter(line => !line.startsWith('- **EVIDENCE**')).join('\n')
-    const document = parseFocusedSpecDocument('specs/auth.md', source, 'current')
-    expect(validateDocuments([document], config, { allowPlanned: false }).violations).toContainEqual(
-      expect.objectContaining({ message: 'expected at least one EVIDENCE row' }),
-    )
-  })
-  it('rejects evidence without a scenario ID in a mixed document', () => {
-    const source = [
-      '#### Scenario: Historical outcome',
-      '- **WHEN** historical input is supplied',
-      '- **THEN** historical output is observed',
-      '#### Scenario: Evidence without identity',
-      '- **EVIDENCE**: `unit::auth test`',
-      '- **WHEN** input is supplied',
-      '- **THEN** output is observed',
-    ].join('\n')
-    const document = parseFocusedSpecDocument('specs/auth.md', source, 'current')
-    expect(document.unenrolledScenarios).toBe(1)
-    expect(document.scenarios).toHaveLength(1)
-    expect(validateDocuments([document], config, { allowPlanned: false }).violations).toContainEqual(
-      expect.objectContaining({ line: 4, message: 'expected exactly one ID row, found 0' }),
-    )
-  })
+    const registry = await loadEvidenceRegistry(root)
 
-  it('rejects malformed ID evidence and revision markers', () => {
-    for (const marker of ['- **ID**: auth.blocked', '- **EVIDENCE**: unit::auth', '- **REVISES**:']) {
-      const document = parseFocusedSpecDocument('specs/auth.md', [
-        '#### Scenario: Incomplete enrollment',
-        marker,
-        '- **WHEN** input is supplied',
-        '- **THEN** output is observed',
-      ].join('\n'), 'current')
-      expect(document.unenrolledScenarios).toBe(0)
-      expect(document.scenarios).toHaveLength(1)
-      const violations = validateDocuments([document], config, { allowPlanned: false }).violations
-      expect(violations).toContainEqual(expect.objectContaining({ message: 'expected exactly one ID row, found 0' }))
-      expect(violations).toContainEqual(expect.objectContaining({ line: 2, message: expect.stringContaining(`malformed ${marker.match(/\*\*(\w+)\*\*/u)?.[1]} row`) }))
-    }
+    expect(registry.entries).toEqual([])
+    expect(registry.violations.map(value => value.message).join('\n')).toMatch(/(?:cannot read|missing).*evidence\.yaml/iu)
   })
-
 })

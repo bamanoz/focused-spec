@@ -67,8 +67,8 @@ function parseDocumentLayout(value: unknown, index: number, path: string, violat
 
   if (!validatePattern(record.match, `${context}.match`, path, violations)) return undefined
   const match = record.match
-  if (!/\.md$/iu.test(match)) {
-    violations.push({ path, message: `${context}.match must select Markdown documents ending in .md` })
+  if (!/\.(?:md|feature|\{(?:md,feature|feature,md)\})$/iu.test(match)) {
+    violations.push({ path, message: `${context}.match must select native documents ending in .md or .feature` })
   }
 
   const captures = match.split(SCOPE_TOKEN).length - 1
@@ -183,7 +183,7 @@ export async function loadConfig(projectRoot: string, explicitPath?: string): Pr
     return { path, violations: [{ path, message: 'configuration must be an object' }] }
   }
   rejectUnknownKeys(root, CONFIG_KEYS, 'configuration', path, violations)
-  if (root.version !== 2) violations.push({ path, message: 'configuration version must be 2' })
+  if (root.version !== 3) violations.push({ path, message: 'configuration version must be 3; migrate inline ID/EVIDENCE rows to native markers and .focused-spec/evidence.yaml' })
 
   const specifications = object(root.specifications)
   let specificationConfig: FocusedSpecConfig['specifications'] | undefined
@@ -230,6 +230,6 @@ export async function loadConfig(projectRoot: string, explicitPath?: string): Pr
   return {
     path,
     violations,
-    config: { version: 2, specifications: specificationConfig, runners, ...(execution === undefined ? {} : { execution }) },
+    config: { version: 3, specifications: specificationConfig, runners, ...(execution === undefined ? {} : { execution }) },
   }
 }

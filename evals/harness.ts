@@ -1,10 +1,12 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { AgentDriver, EvalGate, EvalResult, EvalRunOptions } from './types.ts'
+import type { AgentDriver, AgentRequest, EvalGate, EvalResult, EvalRunOptions } from './types.ts'
 import { evalCase } from './cases.ts'
-import { judgeCompletedWorkspace, judgeProposalCheckpoint, skillActivationGate, snapshotProtectedFiles } from './judge.ts'
+import { guidanceActivationGate, judgeCompletedWorkspace, judgeProposalCheckpoint, judgeWorkingCheckpoint, skillActivationGate, snapshotProtectedFiles } from './judge.ts'
+import type { WorkingEvidenceCheckpoint } from './judge.ts'
 import { OmpAgentDriver } from './omp-agent.ts'
 import { evalRepositoryRoot, provisionWorkspace, readEvalPrompt } from './provision.ts'
+import { interviewFailedAgent } from './diagnostic.ts'
 
 export async function runEval(
   options: EvalRunOptions,
@@ -17,18 +19,24 @@ export async function runEval(
   const turns = []
   const gates: EvalGate[] = []
   const transcripts: string[] = []
+  let workingCheckpoint: WorkingEvidenceCheckpoint | undefined
+  let selectedScenarioId = selected.prescribedScenarioId
   const timeoutMs = options.timeoutMs ?? 1_200_000
+  let lastRequest: AgentRequest | undefined
 
   try {
     for (const turn of selected.turns) {
       const prompt = await readEvalPrompt(turn.promptPath)
-      const result = await driver.run({
+      const request: AgentRequest = {
         workspace: workspace.path,
+        sessionDir: join(workspace.path, '..', 'sessions', String(turns.length + 1)),
         prompt,
         skills: turn.skills,
         ...(options.model === undefined ? {} : { model: options.model }),
         timeoutMs,
-      })
+      }
+      lastRequest = request
+      const result = await driver.run(request)
       turns.push(result)
       transcripts.push(result.output)
       gates.push({
@@ -37,21 +45,39 @@ export async function runEval(
         detail: `exit=${String(result.exitCode)} durationMs=${result.durationMs}`,
       })
       if (!result.success) break
-      gates.push(skillActivationGate(result.output))
+      gates.push(skillActivationGate(result.output), await guidanceActivationGate(workspace.path, [result.output]))
       if (gates.some(item => !item.passed)) break
-      if (turn.checkpoint === 'proposal') gates.push(...await judgeProposalCheckpoint(workspace.path, selected))
+      if (turn.checkpoint === 'proposal') {
+        const checkpoint = await judgeProposalCheckpoint(workspace.path, selected)
+        gates.push(...checkpoint.gates)
+        selectedScenarioId ??= checkpoint.selectedScenarioId
+      }
+      if (turn.checkpoint === 'working-evidence') {
+        const checkpoint = await judgeWorkingCheckpoint(workspace.path, selected, selectedScenarioId)
+        gates.push(...checkpoint.gates)
+        workingCheckpoint = checkpoint
+        selectedScenarioId ??= checkpoint.selectedScenarioId
+      }
       if (gates.some(item => !item.passed)) break
     }
 
     if (turns.length === selected.turns.length && gates.every(item => item.passed)) {
-      gates.push(...await judgeCompletedWorkspace(workspace.path, selected, snapshots, transcripts))
+      try {
+        gates.push(...await judgeCompletedWorkspace(workspace.path, selected, snapshots, transcripts, workingCheckpoint, selectedScenarioId))
+      } catch (error) {
+        gates.push({ name: 'evaluation-error', passed: false, detail: error instanceof Error ? error.message : String(error) })
+      }
     }
+    const passed = gates.length > 0 && gates.every(item => item.passed)
+    const diagnostic = !passed && lastRequest !== undefined
+      ? await interviewFailedAgent(lastRequest, gates, selected.description, driver) : null
     const result: EvalResult = {
       caseId: selected.id,
-      passed: gates.length > 0 && gates.every(item => item.passed),
+      passed,
       workspace: workspace.path,
       turns,
       gates,
+      diagnostic,
     }
     const resultsDirectory = join(evalRepositoryRoot(), 'evals', 'results')
     await mkdir(resultsDirectory, { recursive: true })

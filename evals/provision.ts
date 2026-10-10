@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -16,34 +16,16 @@ function runNpm(args: readonly string[], cwd: string, timeoutMs: number) {
     : runProcess(process.execPath, [npmExecPath, ...args], { cwd, timeoutMs })
 }
 
-async function newestTarball(prefix: string): Promise<string | undefined> {
-  const directory = join(repositoryRoot, '.eval-cache')
-  let entries: string[]
-  try {
-    entries = await readdir(directory)
-  } catch {
-    return undefined
-  }
-  return entries.filter(entry => entry.startsWith(prefix) && entry.endsWith('.tgz')).sort().at(-1)
-}
-
-async function packDependencies(includeOpenSpec: boolean): Promise<{ focused: string; openspec?: string }> {
-  const cache = join(repositoryRoot, '.eval-cache')
-  await mkdir(cache, { recursive: true })
-  const previousFocused = await newestTarball('focused-spec-')
-  if (previousFocused !== undefined) await rm(join(cache, previousFocused), { force: true })
-  const focusedPack = await runNpm(['pack', '--pack-destination', cache], repositoryRoot, 120_000)
+async function packDependencies(includeOpenSpec: boolean, cache: string): Promise<{ focused: string; openspec?: string }> {
+  const focusedPack = await runNpm(['pack', '--ignore-scripts', '--pack-destination', cache], repositoryRoot, 120_000)
   if (focusedPack.code !== 0) throw new Error(`focused-spec pack failed: ${focusedPack.stderr || focusedPack.stdout}`)
   const focusedName = focusedPack.stdout.trim().split(/\r?\n/u).at(-1)
   if (focusedName === undefined || focusedName === '') throw new Error('focused-spec pack did not report a tarball')
   if (!includeOpenSpec) return { focused: join(cache, focusedName) }
 
-  let openspecName = await newestTarball('fission-ai-openspec-')
-  if (openspecName === undefined) {
-    const openspecPack = await runNpm(['pack', `@fission-ai/openspec@${OPEN_SPEC_VERSION}`, '--pack-destination', cache], repositoryRoot, 120_000)
-    if (openspecPack.code !== 0) throw new Error(`OpenSpec pack failed: ${openspecPack.stderr || openspecPack.stdout}`)
-    openspecName = openspecPack.stdout.trim().split(/\r?\n/u).at(-1)
-  }
+  const openspecPack = await runNpm(['pack', `@fission-ai/openspec@${OPEN_SPEC_VERSION}`, '--ignore-scripts', '--prefer-offline', '--pack-destination', cache], repositoryRoot, 120_000)
+  if (openspecPack.code !== 0) throw new Error(`OpenSpec pack failed: ${openspecPack.stderr || openspecPack.stdout}`)
+  const openspecName = openspecPack.stdout.trim().split(/\r?\n/u).at(-1)
   if (openspecName === undefined || openspecName === '') throw new Error('OpenSpec pack did not report a tarball')
   return { focused: join(cache, focusedName), openspec: join(cache, openspecName) }
 }
@@ -53,14 +35,14 @@ async function installSkills(workspace: string, skills: readonly string[], opens
   await mkdir(destination, { recursive: true })
   for (const skill of new Set(skills)) {
     const source = skill === 'focused-spec'
-      ? join(repositoryRoot, 'skills', 'focused-spec')
+      ? join(workspace, 'node_modules', 'focused-spec', 'skills', 'focused-spec')
       : join(openspecSkillsDir, skill)
     await cp(source, join(destination, skill), { recursive: true })
   }
 }
 
-async function installPackages(workspace: string, includeOpenSpec: boolean): Promise<void> {
-  const packages = await packDependencies(includeOpenSpec)
+async function installPackages(workspace: string, includeOpenSpec: boolean, cache: string): Promise<void> {
+  const packages = await packDependencies(includeOpenSpec, cache)
   const packagePath = join(workspace, 'package.json')
   const manifest = JSON.parse(await readFile(packagePath, 'utf8')) as Record<string, unknown>
   manifest.devDependencies = {
@@ -84,14 +66,23 @@ export async function provisionWorkspace(
   if (evalCase.source === 'openspec' && (openspecSkillsDir === undefined || openspecSkillsDir.trim() === '')) {
     throw new Error('OpenSpec evals require --openspec-skills <path> or OPEN_SPEC_SKILLS_DIR')
   }
-  const workspace = await mkdtemp(join(tmpdir(), `focused-spec-eval-${evalCase.id}-`))
-  await cp(join(evalRoot, 'fixtures', 'polyglot'), workspace, { recursive: true })
-  if (evalCase.source === 'openspec') await cp(join(evalRoot, 'fixtures', 'openspec'), workspace, { recursive: true })
-  if (evalCase.overlay !== undefined) await cp(join(evalRoot, evalCase.overlay), workspace, { recursive: true, force: true })
-  const skills = evalCase.turns.flatMap(turn => [...turn.skills])
-  await installSkills(workspace, skills, openspecSkillsDir ?? '')
-  await installPackages(workspace, evalCase.source === 'openspec')
-  return { path: workspace, cleanup: async () => rm(workspace, { recursive: true, force: true }) }
+  const directory = await mkdtemp(join(tmpdir(), `focused-spec-eval-${evalCase.id}-`))
+  const workspace = join(directory, 'workspace')
+  const cache = join(directory, 'packages')
+  const cleanup = async () => rm(directory, { recursive: true, force: true })
+  try {
+    await mkdir(cache)
+    await cp(join(evalRoot, 'fixtures', 'polyglot'), workspace, { recursive: true })
+    if (evalCase.source === 'openspec') await cp(join(evalRoot, 'fixtures', 'openspec'), workspace, { recursive: true })
+    if (evalCase.overlay !== undefined) await cp(join(evalRoot, evalCase.overlay), workspace, { recursive: true, force: true })
+    const skills = evalCase.turns.flatMap(turn => [...turn.skills])
+    await installPackages(workspace, evalCase.source === 'openspec', cache)
+    await installSkills(workspace, skills, openspecSkillsDir ?? '')
+    return { path: workspace, cleanup }
+  } catch (error) {
+    await cleanup()
+    throw error
+  }
 }
 
 export async function readEvalPrompt(relativePath: string): Promise<string> {

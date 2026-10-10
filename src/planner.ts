@@ -32,8 +32,8 @@ export async function planEvidence(
   let selectedScenarioFound = false
   for (const document of documents) {
     for (const scenario of document.scenarios) {
-      const scenarioId = scenario.ids[0]
-      if (scenarioId === undefined || (options.scenarioId !== undefined && scenarioId !== options.scenarioId)) continue
+      const scenarioId = scenario.id
+      if (options.scenarioId !== undefined && scenarioId !== options.scenarioId) continue
       selectedScenarioFound = true
       const selected: EvidenceUse[] = []
       for (const raw of scenario.evidence) {
@@ -152,8 +152,8 @@ export function projectExecutionPlan(
 
   for (const document of documents) {
     for (const scenario of document.scenarios) {
-      const id = scenario.ids[0]
-      if (id === undefined || (options.scenarioId !== undefined && id !== options.scenarioId)) continue
+      const id = scenario.id
+      if (options.scenarioId !== undefined && id !== options.scenarioId) continue
       selectedScenarioFound = true
 
       const evidence = scenario.evidence.flatMap(raw => {

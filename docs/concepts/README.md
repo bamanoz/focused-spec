@@ -2,58 +2,59 @@
 
 ## Focused specification
 
-A focused specification protects the smallest product-boundary outcome that can fail independently. It is intentionally smaller than a test plan and leaves implementation free to change.
+A focused specification protects the smallest product-boundary outcome that can fail independently. The owning framework's native checkable item remains the only behavioral text. `focused-spec` adds only:
 
-A scenario contains:
+- a lowercase dotted ID bound to that item;
+- one or more exact evidence references in `.focused-spec/evidence.yaml`;
+- execution results from project-local runners.
 
-- one repository-unique lowercase dotted ID;
-- one `WHEN` request;
-- one user-visible or durable `THEN` outcome;
-- one or more evidence references that form an `AND` contract.
+The ID is not a second requirement, and the registry must not repeat or reinterpret the behavior.
 
-Malformed `EVIDENCE` rows are validation errors even when other evidence rows are valid; no authored evidence may be silently omitted.
+## Native items and bindings
 
-Example:
+Version 3 discovers native `.md` and `.feature` documents. It records a native item's structural name and location; it does not infer requirements from prose or require a particular source framework.
 
-```markdown
-#### Scenario: Blocked account submits valid credentials
-- **ID**: `auth.login.blocked-account`
-- **EVIDENCE**: `go-unit::./auth::TestBlockedAccount`
-- **EVIDENCE**: `pytest-functional::tests/functional/test_auth.py::test_blocked_account`
-- **WHEN** a blocked account submits otherwise valid credentials
-- **THEN** authentication is rejected
+Editable Markdown binds an ID with `<!-- focused-spec:id=<id> -->` immediately before one heading, paragraph, or list item. A paragraph or list item may instead end with the marker inline. The marker must resolve to exactly that adjacent item.
+
+Gherkin binds an ID with `@focused.<id>` on one `Scenario` or `Scenario Outline`. Focused tags on `Feature`, `Rule`, `Background`, or `Examples` are invalid because those structures do not identify one executable scenario.
+
+When a document is generated or cannot preserve either marker, the registry may bind an explicit host-owned native ID:
+
+```yaml
+scopes:
+  current:
+    order.limit.reject-at-capacity:
+      source:
+        path: generated/SPEC.md
+        nativeId: CAP-1
+      evidence:
+        - pytest-functional::tests/test_order_limit.py::test_order_at_limit_rejects_another_item
 ```
 
-### Incremental enrollment
+`source.nativeId` is resolved only from an explicit declaration in `source.path`. Headings, line numbers, and behavior wording are not identities and are never guessed. Generated output stays unmarked.
 
-Enrollment is per scenario block, not per document or framework scope. A scenario block is focused when it contains any labeled `ID`, `EVIDENCE`, or `REVISES` row. The marker enrolls the block even when the row's value or surrounding focused shape is malformed, so malformed focused metadata produces a validation error instead of silently falling back to native prose.
+A marked item without its matching registry entry is invalid. A registry entry is also invalid when it is unbound, binds more than one native item, conflicts with another binding, or names a missing or ambiguous explicit native ID. Unmarked native content is outside focused coverage: it is neither an error nor an arbitrary count reported as if focused-spec had verified it.
 
-Configured documents may mix focused scenarios with the owning framework's native scenario blocks. Native blocks without an enrollment marker remain unenrolled: focused-spec ignores their contents for focused validation and execution, while full `validate` and every successful `run` count them across the selected document scopes as `unenrolledScenarios`, including a scenario-narrowed run. This count makes partial adoption visible; it is not evidence that those native scenarios are covered.
+## Registry identity and evidence
 
-When all discovered scopes are selected, a legacy-only scope may coexist with an enrolled scope. The selection is invalid if discovered documents contain no enrolled focused scenario. Explicitly selecting a scope that contains only unenrolled scenarios is also invalid. This permits scenario-by-scenario adoption without letting an all-native selection report focused coverage.
+Identity is the pair `(scope, ID)`. IDs are unique within a scope. The same ID may appear in another scope, but every occurrence must bind its own item and declare its own evidence. Scopes are execution contexts, not ownership or ancestry, and evidence never inherits between them.
 
-## Uniform scopes
+Evidence has the form `<runner-id>::<opaque selector>`. Only the first `::` separates the runner ID; the remainder belongs to the runner. Every reference must resolve to exactly one target and produce exactly one result. Multiple references on an entry form an AND contract.
 
-Every configured Markdown document belongs to an ordinary, path-safe scope. A document layout either names that scope explicitly with `scope: <name>` or captures exactly one `{scope}` fragment from its match pattern; it never does both or neither. Names such as `current`, `release-7`, and `baseline` have identical semantics.
+Any scope may use the `planned:` prefix while an exact target does not yet exist. Non-strict validation records but does not resolve planned references. Strict validation and execution reject them. `SKIP` and `ERROR` are not success by default.
 
-Stable IDs are unique within a scope. Across scopes, the same ID has exactly one unmarked owner; every additional occurrence needs exactly one `- **REVISES**: <source-scope>` row naming another scope with that ID. Revision chains may branch or pass through another revision, but must reach the owner without self-references, missing sources, or cycles. The relationship is explicit: framework headings and particular scope names grant no special ownership.
+The registry shape is deliberately closed: unknown fields, duplicate YAML fields, malformed IDs, malformed evidence, and malformed source bindings fail validation instead of being ignored.
 
-Document locations are framework-neutral and explicit. The CLI does not infer OpenSpec changes, Spec Kit features, Kiro requirements, archives, or fallback files. It parses focused scenario blocks from the configured Markdown and leaves native SDD prose and schema validation to the owning framework. Projects whose native format cannot host focused scenarios can configure a companion Markdown file. The [configuration guide](../guides/configuration.md) owns the exact version-2 layout contract.
+## Selection
 
-Without `--scope`, validation and execution select every discovered scope. With `--scope <name>`, both select only that scope. `run --scenario <id>` strictly validates and executes only matching scenario instances in those scopes; plain `validate` still checks every scenario in its scope selection without running tests.
+Without `--scope`, validation and execution select all registry scopes and discovered documents. With `--scope <name>`, both select only that scope. `run --scenario <id>` further isolates the selected `(scope, ID)` entries, including their binding and evidence validation; unrelated entry, binding, and evidence failures do not block that run.
 
-## Evidence
-
-Evidence has the form `<runner-id>::<opaque selector>`. Only the first `::` separates the runner ID; the remainder belongs to the runner. Every evidence row must resolve to exactly one target and produce exactly one result.
-
-Any scope may use the `planned:` prefix while an exact test target does not yet exist. Non-strict validation counts but does not resolve planned rows. Strict validation and execution reject planned evidence in every scope.
-
-A scenario passes only when every evidence target passes. `SKIP` and `ERROR` are not success by default.
+An all-scope selection with `scopes: {}` and no discovered documents is valid and empty. The registry file itself is required. Selecting a missing scope or scenario is an error.
 
 ## Runner boundary
 
-The core does not know Go, pytest, or any other framework. A project registers runner plugins in `.focused-spec/config.yaml`. The CLI loads each plugin in a child Node process, asks it to resolve selectors, then asks it to execute the resolved targets.
+The runner API is unchanged. The core does not know Go, pytest, or another test framework. A project registers runner plugins in `.focused-spec/config.yaml`; the CLI asks each plugin to resolve opaque selectors and then execute the resolved targets.
 
-Runner plugins are trusted project code. They must still use argument arrays with `shell: false`, bounded diagnostics, deterministic target IDs, and real framework exit status. A runner must never return a passing result without executing the selected test.
+Runner plugins are trusted project code. They must use safe process invocation, bounded diagnostics, deterministic target IDs, and real framework results. A runner must never return `pass` without executing the selected test.
 
 The focused behavioral contract is recorded in the [capability specs](../../openspec/specs/scenario-authoring/spec.md); the [documentation map](../README.md) links every capability.

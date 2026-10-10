@@ -10,7 +10,7 @@ export const OPEN_SPEC_SKILLS = [
 export interface EvalTurn {
   readonly promptPath: string
   readonly skills: readonly string[]
-  readonly checkpoint?: 'proposal'
+  readonly checkpoint?: 'proposal' | 'working-evidence'
 }
 
 export interface EvalCase {
@@ -20,7 +20,7 @@ export interface EvalCase {
   readonly source: 'files' | 'openspec'
   readonly changeName?: string
   readonly turns: readonly EvalTurn[]
-  readonly expectedScenarioId: string
+  readonly prescribedScenarioId?: string
   readonly expectedEvidenceCount: number
   readonly maximumEvidenceCount?: number
   readonly expectedSelectorFragments: readonly string[]
@@ -34,6 +34,11 @@ export interface AgentRequest {
   readonly skills: readonly string[]
   readonly model?: string
   readonly timeoutMs: number
+  readonly sessionDir?: string
+  readonly resume?: string
+  readonly tools?: string
+  readonly systemPrompt?: string
+  readonly appendSystemPrompt?: string
 }
 
 export interface AgentResult {
@@ -53,12 +58,20 @@ export interface EvalGate {
   readonly detail: string
 }
 
+export interface EvalDiagnostic {
+  readonly status: 'answered' | 'unavailable'
+  readonly answer: string
+  readonly transcript: string
+  readonly detail: string
+}
+
 export interface EvalResult {
   readonly caseId: string
   readonly passed: boolean
   readonly workspace: string
   readonly turns: readonly AgentResult[]
   readonly gates: readonly EvalGate[]
+  readonly diagnostic: EvalDiagnostic | null
 }
 
 export interface EvalRunOptions {

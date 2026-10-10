@@ -7,32 +7,44 @@ The binary is `focused-spec`.
 ```text
 focused-spec validate [--root <path>] [--config <path>] [--scope <name>] [--strict] [--syntax-only] [--json] [--timings]
 focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--json] [--timings]
+focused-spec agent-guide [--protocol <version>] [--topic workflow|runners] [--json]
 ```
 
 Scope names are path-safe single fragments. The CLI preserves the selected name exactly; it never treats it as a glob or path.
 
 ## Help and argument errors
 
-The root overview is available as `focused-spec --help`, `focused-spec -h`, or `focused-spec help`. It describes both commands and points to detailed help. Use `focused-spec validate --help`, `focused-spec validate -h`, or `focused-spec help validate` for validation options; use the corresponding `run` forms for execution options. Each command's help includes its purpose, supported options, defaults, selection rules, and examples.
+Use `focused-spec --help` and `<command> --help` for the installed command's options, defaults, selection rules, and examples. Explicit help exits zero without reading project configuration, the evidence registry, runner modules, or guidance assets. For a known command, help takes precedence over other options, including `--json`.
 
-Explicit help writes text to stdout and exits zero without reading `.focused-spec/config.yaml` or loading runners; it works outside a configured project. For a known command, help takes precedence over other options, including `--json`: `focused-spec run --json --help` prints text, not a JSON result. An unknown command does not become valid by adding `--help`.
+No command, an unknown command or option, a missing value, or an unknown `help` target exits nonzero with a diagnostic and the relevant help pointer.
 
-No command, an unknown command or option, a missing option value, or an unknown `help` target exits nonzero with a diagnostic on stderr and a pointer to `focused-spec --help` or the relevant `<command> --help`. Other validation and execution output contracts below are unchanged.
+## Package-owned agent guidance
+
+`agent-guide` reads the invoked package's authoritative workflow (default topic) or complete runner guidance (`--topic runners`). It works offline before project setup, creates no project or agent files, and does not perform validation or evidence execution. Invoke the consuming project's explicit installed CLI, not an unverified global binary or a downloading `npx` invocation.
+
+Loader protocol defaults to 1; it is independent of package versions, configuration version 3, and runner API version 1. The loader requests it explicitly. Protocol-1 JSON is:
+
+```json
+{
+  "protocolVersion": 1,
+  "package": { "name": "focused-spec", "version": "<installed version>" },
+  "topic": "workflow",
+  "content": "<complete Markdown guidance>"
+}
+```
+
+Text output identifies the installed package version, protocol, and topic before the Markdown. An unsupported protocol, invalid option/topic, missing value, or incomplete package exits nonzero with stderr diagnostics and no usable guidance on stdout. An explicit unsupported protocol is never silently replaced with the default. No legacy full-text skill or alternate installation is used as a fallback.
+
+```sh
+./node_modules/.bin/focused-spec agent-guide --protocol 1 --json
+./node_modules/.bin/focused-spec agent-guide --protocol 1 --topic runners --json
+```
 
 ## Validation
 
-A scenario block is enrolled when it contains any labeled `ID`, `EVIDENCE`, or `REVISES` row. This test is deliberately marker-based: a malformed marker still enrolls the block and causes a focused validation violation instead of making the block native. Blocks with none of these markers are unenrolled native scenarios.
+Validation reads version-3 configuration, the required `.focused-spec/evidence.yaml`, and selected native `.md` or `.feature` documents. It binds every selected registry entry to exactly one native item and rejects marked items without entries. Missing, detached, duplicate, conflicting, unbound, or ambiguous identities are violations.
 
-`validate --syntax-only` checks document syntax and ownership without loading runners. Full `validate` loads runners and resolves concrete evidence but does not execute tests. A successful full validation reports:
-
-- `scenarios`: every enrolled focused scenario in the validation scope, including scenarios whose evidence is entirely planned;
-- `plannedEvidence`: the number of `planned:` evidence rows;
-- `targets`: unique resolved executable targets. Planned evidence is not resolved and does not contribute to this count;
-- `unenrolledScenarios`: native scenario blocks in all documents belonging to the selected scope(s). They are counted but not focused-validated or resolved.
-
-Without `--scope`, validation covers every discovered scope. Legacy-only scopes may coexist with enrolled scopes in this all-scope selection, but discovered documents with no enrolled focused scenario anywhere fail with `no enrolled focused scenarios in discovered documents`. With `--scope <name>`, validation covers only that scope; unrelated scopes are not otherwise validated or resolved, though repository ownership checks may inspect their focused scenario IDs and revision links without resolving evidence. A requested scope with no matching documents is an error; a native-only scope fails with `scope has no focused scenarios: <name>`. A project whose layouts match no documents is valid and reports zero counts when no scope is selected.
-
-Validation text starts with `validation scope: all discovered scopes` or `validation scope: selected scope <name>`, followed by the success summary or violations. A successful full-validation summary ends with `; N unenrolled native scenarios`. Successful full-validation JSON carries the same count and context:
+`validate --syntax-only` checks configuration, registry syntax, native document syntax, scope-local identity, and binding without loading runner modules. Full `validate` additionally loads runners and resolves concrete evidence, but never executes tests. A successful full-validation JSON result retains:
 
 ```json
 {
@@ -42,96 +54,62 @@ Validation text starts with `validation scope: all discovered scopes` or `valida
   },
   "scenarios": 1,
   "plannedEvidence": 1,
-  "targets": 0,
-  "unenrolledScenarios": 3
+  "targets": 0
 }
 ```
 
-`validate --syntax-only --json` omits evidence and unenrolled-scenario counts but retains the context because it checks the same document set:
+- `scenarios` is the number of bound registry entries in the validation selection;
+- `plannedEvidence` is the number of selected `planned:` references;
+- `targets` is the number of unique resolved executable targets. Planned evidence is not resolved and does not contribute.
 
-```json
-{
-  "valid": true,
-  "mode": "syntax-only",
-  "validationScope": {
-    "scopes": { "mode": "selected", "name": "add-search" }
-  }
-}
-```
+Unmarked native content is not focused coverage and is not reported as an arbitrary native-item count. Validation failures return `valid: false`, the actual `validationScope`, and machine-readable `violations`; successful counts are omitted.
 
-Validation failures report `valid: false`, the same `validationScope`, and a machine-readable `violations` array. They do not report successful counts, including `unenrolledScenarios`.
+Non-strict validation permits planned evidence and skips its resolution. `--strict` rejects it. Use syntax-only or non-strict validation while planning, and strict validation after every selected target exists.
 
-Non-strict validation permits `planned:` evidence in every scope and skips resolving those rows. `--strict` rejects all planned evidence. Use syntax-only or non-strict validation while planning any scope; use strict validation only after its exact tests exist.
+Without `--scope`, validation selects every discovered scope and registry entry. With `--scope <name>`, it selects only that scope and ignores failures elsewhere. A missing selected scope is an error. An all-scope project with a present registry containing `scopes: {}` and no discovered documents is valid and reports zero counts; a missing registry is always an error.
 
 ## Execution and result context
 
-`run` performs strict validation before executing anything. Validation and execution use the same scope selection:
+`run` performs strict validation before executing anything:
 
-- without `--scope`, both select all discovered scopes;
-- with `--scope <name>`, both select only that scope;
-- `run --scenario <id>` narrows strict validation, evidence resolution, and execution to occurrences of that ID in the selected scope(s). With no `--scope`, matching revisions across scopes are all selected. Without `--scenario`, full selected-scope validation and execution remain unchanged. `unenrolledScenarios` still counts native blocks across all documents in the selected scope(s), not just the selected scenario.
+- without `--scope`, binding, resolution, and execution select all scopes;
+- with `--scope <name>`, they select only that scope;
+- `run --scenario <id>` selects only matching `(scope, ID)` entries, including their native bindings and evidence. Unrelated entry, binding, and evidence failures do not prevent that selected run.
 
-Strict `run` resolves concrete evidence for exactly its validation selection once, then executes those already-resolved targets. Malformed, planned, or unresolved evidence in the selected scenario prevents execution; evidence errors in unrelated scenarios do not block `run --scenario`. Plain `validate`, including `validate --strict`, still checks all scenarios in its selected scope(s) but never executes tests.
+With no `--scope`, a repeated ID selects each matching scope independently and uses each entry's evidence. Shared resolved targets remain deduplicated; same-ID reuse does not merge scenario results or inherit evidence. Plain `validate`, including `validate --strict`, still checks its complete selected scope set and never executes tests.
 
-Text output begins with exactly one of these validation lines:
+Text output begins with validation and execution context lines such as:
 
 ```text
 validation scope: all discovered scopes
-validation scope: selected scope add-search
-validation scope: selected scope add-search, scenario search.results.empty
+execution selection: all discovered scopes
 ```
 
-It is followed by the corresponding execution line; a selected scenario is appended when present:
+or:
 
 ```text
-execution selection: all discovered scopes
+validation scope: selected scope add-search, scenario search.results.empty
 execution selection: selected scope add-search, scenario search.results.empty
 ```
 
-JSON output includes these stable neutral context objects and the top-level native-scenario count:
+Completed JSON retains `executionStarted`, `validationScope`, `executionSelection`, `success`, the `scenarios` result array, and `targetCount`. Both context objects use `scopes: { "mode": "all" }` for all-scope execution or `scopes: { "mode": "selected", "name": "<scope>" }` for one scope. When `--scenario` is present, both also contain that scenario ID.
 
-```json
-{
-  "executionStarted": true,
-  "validationScope": {
-    "scopes": { "mode": "selected", "name": "add-search" },
-    "scenario": "search.results.empty"
-  },
-  "executionSelection": {
-    "scopes": { "mode": "selected", "name": "add-search" },
-    "scenario": "search.results.empty"
-  },
-  "unenrolledScenarios": 3
-}
-```
+Every scenario result includes its `scope`. Multi-scope text rows include `[<scope>]`; selected-scope rows omit that prefix. No execution output includes an unverified native-item count.
 
-For a run without `--scope`, both context objects contain `scopes: { "mode": "all" }`; `--scenario` adds the same `scenario` ID to both. When `--scenario` is absent, both scenario properties are omitted. Every scenario result includes its `scope`. In multi-scope text output, scenario rows use `PASS [<scope>] <scenario-id>` (and the corresponding non-pass status); selected-scope rows omit the bracketed prefix. The successful run summary ends with `; N unenrolled native scenarios`. Completed run JSON also retains `success`, `scenarios`, `targetCount`, and `unenrolledScenarios`. A successful run with no discovered scopes has `executionStarted: false`, `scenarios: []`, `targetCount: 0`, and `unenrolledScenarios: 0`: no test was executed and no scenario is reported as passing.
+If configuration, registry parsing, native binding, selected evidence resolution, or strict validation fails before execution, text says `execution did not start`. JSON reports `valid: false`, `executionStarted: false`, actual selection context, and `violations`, and omits execution result fields. A scenario ID absent from the selected scope or scopes follows this failure contract. Scope-wide validation is not implied by a successful scenario-only run.
 
-If configuration, discovery, selected-scenario validation, or evidence resolution fails before tests run, text output says `execution did not start`. JSON reports `valid: false`, `executionStarted: false`, the actual `validationScope` and `executionSelection`, and the machine-readable `violations` array. It omits execution result fields and `unenrolledScenarios`, so it never claims that the selection ran. An explicitly missing or native-only selected scope, an all-scope selection whose discovered documents are all native, or a scenario ID absent from the selected scope(s) follows this failure contract. Scope-wide validation is not implied by a successful scenario-only run.
-
-`--allow-skip` is valid only for `run`. It permits a skipped scenario to produce a successful process exit without relabelling it as passed. Scenario and target statuses are `PASS`, `FAIL`, `SKIP`, and `ERROR`; only `PASS` is successful by default.
-
-The CLI exits nonzero on invalid configuration, discovery violations, unresolved evidence, failed execution, errors, or disallowed skips.
+`--allow-skip` applies only to `run`. It permits a skipped scenario to produce a successful process exit without relabelling it as passed. Scenario and target statuses are `PASS`, `FAIL`, `SKIP`, and `ERROR`; only `PASS` succeeds by default. The CLI exits nonzero on invalid configuration, missing or invalid registry, discovery or binding violations, unresolved evidence, failed execution, errors, or disallowed skips.
 
 ## Timing output
 
-`--timings` adds a `timings` object to JSON or a `timings:` line to text output. Fields are elapsed milliseconds: `validationMs` covers document discovery and structural validation, `resolutionMs` covers runner resolution, `executionMs` covers execution (including partition planning and scheduling wait), and `totalMs` covers the command from argument parsing until output construction begins. A phase appears only if reached; validation failures retain timings for reached phases. The execution phase is absent when execution does not start. These phases do not cover all of `totalMs`, and concurrent activities can overlap; do not sum them to infer wall time. Without `--timings`, result fields and text remain unchanged.
+`--timings` adds a `timings` object to JSON or a `timings:` line to text. `validationMs` covers registry loading, document discovery, parsing, and binding; `resolutionMs` covers runner resolution; `executionMs` covers execution and scheduling; `totalMs` covers the command until output construction begins. A phase appears only when reached. Concurrent activities may overlap, so phase values are not additive.
 
 ## Execution concurrency
 
-The optional `execution.maxConcurrentGroups` project setting is a positive integer, defaulting to 1. Above 1, the core may overlap only resource-compatible groups explicitly returned by a runner's optional `partition` method; legacy and explicitly exclusive groups remain exclusive. It does not configure the underlying framework worker count and it does not coordinate other CLI processes. See the [runner API](runner-api.md) for group validation and result semantics.
+`execution.maxConcurrentGroups` is a positive integer and defaults to 1. Above 1, core overlaps only resource-compatible groups returned by a runner's optional `partition` method. Runners without partition support and explicitly exclusive groups remain exclusive. This setting does not configure framework worker counts or coordinate other CLI processes. See the [runner API](runner-api.md).
 
-## Configuration
+## Configuration and version-2 migration
 
-The default config is `.focused-spec/config.yaml` under `--root`. A relative `--config` path is resolved from the selected project root. Configuration requires `version: 2`, a nonempty `specifications.documents` list, and a `runners` object. The [configuration guide](../guides/configuration.md) is the normative layout and migration reference.
+The default config is `.focused-spec/config.yaml` under `--root`; a relative `--config` path resolves from that root. Configuration requires `version: 3`, a nonempty `specifications.documents` list, and a `runners` object. The required evidence registry remains at `.focused-spec/evidence.yaml` even when `--config` selects another config path.
 
-## Uniform-scope result migration
-
-The uniform model is a clean result-context cutover. No aliases are emitted for old baseline/current/change fields, and no scope name receives privileged semantics. In consumers of JSON:
-
-- replace current/change/baseline validation context with `validationScope.scopes: { "mode": "all" }` or `{ "mode": "selected", "name": <name> }`;
-- replace source-specific execution context with `executionSelection.scopes` using the same all-or-selected shape;
-- retain an optional `executionSelection.scenario` only when `--scenario` was supplied;
-- read each scenario result's `scope` when correlating repeated IDs.
-
-Configuration remains version 2. The older `--change <name>` option still has no compatibility alias; use `--scope <name>`. Project runner plugins require no change; `partition` remains an optional addition to the `apiVersion: 1` runner API.
+Version 2 has no compatibility alias. Upgrade the version, keep document layouts and runner/execution settings, move bold `ID`/`EVIDENCE` rows into the registry, and bind IDs on canonical native items. The [configuration guide](../guides/configuration.md#migrate-from-version-2) is the migration reference. Runner plugins remain on `apiVersion: 1` and require no migration.

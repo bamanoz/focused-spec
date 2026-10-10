@@ -1,0 +1,255 @@
+scopes:
+  current:
+    scenario.identity.duplicate-document:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects one marker ID bound to multiple native items"]
+    scenario.identity.independent-scopes:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > accepts the same ID in independent scopes"]
+    scenario.identity.explicit-evidence:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > does not inherit evidence from another scope with the same ID"]
+    scenario.evidence.required:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > does not inherit evidence from another scope with the same ID"]
+    scenario.evidence.malformed-row:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects malformed evidence alongside valid evidence before execution"]
+    scenario.evidence.opaque-selector:
+      evidence: ["vitest::test/core.spec.ts::evidence registry parsing > parses planned evidence and opaque runner selectors"]
+    native.registry.closed-schema:
+      evidence: ["vitest::test/core.spec.ts::evidence registry parsing > rejects unknown and duplicate registry keys"]
+    scenario.enrollment.mixed-document:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > runs marked outcomes beside untouched native content"]
+    native.binding.markdown.heading:
+      evidence: ["vitest::test/core.spec.ts::native specification parsing > binds a marker to the immediately following Markdown item"]
+    native.binding.markdown.items:
+      evidence: ["vitest::test/core.spec.ts::native specification parsing > binds markers to Markdown paragraphs and list items"]
+    native.binding.markdown.detached:
+      evidence: ["vitest::test/core.spec.ts::native specification parsing > rejects detached and duplicate Markdown markers"]
+    native.binding.markdown.fenced:
+      evidence: ["vitest::test/core.spec.ts::native specification parsing > ignores marker-looking text in fenced code blocks"]
+    native.binding.gherkin.tags:
+      evidence: ["vitest::test/core.spec.ts::native specification parsing > attaches Gherkin tags only to Scenario and Scenario Outline"]
+    native.binding.gherkin.selected-error:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects inherited Gherkin tags for the selected ID without blocking unrelated IDs"]
+    native.binding.external.unique:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > requires external native IDs to resolve uniquely"]
+    native.binding.registry.dangling:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects a dangling registry entry"]
+    native.binding.obsolete.inline:
+      evidence: ["vitest::test/core.spec.ts::native specification parsing > rejects obsolete focused rows instead of interpreting the legacy format"]
+    config.document.invalid:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > reports missing and malformed configuration"]
+    config.runner.timeout-bound:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects runner timeouts that overflow the host timer"]
+    config.runner.invalid-options:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid runner paths and non-JSON options"]
+    config.layout.invalid:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects unsafe document layouts and escaped specification symlinks"]
+    config.format.version-three:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects obsolete version 2 configuration with migration guidance"]
+    config.registry.required:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects a missing evidence registry"]
+    config.source.empty-files:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > preserves successful validation and execution for an empty registry"]
+    config.source.openspec-discovery:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > reports all scenarios, planned evidence, and unique resolved targets"]
+    config.source.layout-variants:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > discovers fixed and captured scope documents from declared patterns"]
+    config.source.missing-scope:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects a selected scope with no documents"]
+    config.source.empty-scope-document:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects selections containing only unmarked native content"]
+    config.source.overlap:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects a document claimed by multiple layouts"]
+    config.source.mixed-scope-enrollment:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > runs marked outcomes beside untouched native content"]
+    config.source.legacy-only-selection:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects selections containing only unmarked native content"]
+    validation.mode.syntax-only:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > validates binding without importing runner modules in syntax only mode"]
+    validation.mode.counts:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > reports all scenarios, planned evidence, and unique resolved targets"]
+    validation.planned.strict-policy:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > allows planned evidence only during non-strict validation"]
+    validation.identity.independent-scopes:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > accepts the same ID in independent scopes"]
+    validation.scope.unselected-error:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > runs a selected scenario despite unrelated entry binding and evidence failures"]
+    validation.scope.selected-own-errors:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid or missing selected scenarios before execution"]
+    validation.scope.selected-only:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > validates a selected scope independently of another same-ID scope"]
+    validation.enrollment.partial-coverage:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > runs marked outcomes beside untouched native content"]
+    validation.enrollment.selected-coverage:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > runs a selected scenario despite unrelated entry binding and evidence failures"]
+    cli.help.overview:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state"]
+    cli.help.validate:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state"]
+    cli.help.run:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state"]
+    cli.help.no-config:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state"]
+    cli.help.invalid-invocation:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid invocations without treating them as successful help"]
+    execution.selection.current:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > runs all scopes and disambiguates repeated scenario IDs"]
+    execution.selection.change-scenario:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > reports selected scope and scenario execution independently"]
+    execution.selection.shared-id:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > validates and runs every matching scope for a selected scenario ID"]
+    execution.selection.missing-scenario:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid or missing selected scenarios before execution"]
+    execution.selection.missing-scope:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects a selected scope with no documents"]
+    execution.targets.shared:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > runs one shared target once for two scenarios"]
+    execution.status.skip-policy:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > does not claim skipped evidence as passing"]
+    execution.status.fail:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > propagates a failing target to the scenario and process result"]
+    execution.status.error:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > reports runner execution errors without a false pass"]
+    execution.status.empty:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > preserves successful validation and execution for an empty registry"]
+    execution.resolution.reuse:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > resolves a shared target once for scoped execution"]
+    execution.resolution.scoped-id:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > executes only selected-scope evidence for the same scenario ID"]
+    execution.resolution.strict-unselected:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > runs a selected scenario despite unrelated entry binding and evidence failures"]
+    execution.timings.opt-in:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > reports phase timings only when requested"]
+    execution.timings.failure:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > reports reached timings on unresolved evidence without starting execution"]
+    execution.groups.independent:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > overlaps independent groups within the configured limit"]
+    execution.groups.conflict:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > serializes groups with a shared resource across runners"]
+    execution.groups.failure:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > reports grouped runner failures without claiming evidence passed"]
+    distribution.package.cli:
+      evidence: ["vitest::test/package.spec.ts::package distribution > installs and executes the packed CLI from a consumer project"]
+    distribution.package.runner-api:
+      evidence: ["vitest::test/package.spec.ts::package distribution > typechecks a consumer plugin against focused-spec runner"]
+    distribution.skill.separate-install:
+      evidence: ["vitest::test/package.spec.ts::package distribution > installs the CLI without creating an agent skill or runner"]
+    agent.proposal.planning-only:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > rejects a proposal that creates configuration or a planned evidence registry"]
+    agent.apply.mutation-sensitive:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > rejects applied evidence that misses a controlled product regression"]
+    agent.evidence.vacuous-repair:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > rejects vacuous evidence even after product repair and requires an agent sensitivity probe"]
+    agent.eval.failed-turn:
+      evidence:
+        - "vitest::test/evals.spec.ts::agent eval harness > records a failed agent turn without running downstream judges"
+        - "vitest::test/evals.spec.ts::agent eval harness > keeps post-failure recommendations outside scored agent turns"
+        - "vitest::test/evals.spec.ts::agent eval harness > retains the failed score when the research interview cannot complete"
+    agent.eval.protected-files:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > rejects protected test and package changes in an evaluated workspace"]
+    agent.eval.skill-activation:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > stops an OpenSpec turn before judging artifacts if the agent skipped the skill"]
+    agent.eval.native-cli-evidence:
+      evidence: ["vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > recognizes completed selected CLI evidence without crediting validation or failed commands"]
+    agent.adoption.preserve-native:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery"]
+    agent.adoption.surviving-evidence:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery"]
+    agent.adoption.evidence-continuity:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > detects lost or altered evidence across document transitions"]
+    agent.eval.scoped-identity:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > judges the selected scope when another scope has the same ID"]
+    agent.eval.provisioning-isolation:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > provisions parallel workspaces without rebuilding shared distribution"]
+    agent.eval.lifecycle-checkpoint:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > judges working evidence before sync removes its discovery"]
+    agent.eval.lifecycle-stop:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > stops before sync when working evidence fails"]
+    runner.lifecycle.real-invocation:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > resolve and execute exact evidence through an isolated runner host"]
+    runner.lifecycle.timeout:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > reports an unresponsive runner as an error after timeout"]
+    runner.resolve.unresolved:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > reports reached timings on unresolved evidence without starting execution"]
+    runner.resolve.cardinality:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > rejects duplicate missing and unknown selector resolutions"]
+    runner.resolve.source-boundary:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > rejects a resolved source outside the project root"]
+    runner.run.cardinality:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > rejects missing duplicate and unknown target results"]
+    runner.partition.selected-targets:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > partitions only selected targets into exact executable groups"]
+    runner.partition.invalid:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > rejects an invalid partition without running that runner's targets"]
+    runner.partition.legacy-exclusive:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > runs an unmodified runner exclusively with bounded concurrency"]
+    runner.partition.default-serial:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > leaves partition dormant with the default serial limit"]
+    runner.partition.uncovered-exclusive:
+      evidence: ["vitest::test/integration.spec.ts::project-local TypeScript runners > keeps targets with unknown resource compatibility exclusive"]
+    agent.eval.authored-identity:
+      evidence:
+        - "vitest::test/evals.spec.ts::agent eval harness > accepts a newly authored valid identity when the task prescribes none"
+        - "vitest::test/evals.spec.ts::agent eval harness > rejects a renamed, ambiguous, missing, or invalid identity after selection"
+        - "vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > accepts the bound native outcome without requiring hidden host headings"
+    agent.eval.prescribed-identity:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > rejects replacement of a prescribed identity"]
+    agent.eval.host-guidance:
+      evidence:
+        - "vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > accepts only completed reads of applicable Spec Kit authoring guidance"
+        - "vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > requires the official BMad workflow even when integration guidance is loaded"
+    agent.eval.plan-confirmation:
+      evidence:
+        - "vitest::test/acp-agent.spec.ts::genuine planning consent > accepts only explicit proposed-path consent and preserves cancellation or refinement"
+        - "vitest::test/acp-agent.spec.ts::genuine planning consent > keeps host questions independent from runtime plan approval"
+        - "vitest::test/acp-agent.spec.ts::genuine planning consent > recognizes exact companion paths from the authoritative submitted plan"
+    agent.eval.native-denial:
+      evidence: ["vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > accepts denial wording only for one unmarked atomic BMad CAP-1 outcome"]
+    agent.eval.configured-working-scope:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > executes the named change in its configured scope and rejects ambiguous or foreign bindings"]
+    agent.eval.host-dialogue:
+      evidence:
+        - "vitest::test/dialogue.spec.ts::authoring dialogue consent > permits the confirmed revision without authorizing a different metadata file"
+        - "vitest::test/dialogue.spec.ts::authoring dialogue consent > fails unfinished dialogue at the turn limit instead of claiming completion"
+  cli-owned-agent-guidance:
+    guidance.delivery.offline:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > serves workflow guidance without project setup"]
+    guidance.delivery.runners:
+      evidence: ["vitest::test/package.spec.ts::package distribution > serves complete runner guidance from the installed package"]
+    guidance.delivery.compatible-update:
+      evidence: ["vitest::test/package.spec.ts::package distribution > refreshes guidance after a compatible package replacement"]
+    guidance.delivery.incompatible-protocol:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects unsupported guide protocols without returning instructions"]
+    guidance.delivery.invalid-request:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid guide requests with actionable help"]
+    guidance.delivery.incomplete-package:
+      evidence: ["vitest::test/package.spec.ts::package distribution > rejects missing authoritative guidance without fallback"]
+    distribution.package.agent-guidance:
+      evidence: ["vitest::test/package.spec.ts::package distribution > serves guidance from a source-independent packed installation"]
+    cli.help.overview:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state"]
+    cli.help.validate:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state"]
+    cli.help.run:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state"]
+    cli.help.agent-guide:
+      evidence: ["vitest::test/cli.spec.ts::focused-spec CLI > explains guide compatibility without loading package guidance"]
+    agent.guidance.project-local:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > rejects global guidance in place of the project installation"]
+    agent.guidance.unavailable:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > rejects absent or legacy local guidance activation"]
+    agent.guidance.invalid-response:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > rejects completed but unusable guidance responses"]
+    agent.guidance.session-refresh:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > requires fresh guidance for a subsequent workflow step"]
+    agent.eval.failed-turn:
+      evidence:
+        - "vitest::test/evals.spec.ts::agent eval harness > records a failed agent turn without running downstream judges"
+        - "vitest::test/evals.spec.ts::agent eval harness > keeps post-failure recommendations outside scored agent turns"
+        - "vitest::test/evals.spec.ts::agent eval harness > retains the failed score when the research interview cannot complete"
+    agent.eval.protected-files:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > rejects protected test and package changes in an evaluated workspace"]
+    agent.eval.skill-activation:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > rejects agent turns that never load the focused-spec skill"]
+    agent.eval.native-cli-evidence:
+      evidence: ["vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > recognizes completed selected CLI evidence without crediting validation or failed commands"]
+    agent.eval.guidance-activation:
+      evidence: ["vitest::test/evals.spec.ts::agent eval harness > requires completed local workflow guidance after loader activation"]

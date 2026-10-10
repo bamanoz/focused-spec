@@ -23,7 +23,7 @@ async function fixture(status: 'pass' | 'skip' = 'pass'): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'focused-spec-'))
   roots.push(root)
   await put(root, '.focused-spec/config.yaml', [
-    'version: 2',
+    'version: 3',
     'specifications:',
     '  documents:',
     '    - match: openspec/specs/**/spec.md',
@@ -33,13 +33,18 @@ async function fixture(status: 'pass' | 'skip' = 'pass'): Promise<string> {
     '  fixture:',
     '    module: ./runner.ts',
   ].join('\n'))
+  await put(root, '.focused-spec/evidence.yaml', [
+    'scopes:',
+    '  current:',
+    '    fixture.runner.executes:',
+    '      evidence: ["fixture::behavior"]',
+  ].join('\n'))
   await put(root, 'openspec/specs/example/spec.md', [
     '### Requirement: Observable behavior',
+    '<!-- focused-spec:id=fixture.runner.executes -->',
     '#### Scenario: Project runner proves behavior',
-    '- **ID**: `fixture.runner.executes`',
-    '- **EVIDENCE**: `fixture::behavior`',
-    '- **WHEN** focused evidence is requested',
-    '- **THEN** the project runner returns its observable result',
+    '',
+    'The project runner returns its observable result.',
   ].join('\n'))
   await put(root, 'runner.ts', [
     'type Selector = string',
@@ -90,6 +95,9 @@ function executionPlan(root: string, runners: readonly TestRunner[]): ExecutionP
     scenarios: targets.map(target => ({
       scope: 'current',
       id: `${target.runnerId}.${target.target.targetId}`,
+      path: `specs/${target.runnerId}.md`,
+      line: 1,
+      name: target.target.displayName,
       evidence: [{ key: target.key, reference: target.references[0] as string }],
     })),
   }
@@ -138,6 +146,15 @@ async function schedulerRoot(runners: Readonly<Record<string, string>>): Promise
   const root = await mkdtemp(join(tmpdir(), 'focused-spec-scheduler-'))
   roots.push(root)
   for (const [path, source] of Object.entries(runners)) await put(root, path, source)
+  await put(root, '.focused-spec/config.yaml', [
+    'version: 3',
+    'specifications:',
+    '  documents:',
+    '    - match: specs/**/*.md',
+    '      scope: current',
+    'runners: {}',
+  ].join('\n'))
+  await put(root, '.focused-spec/evidence.yaml', 'scopes: {}\n')
   return root
 }
 
@@ -232,16 +249,23 @@ describe('project-local TypeScript runners', () => {
     const root = await fixture()
     await put(root, 'openspec/specs/example/spec.md', [
       '### Requirement: Shared result',
+      '<!-- focused-spec:id=fixture.shared.first -->',
       '#### Scenario: First consumer',
-      '- **ID**: `fixture.shared.first`',
-      '- **EVIDENCE**: `fixture::behavior`',
-      '- **WHEN** the first consumer requests the shared target',
-      '- **THEN** it receives the target result',
+      '',
+      'The first consumer receives the target result.',
+      '',
+      '<!-- focused-spec:id=fixture.shared.second -->',
       '#### Scenario: Second consumer',
-      '- **ID**: `fixture.shared.second`',
-      '- **EVIDENCE**: `fixture::behavior`',
-      '- **WHEN** the second consumer requests the shared target',
-      '- **THEN** it receives the same target result',
+      '',
+      'The second consumer receives the same target result.',
+    ].join('\n'))
+    await put(root, '.focused-spec/evidence.yaml', [
+      'scopes:',
+      '  current:',
+      '    fixture.shared.first:',
+      '      evidence: ["fixture::behavior"]',
+      '    fixture.shared.second:',
+      '      evidence: ["fixture::behavior"]',
     ].join('\n'))
     await put(root, 'runner.ts', [
       "import { appendFile } from 'node:fs/promises'",
@@ -274,7 +298,7 @@ describe('project-local TypeScript runners', () => {
     await put(root, 'package.json', '{"private":true,"type":"module"}\n')
     await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'junction')
     await put(root, '.focused-spec/config.yaml', [
-      'version: 2',
+      'version: 3',
       'specifications:',
       '  documents:',
       '    - match: features/{scope}/spec.md',
@@ -283,13 +307,18 @@ describe('project-local TypeScript runners', () => {
       '    module: ./.focused-spec/runners/vitest.ts',
       '    timeoutMs: 120000',
     ].join('\n'))
+    await put(root, '.focused-spec/evidence.yaml', [
+      'scopes:',
+      '  account-lock:',
+      '    fixture.vitest.scope:',
+      '      evidence: ["vitest::test/contract.spec.ts::fixture contract > accepts configured value"]',
+    ].join('\n'))
     await put(root, '.focused-spec/runners/vitest.ts', await readFile(fileURLToPath(new URL('../.focused-spec/runners/vitest.ts', import.meta.url)), 'utf8'))
     await put(root, 'features/account-lock/spec.md', [
+      '<!-- focused-spec:id=fixture.vitest.scope -->',
       '#### Scenario: Vitest proves the named scope',
-      '- **ID**: `fixture.vitest.scope`',
-      '- **EVIDENCE**: `vitest::test/contract.spec.ts::fixture contract > accepts configured value`',
-      '- **WHEN** the named scope is executed',
-      '- **THEN** the real Vitest result determines the scenario status',
+      '',
+      'The real Vitest result determines the scenario status.',
     ].join('\n'))
     const testPath = 'test/contract.spec.ts'
     await put(root, testPath, [
@@ -346,7 +375,7 @@ describe('project-local TypeScript runners', () => {
       { targetIds: ['not-selected'], resources: [] },
     ] }))
     await put(root, '.focused-spec/config.yaml', [
-      'version: 2',
+      'version: 3',
       'specifications:',
       '  documents:',
       '    - match: specs/**/*.md',
@@ -373,7 +402,7 @@ describe('project-local TypeScript runners', () => {
 
     for (const invalid of ['0', '1.5', 'nope']) {
       await put(root, '.focused-spec/config.yaml', [
-        'version: 2',
+        'version: 3',
         'specifications:',
         '  documents:',
         '    - match: specs/**/*.md',

@@ -1,7 +1,7 @@
-version: 2
+version: 3
 specifications:
   documents:
-    - match: _bmad-output/specs/spec-{scope}/scenarios.md
+    - match: _bmad-output/specs/spec-{scope}/SPEC.md
 runners:
   pytest-functional:
     module: ./.focused-spec/runners/pytest.ts

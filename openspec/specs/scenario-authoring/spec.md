@@ -2,99 +2,100 @@
 
 ## Purpose
 
-Focused scenario identity, shape, and evidence references.
+Native item identity, unique binding, and evidence-only registry.
 
 ## Requirements
 
 ### Requirement: Focused scenario identity
-A focused scenario SHALL have one lowercase dotted stable ID that is unique within its scope. Across scopes, the same ID MAY appear only when exactly one occurrence is the unmarked owner and every other occurrence has exactly one `- **REVISES**: <source-scope>` row naming an existing same-ID scenario in another scope. Revision chains SHALL reach that owner without self-references or cycles; multiple scopes MAY independently revise one source. Section headers such as OpenSpec `MODIFIED Requirements` and scope names such as `baseline` SHALL NOT confer revision rights. Independent outcomes SHALL use independent scenarios.
+Each bound native item SHALL have one lowercase dotted stable ID unique within its scope and SHALL identify one independently failing outcome. The same ID MAY occur independently in separate scopes, but every occurrence SHALL bind its own item and declare its own evidence without ownership, revision links, ancestry inference, or evidence inheritance.
 
-#### Scenario: Duplicate stable ID in separate documents
-- **ID**: `scenario.identity.duplicate-document`
-- **EVIDENCE**: `vitest::test/core.spec.ts::focused specification parsing > rejects malformed shape, unknown runners, and duplicate ownership`
-- **WHEN** two specification documents in one scope claim the same scenario ID
-- **THEN** validation reports the within-scope duplicate instead of accepting both
+<!-- focused-spec:id=scenario.identity.duplicate-document -->
+#### Scenario: Duplicate identity binds two native items
+- **WHEN** two native items in one scope declare the same focused marker ID
+- **THEN** validation rejects the duplicate instead of accepting both
 
-#### Scenario: Missing or multiple scenario fields
-- **ID**: `scenario.shape.cardinality`
-- **EVIDENCE**: `vitest::test/core.spec.ts::focused specification parsing > rejects scenarios without exactly one ID WHEN and THEN`
-- **WHEN** a scenario has zero or multiple ID, WHEN, or THEN rows
-- **THEN** validation rejects its shape with an actionable violation
+<!-- focused-spec:id=scenario.identity.independent-scopes -->
+#### Scenario: Independent scopes reuse an identity
+- **WHEN** separate scopes bind the same stable ID to their own native items and evidence
+- **THEN** validation accepts both independent occurrences
 
-#### Scenario: Explicit cross-scope revision
-- **ID**: `scenario.identity.explicit-revision`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > accepts revisions from an unselected source without resolving its evidence`
-- **WHEN** a scenario keeps an ID from another scope and declares one REVISES row naming that same-ID source scope
-- **THEN** validation accepts the revision without using framework-specific headings or privileged scope names
-
-#### Scenario: Baseline is an ordinary source name
-- **ID**: `scenario.identity.baseline-ordinary`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > treats baseline as an ordinary revision source name`
-- **WHEN** a scope named baseline owns an ID and a different scope explicitly revises it
-- **THEN** validation accepts the relationship by the same rules as every other pair of scope names
-
-#### Scenario: Revision source does not own the ID
-- **ID**: `scenario.identity.invalid-revision`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects revisions without an owning source scope`
-- **WHEN** a scenario declares REVISES for a source scope that has no scenario with the same ID
-- **THEN** validation rejects the orphan revision with its location, ID, and source scope
-
-#### Scenario: Scope cannot revise itself
-- **ID**: `scenario.identity.baseline-revision`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects revisions from the same scope`
-- **WHEN** a scenario declares its own scope in a REVISES row
-- **THEN** validation rejects the self-reference rather than treating the scope name specially
-
-#### Scenario: Ambiguous revision marker
-- **ID**: `scenario.identity.malformed-revision`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects malformed and repeated revision markers`
-- **WHEN** a scenario declares malformed or repeated REVISES rows
-- **THEN** validation rejects the ambiguous revision instead of allowing ID reuse
-
-#### Scenario: Revision cycle has no owner
-- **ID**: `scenario.identity.revision-cycle`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects cyclic revision ownership`
-- **WHEN** every occurrence of one ID revises another occurrence and their links form a cycle
-- **THEN** validation rejects the cycle because no chain reaches one unmarked owner
+<!-- focused-spec:id=scenario.identity.explicit-evidence -->
+#### Scenario: Evidence cannot be inherited
+- **WHEN** a selected marked item lacks its own registration while another scope registers the same ID
+- **THEN** validation rejects the selected occurrence without inheriting evidence
 
 ### Requirement: Evidence rows
-Each scenario SHALL name at least one evidence reference in the form `[planned:]<runner-id>::<opaque selector>`. Every authored evidence row SHALL be preserved for validation and multiple rows form an AND contract.
+Evidence SHALL live only in the required .focused-spec/evidence.yaml registry, keyed by scope and stable ID. The registry SHALL contain only a scopes mapping; entries SHALL contain a nonempty evidence list and optional external source mapping containing exactly path and nativeId. Unknown or duplicate fields and behavioral text fields SHALL fail validation. References SHALL use [planned:]<runner-id>::<opaque selector>; every reference SHALL be checked and multiple references form an AND contract.
 
-#### Scenario: Missing evidence
-- **ID**: `scenario.evidence.required`
-- **EVIDENCE**: `vitest::test/core.spec.ts::focused specification parsing > rejects a scenario without evidence`
-- **WHEN** a scenario declares no EVIDENCE row
-- **THEN** validation rejects the scenario rather than treating it as proved
+<!-- focused-spec:id=scenario.evidence.required -->
+#### Scenario: Every occurrence needs explicit evidence
+- **WHEN** a native marker has no own scope-local registry evidence
+- **THEN** validation rejects that occurrence even when another scope has evidence
 
-#### Scenario: Malformed evidence alongside valid evidence
-- **ID**: `scenario.evidence.malformed-row`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > rejects malformed evidence rows rather than passing on the remaining evidence`
-- **WHEN** a scenario contains a valid EVIDENCE row and another EVIDENCE row without its required syntax
-- **THEN** run fails validation at the malformed row before reporting any PASS
+<!-- focused-spec:id=scenario.evidence.malformed-row -->
+#### Scenario: Malformed evidence cannot be hidden by valid evidence
+- **WHEN** a registration contains both valid and malformed evidence references
+- **THEN** run rejects the malformed reference before execution
 
-#### Scenario: Opaque selector retains its internal separators
-- **ID**: `scenario.evidence.opaque-selector`
-- **EVIDENCE**: `vitest::test/core.spec.ts::focused specification parsing > parses a focused scenario and opaque runner selector`
-- **WHEN** an evidence reference contains additional `::` within its selector
-- **THEN** the reference is split only at the first `::` and the remaining selector is preserved
+<!-- focused-spec:id=scenario.evidence.opaque-selector -->
+#### Scenario: Opaque selector keeps internal separators
+- **WHEN** a registry reference contains planned evidence and additional selector separators
+- **THEN** only the first separator splits the runner ID and the remaining selector is preserved
+
+<!-- focused-spec:id=native.registry.closed-schema -->
+#### Scenario: Duplicate or behavioral registry fields fail
+- **WHEN** registry YAML repeats a key or includes an unsupported behavioral field
+- **THEN** the registry is rejected rather than treating it as another behavior source
 
 ### Requirement: Native scenario enrollment
-A scenario in a configured Markdown document SHALL enter the focused-spec contract if its block contains an `ID`, `EVIDENCE`, or `REVISES` row label, including a malformed row with that label. A scenario without any of these labels SHALL remain an unenrolled native scenario and SHALL NOT require focused fields, resolve evidence, or receive a focused result. Enrolled scenarios SHALL satisfy the existing ID, WHEN, THEN, EVIDENCE, and revision rules. WHEN and THEN alone SHALL NOT enroll a scenario.
+Behavior SHALL remain solely in the host native checkable item. Editable Markdown SHALL bind one heading, paragraph, or list item through an adjacent focused-spec HTML marker placed before the item, or inline at the end of a paragraph/list item. At most one blank line is permitted; intervening structural nodes and larger gaps detach the marker. Markers inside code examples SHALL NOT enroll an item. Gherkin focused tags SHALL bind only Scenario or Scenario Outline, not inherited Feature/Rule/Examples tags. Generated or unmarked items MAY use an explicit registry source.path and source.nativeId declaration; resolution SHALL be unique within that exact configured document, never inferred from headings, lines, or wording. Every marker SHALL have a registry entry and every registration SHALL uniquely bind one native item. Obsolete inline focused rows SHALL be rejected. Host behavioral meaning and native-format validity SHALL NOT be certified by focused-spec.
 
-#### Scenario: Native and enrolled outcomes share one document
-- **ID**: `scenario.enrollment.mixed-document`
-- **EVIDENCE**: `vitest::test/cli.spec.ts::focused-spec CLI > runs enrolled outcomes beside untouched native scenarios`
-- **WHEN** a configured document contains a native scenario without focused metadata and a valid enrolled scenario
-- **THEN** only the enrolled scenario is validated and executed while the native scenario remains unchanged and receives no PASS
+<!-- focused-spec:id=scenario.enrollment.mixed-document -->
+#### Scenario: Registered evidence beside untouched native content
+- **WHEN** a document contains one marked item and unrelated unmarked native content
+- **THEN** only the registered item executes and receives a focused result
 
-#### Scenario: Evidence without ID cannot disappear
-- **ID**: `scenario.enrollment.evidence-without-id`
-- **EVIDENCE**: `vitest::test/core.spec.ts::focused specification parsing > rejects evidence without a scenario ID in a mixed document`
-- **WHEN** a scenario contains an EVIDENCE row but no ID row
-- **THEN** validation reports the missing ID rather than treating that scenario as native
+<!-- focused-spec:id=native.binding.markdown.heading -->
+#### Scenario: Marker binds the following native heading
+- **WHEN** a focused marker is adjacent to a native Markdown heading
+- **THEN** parsing binds its stable ID without requiring duplicate focused prose
 
-#### Scenario: Malformed enrollment marker cannot downgrade a scenario
-- **ID**: `scenario.enrollment.malformed-marker`
-- **EVIDENCE**: `vitest::test/core.spec.ts::focused specification parsing > rejects malformed ID evidence and revision markers`
-- **WHEN** a scenario has a malformed ID, EVIDENCE, or REVISES row label but no valid ID
-- **THEN** validation reports the malformed focused metadata and does not ignore the scenario
+<!-- focused-spec:id=native.binding.markdown.items -->
+#### Scenario: Paragraph and list-item binding
+- **WHEN** markers identify native paragraphs and list items
+- **THEN** each marker binds its own structural item
+
+<!-- focused-spec:id=native.binding.markdown.detached -->
+#### Scenario: Detached and conflicting markers fail
+- **WHEN** markers are detached or multiple markers claim one item
+- **THEN** parsing reports the binding violation
+
+<!-- focused-spec:id=native.binding.markdown.fenced -->
+#### Scenario: Literal marker examples do not enroll
+- **WHEN** a fenced code block contains marker-looking text
+- **THEN** the literal example is not bound as native behavior
+
+<!-- focused-spec:id=native.binding.gherkin.tags -->
+#### Scenario: Gherkin scenario-local identity
+- **WHEN** focused tags attach to scenarios or inherited host containers
+- **THEN** scenario tags bind and inherited container tags fail
+
+<!-- focused-spec:id=native.binding.gherkin.selected-error -->
+#### Scenario: Selected identity retains inherited-tag errors
+- **WHEN** an inherited Gherkin focused tag declares the selected ID while another inherited tag declares only an unrelated ID
+- **THEN** the selected ID's invalid tag blocks execution while unrelated IDs remain isolated until full validation
+
+<!-- focused-spec:id=native.binding.external.unique -->
+#### Scenario: Explicit generated native IDs resolve uniquely
+- **WHEN** external registration names a declared native ID in one configured document
+- **THEN** the unique item executes while absent or duplicate declarations fail
+
+<!-- focused-spec:id=native.binding.registry.dangling -->
+#### Scenario: Registration cannot outlive its item
+- **WHEN** a registry entry has no matching native marker
+- **THEN** validation fails rather than executing detached evidence
+
+<!-- focused-spec:id=native.binding.obsolete.inline -->
+#### Scenario: Legacy rows are not a fallback
+- **WHEN** a document contains legacy focused ID or EVIDENCE rows
+- **THEN** validation rejects the obsolete format instead of interpreting it

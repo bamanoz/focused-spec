@@ -1,11 +1,10 @@
 ---
 id: SPEC-order-limit
-companions:
-  - scenarios.md
+companions: []
 sources: []
 ---
 
-> **Canonical contract.** This SPEC and its companions define what to build and verify.
+> **Canonical contract.** This SPEC defines what to build and verify.
 
 # Order Item Limit
 
@@ -17,7 +16,7 @@ Shoppers need an order to stop accepting new line items at its configured limit 
 
 - **CAP-1**
   - **intent:** The order service can decide whether an order may accept one more line item.
-  - **success:** An order already containing as many line items as its configured limit is denied another item; see `scenarios.md`.
+  - **success:** An order already containing as many line items as its configured limit is denied another item.
 
 ## Constraints
 
