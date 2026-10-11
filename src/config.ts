@@ -23,7 +23,7 @@ export function isJsonValue(value: unknown): value is JsonValue {
   const record = object(value)
   return record !== undefined && Object.values(record).every(isJsonValue)
 }
-const CONFIG_KEYS: Readonly<Record<string, true>> = { version: true, specifications: true, runners: true, execution: true }
+const CONFIG_KEYS: Readonly<Record<string, true>> = { version: true, specifications: true, evidence: true, runners: true, execution: true }
 const SPECIFICATION_KEYS: Readonly<Record<string, true>> = { documents: true }
 const DOCUMENT_KEYS: Readonly<Record<string, true>> = { match: true, scope: true, exclude: true }
 const EXECUTION_KEYS: Readonly<Record<string, true>> = { maxConcurrentGroups: true }
@@ -52,6 +52,31 @@ function validatePattern(value: unknown, context: string, path: string, violatio
     return false
   }
   return true
+}
+
+export function parseEvidenceConfig(value: unknown, path: string, violations: Violation[]): FocusedSpecConfig['evidence'] {
+  if (value === undefined) return undefined
+  const evidence = object(value)
+  if (evidence === undefined) {
+    violations.push({ path, message: 'evidence must be an object containing files' })
+    return undefined
+  }
+  rejectUnknownKeys(evidence, { files: true }, 'evidence', path, violations)
+  if (!Array.isArray(evidence.files) || evidence.files.length === 0) {
+    violations.push({ path, message: 'evidence.files must be a non-empty array of project-relative YAML paths or patterns' })
+    return undefined
+  }
+  const files: string[] = []
+  for (const [index, pattern] of evidence.files.entries()) {
+    const context = `evidence.files[${index}]`
+    if (!validatePattern(pattern, context, path, violations)) continue
+    if (pattern.trim() === '' || /^[A-Za-z]:/u.test(pattern) || /(?:^|[/{,])\.\.(?:[/},]|$)/u.test(pattern)) {
+      violations.push({ path, message: `${context} must be a safe non-empty project-relative path pattern` })
+      continue
+    }
+    files.push(pattern)
+  }
+  return { files }
 }
 
 
@@ -203,6 +228,8 @@ export async function loadConfig(projectRoot: string, explicitPath?: string): Pr
     }
   }
 
+  const evidence = parseEvidenceConfig(root.evidence, path, violations)
+
   const runnerValues = object(root.runners)
   if (runnerValues === undefined) violations.push({ path, message: 'runners must be an object' })
   const runners: Record<string, RunnerConfig> = {}
@@ -230,6 +257,6 @@ export async function loadConfig(projectRoot: string, explicitPath?: string): Pr
   return {
     path,
     violations,
-    config: { version: 3, specifications: specificationConfig, runners, ...(execution === undefined ? {} : { execution }) },
+    config: { version: 3, specifications: specificationConfig, runners, ...(evidence === undefined ? {} : { evidence }), ...(execution === undefined ? {} : { execution }) },
   }
 }

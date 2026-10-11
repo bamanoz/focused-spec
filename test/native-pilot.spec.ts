@@ -2,7 +2,11 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { agentEvidenceGate, creationGate, evidenceGate, hostPrerequisiteGate, hostWorkflowGate, hostWriteConstraintGate, judged } from '../evals/native-pilot.ts'
+import {
+  agentEvidenceGate, canonicalMemlogReadGate, companionGate, creationGate, evidenceGate, hostPrerequisiteGate, hostWorkflowGate,
+  infrastructureIntegrityGate, infrastructureSnapshot,
+  hostWriteConstraintGate, judged, nativeSingleSourceGate,
+} from '../evals/native-pilot.ts'
 
 const roots: string[] = []
 
@@ -19,6 +23,61 @@ afterEach(async () => {
 })
 
 describe('native pilot evaluation boundaries', () => {
+  it('requires a successful in-project canonical memlog read before regeneration starts', () => {
+    const workspace = join(tmpdir(), 'focused-native-read-contract')
+    const memlog = '_bmad-output/specs/spec-blocked-login/.memlog.md'
+    const kernel = '_bmad-output/specs/spec-blocked-login/spec-blocked-login.md'
+    const read = (path: string, failed = false, complete = true) => [
+      { type: 'tool_execution_start', toolName: 'read', toolCallId: 'source', args: { path } },
+      ...(complete ? [{ type: 'tool_execution_end', toolName: 'read', toolCallId: 'source', isError: failed,
+        result: { isError: failed } }] : []),
+    ]
+    const write = [
+      { type: 'tool_execution_start', toolName: 'write', toolCallId: 'kernel', args: { path: join(workspace, kernel) } },
+      { type: 'tool_execution_end', toolName: 'write', toolCallId: 'kernel', isError: false, result: {} },
+    ]
+    const trace = (events: object[]) => events.map(event => JSON.stringify(event)).join('\n')
+    expect(canonicalMemlogReadGate(workspace, trace([...read(join(workspace, memlog)), ...write])).passed).toBe(true)
+    expect(canonicalMemlogReadGate(workspace, trace([...read(`${memlog}:1-80`), ...write])).passed).toBe(true)
+    expect(canonicalMemlogReadGate(workspace, trace([...read(memlog, true), ...write])).passed).toBe(false)
+    expect(canonicalMemlogReadGate(workspace, trace([...read(memlog, false, false), ...write])).passed).toBe(false)
+    expect(canonicalMemlogReadGate(workspace, trace([...write, ...read(memlog)])).passed).toBe(false)
+    expect(canonicalMemlogReadGate(workspace, trace([...read(join(workspace, '..', 'other-project', memlog)), ...write])).passed).toBe(false)
+  })
+
+  it('accepts named-system EARS outcomes while rejecting missing triggers, obligations and denial', () => {
+    const source = [
+      '# Requirements',
+      '**User Story:** As an administrator, I want blocked accounts denied login.',
+      '## Acceptance Criteria',
+      '<!-- focused-spec:id=account.login.blocked -->',
+      '1. WHEN an account blocked by an administrator attempts to log in with valid credentials, THE authentication system SHALL deny login.',
+    ].join('\n')
+    expect(creationGate('kiro', source).passed).toBe(true)
+    expect(creationGate('kiro', source.replace('WHEN', 'GIVEN')).passed).toBe(false)
+    expect(creationGate('kiro', source.replace('SHALL', 'MAY')).passed).toBe(false)
+    expect(creationGate('kiro', source.replace('deny login', 'allow login')).passed).toBe(false)
+  })
+
+  it('separates installed GSD resources from project behavior without permitting infrastructure edits', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-gsd-boundary-'))
+    roots.push(root)
+    await mkdir(join(root, '.planning'), { recursive: true })
+    await mkdir(join(root, '.pi/gsd-core/workflows'), { recursive: true })
+    await mkdir(join(root, '.home/.npm/installed-workflow'), { recursive: true })
+    const item = '- [ ] **AUTH-01**: A blocked account with valid credentials is denied login. <!-- focused-spec:id=auth.blocked-account -->\n'
+    const example = '#### Scenario: Workflow example\n- **ID**: `example.workflow`\n'
+    await writeFile(join(root, '.planning/REQUIREMENTS.md'), item)
+    await writeFile(join(root, '.pi/gsd-core/workflows/audit-fix.md'), example)
+    await writeFile(join(root, '.home/.npm/installed-workflow/audit-fix.md'), example)
+    const before = await infrastructureSnapshot(root)
+    expect((await companionGate(root, 'gsd')).passed).toBe(true)
+    await writeFile(join(root, '.pi/gsd-core/workflows/audit-fix.md'), 'Changed installed workflow\n')
+    expect((await infrastructureIntegrityGate(root, before)).passed).toBe(false)
+    await writeFile(join(root, '.planning/duplicate.md'), item)
+    expect((await companionGate(root, 'gsd')).passed).toBe(false)
+  })
+
   it('recognizes a successful ranged workflow read without crediting failed reads or lookalike resources', () => {
     expect(hostWorkflowGate('gsd', readTranscript('.pi/gsd-core/workflows/new-project.md:1-150'), true).passed).toBe(true)
     expect(hostWorkflowGate('gsd', readTranscript('.pi/gsd-core/workflows/new-project.md', true), true).passed).toBe(false)
@@ -68,7 +127,7 @@ describe('native pilot evaluation boundaries', () => {
       '',
       '- **CAP-1**',
       '  - **intent:** The system denies login to an account blocked by an administrator, even with valid credentials.',
-      '  - **success:** Authentication returns denial when the account is blocked and the supplied credentials are valid.',
+      '  - **success:** Authentication denies access when the account is blocked and the supplied credentials are valid.',
       '',
       '## Constraints',
       '',
@@ -86,10 +145,116 @@ describe('native pilot evaluation boundaries', () => {
     const duplicate = `${generated}\n- **CAP-1**\n  - **intent:** Reject blocked login.\n  - **success:** A blocked account with valid credentials receives denial.\n`
 
     expect(creationGate('bmad', generated).passed).toBe(true)
+    expect(creationGate('bmad', generated.replace('Authentication denies access when the account is blocked and the supplied credentials are valid.', 'A blocked account with valid credentials is not authenticated.')).passed).toBe(true)
     expect(creationGate('bmad', generated.replace(' and the supplied credentials are valid.', '.')).passed).toBe(false)
-    expect(creationGate('bmad', generated.replace('returns denial', 'returns an outcome')).passed).toBe(false)
+    expect(creationGate('bmad', generated.replace('denies access', 'returns an outcome')).passed).toBe(false)
     expect(creationGate('bmad', duplicate).passed).toBe(false)
     expect(creationGate('bmad', generated.replace('- **CAP-1**', '<!-- focused-spec:id=auth.login.blocked-account -->\n- **CAP-1**')).passed).toBe(false)
+  })
+
+  it('binds Spec Kit identity to the actual parser-native item', () => {
+    const identity = '<!-- focused-spec:id=account.login.blocked -->'
+    const story = [
+      '# Feature Specification: Blocked Account Login',
+      '',
+      '## User Scenarios & Testing *(mandatory)*',
+      '',
+      identity,
+      '### User Story 1 - Reject Blocked Account Login (Priority: P1)',
+      '',
+      'An administrator-blocked account cannot sign in even with valid credentials.',
+      '',
+      '**Acceptance Scenarios**:',
+      '',
+      '1. **Given** an account is blocked and credentials are valid, **When** it attempts to sign in, **Then** authentication is denied.',
+      '',
+      '## Requirements *(mandatory)*',
+      '',
+      '### Functional Requirements',
+      '',
+      '- **FR-001**: The system MUST reject blocked accounts with valid credentials.',
+    ].join('\n')
+    const acceptanceBound = story.replace(`${identity}\n### User Story`, '### User Story')
+      .replace('1. **Given**', `${identity}\n1. **Given**`)
+
+    expect(creationGate('spec-kit', story).passed).toBe(true)
+    expect(nativeSingleSourceGate('spec-kit', story).passed).toBe(true)
+    expect(creationGate('spec-kit', acceptanceBound).passed).toBe(true)
+    expect(creationGate('spec-kit', story.replace(`${identity}\n`, '')).passed).toBe(false)
+    expect(creationGate('spec-kit', story.replace('1. **Given**', `${identity}\n1. **Given**`)).passed).toBe(false)
+    expect(creationGate('spec-kit', story.replace(`${identity}\n### User Story`, `${identity}\n\n\n### User Story`)).passed).toBe(false)
+
+    const echoedElsewhere = story
+      .replace('An administrator-blocked account cannot sign in even with valid credentials.', 'An account holder can attempt to sign in.')
+      .replace('1. **Given** an account is blocked and credentials are valid, **When** it attempts to sign in, **Then** authentication is denied.',
+        '1. **Given** an account exists, **When** it attempts to sign in, **Then** the request is processed.')
+    expect(creationGate('spec-kit', echoedElsewhere).passed).toBe(false)
+  })
+
+  it('excludes ephemeral approved plans but rejects discoverable duplicate behavior sources', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-companions-'))
+    roots.push(root)
+    const identity = '<!-- focused-spec:id=account.login.blocked -->'
+    await mkdir(join(root, 'agent-os/specs/blocked-login'), { recursive: true })
+    await mkdir(join(root, '.omp-authoring-sessions/session/local'), { recursive: true })
+    await writeFile(join(root, 'agent-os/specs/blocked-login/shape.md'), `${identity}\nBlocked account outcome\n`)
+    await writeFile(join(root, '.omp-authoring-sessions/session/local/approved-plan.md'), `${identity}\nApproved plan copy\n`)
+    expect((await companionGate(root, 'agent-os')).passed).toBe(true)
+
+    await mkdir(join(root, 'notes'), { recursive: true })
+    await writeFile(join(root, 'notes/duplicate.md'), `${identity}\nDuplicate behavior\n`)
+    const duplicate = await companionGate(root, 'agent-os')
+    expect(duplicate.passed).toBe(false)
+    expect(duplicate.detail).toContain('agent-os/specs/blocked-login/shape.md (1)')
+    expect(duplicate.detail).toContain('notes/duplicate.md (1)')
+    expect(duplicate.detail).not.toContain('.omp-authoring-sessions')
+
+    await writeFile(join(root, 'notes/scenarios.md'), 'Obsolete companion\n')
+    const companion = await companionGate(root, 'agent-os')
+    expect(companion.passed).toBe(false)
+    expect(companion.detail).toContain('companion files=notes/scenarios.md')
+  })
+
+  it('ignores quoted native payloads but rejects live duplicates and detached markers', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-quoted-plan-'))
+    roots.push(root)
+    const directory = join(root, 'agent-os/specs/blocked-login')
+    await mkdir(directory, { recursive: true })
+    const item = '<!-- focused-spec:id=account.login.blocked -->\nAn administrator-blocked account with valid credentials is rejected.\n'
+    const shape = join(directory, 'shape.md')
+    const plan = join(directory, 'plan.md')
+    await writeFile(shape, item)
+    await writeFile(plan, `# Approved execution plan\n\nSave shape.md with this payload:\n\n\`\`\`markdown\n${item}\`\`\`\n`)
+    expect((await companionGate(root, 'agent-os')).passed).toBe(true)
+    await rm(shape)
+    expect((await companionGate(root, 'agent-os')).passed).toBe(false)
+    await writeFile(shape, item)
+    await writeFile(plan, item)
+    expect((await companionGate(root, 'agent-os')).passed).toBe(false)
+    await writeFile(plan, '<!-- focused-spec:id=account.login.blocked -->\n')
+    expect((await companionGate(root, 'agent-os')).passed).toBe(false)
+  })
+
+  it('counts live external BMad capabilities rather than fenced kernel examples', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-quoted-kernel-'))
+    roots.push(root)
+    const capability = '- **CAP-1**\n  - **success:** Reject blocked accounts with valid credentials.\n'
+    await writeFile(join(root, 'kernel.md'), capability)
+    await writeFile(join(root, 'plan.md'), `# Regeneration plan\n\n~~~markdown\n${capability}~~~\n`)
+    expect((await companionGate(root, 'bmad')).passed).toBe(true)
+    await writeFile(join(root, 'plan.md'), capability)
+    expect((await companionGate(root, 'bmad')).passed).toBe(false)
+  })
+
+  it('counts focused Gherkin scenarios rather than quoted tags', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-quoted-feature-'))
+    roots.push(root)
+    const feature = 'Feature: Login\n\n  @focused.account.login.blocked\n  Scenario: Blocked login\n    Given a blocked account with valid credentials\n    Then login is rejected\n'
+    await writeFile(join(root, 'login.feature'), feature)
+    await writeFile(join(root, 'plan.md'), `# Approved feature\n\n\`\`\`gherkin\n${feature}\`\`\`\n`)
+    expect((await companionGate(root, 'gherkin')).passed).toBe(true)
+    await writeFile(join(root, 'duplicate.feature'), feature)
+    expect((await companionGate(root, 'gherkin')).passed).toBe(false)
   })
 
   it('accepts the bound native outcome without requiring hidden host headings', () => {
@@ -204,6 +369,7 @@ describe('native pilot evaluation boundaries', () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-native-registry-'))
     roots.push(root)
     await mkdir(join(root, '.focused-spec'))
+    await writeFile(join(root, '.focused-spec/config.yaml'), 'version: 3\nspecifications:\n  documents: [{ match: specs/*.md, scope: current }]\nrunners: {}\n')
     const source = '<!-- focused-spec:id=auth.login.blocked-account -->\n#### Scenario: Blocked login\n'
     const path = join(root, '.focused-spec/evidence.yaml')
     await writeFile(path, 'scopes:\n  current:\n    auth.login.blocked-account:\n      evidence: [go-test::./auth::TestBlockedAccount]\n')
@@ -226,6 +392,7 @@ describe('native pilot evaluation boundaries', () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-native-external-source-'))
     roots.push(root)
     await mkdir(join(root, '.focused-spec'))
+    await writeFile(join(root, '.focused-spec/config.yaml'), 'version: 3\nspecifications:\n  documents: [{ match: specs/*.md, scope: current }]\nrunners: {}\n')
     await writeFile(join(root, '.focused-spec/evidence.yaml'), [
       'scopes:',
       '  current:',

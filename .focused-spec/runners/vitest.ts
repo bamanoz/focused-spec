@@ -8,7 +8,7 @@ const DIAGNOSTIC_LIMIT = 4_000
 
 type ListedTest = { file: string; name: string }
 type Assertion = { ancestorTitles: string[]; title: string; status: string; failureMessages?: string[] }
-type Report = { testResults: { assertionResults: Assertion[] }[] }
+type Report = { testResults: { assertionResults: Assertion[]; message?: string }[]; numRuntimeErrorTestSuites?: number }
 
 async function vitest(args: string[], root: string, cwd: string, signal: AbortSignal): Promise<{ code: number; stdout: string; stderr: string }> {
   const child = spawn(process.execPath, [resolve(root, 'node_modules/vitest/vitest.mjs'), ...args], {
@@ -30,10 +30,10 @@ async function vitest(args: string[], root: string, cwd: string, signal: AbortSi
   child.stderr.on('data', (chunk: Buffer) => {
     stderr = (stderr + String(chunk)).slice(-DIAGNOSTIC_LIMIT)
   })
-  const code = await new Promise<number>((done, reject) => {
-    child.once('error', reject)
-    child.once('close', value => done(value ?? 1))
-  })
+  const completion = Promise.withResolvers<number>()
+  child.once('error', completion.reject)
+  child.once('close', value => completion.resolve(value ?? 1))
+  const code = await completion.promise
   if (overflow) throw new Error('Vitest output exceeded the limit')
   return { code, stdout, stderr }
 }
@@ -94,25 +94,43 @@ export default {
     return { targets, errors }
   },
   async run(request) {
-    const results: TargetResult[] = []
+    const files = new Map<string, Map<string, ResolvedTarget>>()
     for (const target of request.targets) {
       const selected = parseSelector(target.selector)
       if (selected === undefined || projectFile(request.projectRoot, selected.file) === undefined) {
         throw new Error(`Invalid Vitest target ${target.selector}`)
       }
-      const output = await vitest(['run', selected.file, '--testNamePattern', pattern(selected.name), '--reporter=json'], request.projectRoot, request.cwd, request.signal)
+      let tests = files.get(selected.file)
+      if (tests === undefined) {
+        tests = new Map()
+        files.set(selected.file, tests)
+      }
+      if (tests.has(selected.name)) throw new Error(`Duplicate Vitest target ${target.selector}`)
+      tests.set(selected.name, target)
+    }
+    const results: TargetResult[] = []
+    for (const [file, tests] of files) {
+      const selectedPattern = [...tests.keys()].map(pattern).join('|')
+      const output = await vitest(['run', file, '--testNamePattern', selectedPattern, '--reporter=json'], request.projectRoot, request.cwd, request.signal)
       const report = json<Report>(output.stdout, 'execution')
       if (!Array.isArray(report.testResults)) throw new Error('Vitest returned no execution results')
+      if ((report.numRuntimeErrorTestSuites ?? 0) > 0 || report.testResults.some(result => (result.message ?? '') !== '')) {
+        throw new Error(`Vitest suite failed: ${output.stderr || report.testResults.map(result => result.message ?? '').join('\n')}`)
+      }
       const assertions = report.testResults.flatMap(result => result.assertionResults)
-        .filter(assertion => [...assertion.ancestorTitles, assertion.title].join(' > ') === selected.name)
-      if (assertions.length !== 1) throw new Error(`Vitest selected ${assertions.length} tests for ${target.selector}`)
-      const assertion = assertions[0]!
-      const status = assertion.status === 'passed' && output.code === 0 ? 'pass'
-        : assertion.status === 'failed' ? 'fail'
-          : assertion.status === 'skipped' && output.code === 0 ? 'skip' : undefined
-      if (status === undefined) throw new Error(`Vitest exited ${output.code} with test status ${assertion.status}: ${output.stderr}`)
-      const diagnostic = (assertion.failureMessages ?? []).join('\n').slice(-DIAGNOSTIC_LIMIT)
-      results.push({ targetId: target.targetId, status, ...(diagnostic === '' ? {} : { diagnostic }) })
+      if (output.code !== 0 && !assertions.some(assertion => assertion.status === 'failed')) {
+        throw new Error(`Vitest exited ${output.code}: ${output.stderr}`)
+      }
+      for (const [name, target] of tests) {
+        const matching = assertions.filter(assertion => [...assertion.ancestorTitles, assertion.title].join(' > ') === name)
+        if (matching.length !== 1) throw new Error(`Vitest selected ${matching.length} tests for ${target.selector}`)
+        const assertion = matching[0]!
+        const status = assertion.status === 'passed' ? 'pass' : assertion.status === 'failed' ? 'fail'
+          : assertion.status === 'skipped' ? 'skip' : undefined
+        if (status === undefined) throw new Error(`Vitest exited ${output.code} with test status ${assertion.status}: ${output.stderr}`)
+        const diagnostic = (assertion.failureMessages ?? []).join('\n').slice(-DIAGNOSTIC_LIMIT)
+        results.push({ targetId: target.targetId, status, ...(diagnostic === '' ? {} : { diagnostic }) })
+      }
     }
     return { results }
   },

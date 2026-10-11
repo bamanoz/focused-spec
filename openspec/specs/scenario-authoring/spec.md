@@ -25,7 +25,7 @@ Each bound native item SHALL have one lowercase dotted stable ID unique within i
 - **THEN** validation rejects the selected occurrence without inheriting evidence
 
 ### Requirement: Evidence rows
-Evidence SHALL live only in the required .focused-spec/evidence.yaml registry, keyed by scope and stable ID. The registry SHALL contain only a scopes mapping; entries SHALL contain a nonempty evidence list and optional external source mapping containing exactly path and nativeId. Unknown or duplicate fields and behavioral text fields SHALL fail validation. References SHALL use [planned:]<runner-id>::<opaque selector>; every reference SHALL be checked and multiple references form an AND contract.
+Evidence SHALL live only in the required logical evidence registry composed from configured YAML files, keyed by scope and stable ID. The registry SHALL contain only a scopes mapping; entries SHALL contain a nonempty evidence list and optional external source mapping containing exactly path and nativeId. Unknown or duplicate fields and behavioral text fields SHALL fail validation. References SHALL use [planned:]<runner-id>::<opaque selector>; every reference SHALL be checked and multiple references form an AND contract.
 
 <!-- focused-spec:id=scenario.evidence.required -->
 #### Scenario: Every occurrence needs explicit evidence

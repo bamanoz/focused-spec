@@ -29,7 +29,7 @@ Move the full portable workflow into `guidance/workflow.md` and the complete run
 
 Update the authoritative workflow to request runner guidance through the same installed CLI instead of linking to a skill-local file. Rewrite runner guidance's ownership and return-to-workflow pointer accordingly. Preserve phase boundaries, native-ID binding, evidence sensitivity, and real-runner semantics verbatim except where instruction delivery changes. Documentation points to these owners; it does not repeat their agent procedure.
 
-A small `src/agent-guide.ts` reader resolves package metadata and topic assets relative to its emitted module, never `cwd`. Read only the requested asset. Route `agent-guide` before project configuration loading in `src/cli.ts`; keep validate/run options and results unchanged. No new dependency or public TypeScript export is necessary for this CLI-only contract.
+A small `src/instructions.ts` reader resolves package metadata and topic assets relative to its emitted module, never `cwd`. Read only the requested asset. Route `instructions` before project configuration loading in `src/cli.ts`; keep validate/run options and results unchanged. No new dependency or public TypeScript export is necessary for this CLI-only contract.
 
 Alternative: regenerating full skills through an update command still leaves a forgotten refresh step. Alternative: installing matching versions reduces risk but does not remove frozen instruction copies or stale sessions.
 
@@ -38,7 +38,7 @@ Alternative: regenerating full skills through an update command still leaves a f
 Proposed public command:
 
 ```text
-focused-spec agent-guide [--protocol <version>] [--topic workflow|runners] [--json]
+focused-spec instructions [--protocol <version>] [--topic workflow|runners] [--json]
 ```
 
 Defaults are protocol 1 and topic `workflow`. Protocol is a positive decimal integer; only explicitly supported versions succeed. The loader always requests its version explicitly. Protocol 1 JSON is:
@@ -54,7 +54,9 @@ Defaults are protocol 1 and topic `workflow`. Protocol is a positive decimal int
 
 The version shown is illustrative; runtime reads the owning package's real metadata, not a constant. Text output has a provenance header followed by the Markdown. Future package releases can change the workflow while keeping this delivery contract. Protocol changes require explicit compatibility decisions; configuration `version: 3` and runner `apiVersion: 1` remain unrelated.
 
-Unsupported protocol, malformed arguments, unknown topic, unreadable/empty requested asset, or invalid package metadata exits nonzero, puts diagnostics on stderr, and emits no usable guidance on stdout. Do not return partial content, silently negotiate another protocol, or fall back to an old installed skill. Explicit help remains successful without loading assets or configuration, including `help agent-guide` and help combined with `--json`.
+Unsupported protocol, malformed arguments, unknown topic, unreadable/empty requested asset, or invalid package metadata exits nonzero, puts diagnostics on stderr, and emits no usable guidance on stdout. Do not return partial content, silently negotiate another protocol, or fall back to an old installed skill. Explicit help remains successful without loading assets or configuration, including `help instructions` and help combined with `--json`.
+
+The approved command name is `instructions`; reject the previous command and its help forms rather than retaining an alias. Keep protocol 1, topics, response schema, stable focused IDs (including `cli.help.agent-guide`), and immutable historical eval/transition artifacts unchanged. Existing CLI invalid-invocation evidence will reject the retired command; the offline and packed-consumer evidence will exercise the new name.
 
 ### 3. Explicit consumer-local invocation
 
@@ -93,6 +95,7 @@ All selectors below are intended apply-stage evidence, not executed planning che
 | `cli.help.validate` | `vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state` |
 | `cli.help.run` | `vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state` |
 | `cli.help.agent-guide` | `planned:vitest::test/cli.spec.ts::focused-spec CLI > explains guide compatibility without loading package guidance` |
+| `guidance.delivery.command-name` | `planned:vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid invocations without treating them as successful help` |
 | `agent.guidance.project-local` | `planned:vitest::test/evals.spec.ts::agent eval harness > rejects global guidance in place of the project installation` |
 | `agent.guidance.unavailable` | `planned:vitest::test/evals.spec.ts::agent eval harness > rejects absent or legacy local guidance activation` |
 | `agent.guidance.invalid-response` | `planned:vitest::test/evals.spec.ts::agent eval harness > rejects completed but unusable guidance responses` |
@@ -109,9 +112,9 @@ Transcript/gate tests alone do not prove an agent follows the loader. After impl
 
 ### Mandatory full model-evaluation matrix
 
-- All six current public cases: `files-source-bootstrap`, `vacuous-evidence`, `openspec-apply`, `openspec-brownfield`, `openspec-propose-apply`, and `full-skill-routing`.
+- All eight current public cases: `files-source-bootstrap`, `vacuous-evidence`, `registry-shards-reuse`, `registry-shards-new-boundary`, `openspec-apply`, `openspec-brownfield`, `openspec-propose-apply`, and `full-skill-routing`.
 - All seven native hosts: `openspec`, `spec-kit`, `kiro`, `bmad`, `gsd`, `agent-os`, and `gherkin`, each in default revision mode and `--create` mode. That is 14 native runs, not only the nine combinations exercised previously.
-- At least 20 fresh model runs for the current matrix; new cases discovered during apply also belong to the complete run. No skipped case can be hidden behind a green aggregate.
+- At least 22 fresh model runs for the current matrix; new cases discovered during apply also belong to the complete run. No skipped case can be hidden behind a green aggregate.
 
 Build once before the model runs. Discover public cases with `node --experimental-strip-types evals/run.ts --list`; invoke each via `node --experimental-strip-types evals/run.ts --case <case> --model <model> --timeout 1200`, adding `--openspec-skills .omp/skills` for OpenSpec cases. Invoke each native host via `node --experimental-strip-types evals/native-pilot.ts <host> <model>` and again with `--create`. Native exit 2 means unverified-only certification, not complete certification; report it explicitly. A model failure requires a substantive fix and a new observed run, never a weakened gate or retry-until-green.
 

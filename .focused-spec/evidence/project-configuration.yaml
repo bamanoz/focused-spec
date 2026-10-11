@@ -1,0 +1,44 @@
+scopes:
+  current:
+    config.document.invalid:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > reports missing and malformed configuration
+    config.runner.timeout-bound:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects runner timeouts that overflow the host timer
+    config.runner.invalid-options:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid runner paths and non-JSON options
+    config.layout.invalid:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects unsafe document layouts and escaped specification symlinks
+    config.format.version-three:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects obsolete version 2 configuration with migration guidance
+    config.registry.required:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects a missing evidence registry
+    config.source.empty-files:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > preserves successful validation and execution for an empty registry
+    config.source.openspec-discovery:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > reports all scenarios, planned evidence, and unique resolved targets
+    config.source.layout-variants:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > discovers fixed and captured scope documents from declared patterns
+    config.source.missing-scope:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects a selected scope with no documents
+    config.source.empty-scope-document:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects selections containing only unmarked native content
+    config.source.overlap:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects a document claimed by multiple layouts
+    config.source.mixed-scope-enrollment:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > runs marked outcomes beside untouched native content
+    config.source.legacy-only-selection:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects selections containing only unmarked native content

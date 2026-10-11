@@ -1,0 +1,23 @@
+scopes:
+  cli-owned-agent-guidance:
+    guidance.delivery.offline:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > serves workflow guidance without project setup
+    guidance.delivery.runners:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > serves complete runner guidance from the installed package
+    guidance.delivery.compatible-update:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > refreshes guidance after a compatible package replacement
+    guidance.delivery.incompatible-protocol:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects unsupported guide protocols without returning instructions
+    guidance.delivery.invalid-request:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid guide requests with actionable help
+    guidance.delivery.incomplete-package:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > rejects missing authoritative guidance without fallback
+    guidance.delivery.command-name:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid invocations without treating them as successful help

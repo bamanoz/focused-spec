@@ -13,6 +13,10 @@ specifications:
       exclude:
         - specs/archive/**
     - match: changes/{scope}/spec.md
+evidence:
+  files:
+    - .focused-spec/evidence/auth.yaml
+    - .focused-spec/evidence/billing/*.yaml
 runners:
   go-unit:
     module: ./.focused-spec/runners/go-test.ts
@@ -37,7 +41,11 @@ Runner configuration and the public runner API are unchanged. A runner ID names 
 
 ## Required evidence registry
 
-Every configured project needs `.focused-spec/evidence.yaml`:
+Every configured project needs one logical evidence registry. Optional `evidence.files` explicitly names a nonempty list of project-relative `.yaml`/`.yml` paths or glob patterns. Without `evidence`, the same loader reads `.focused-spec/evidence.yaml`; an explicit list never falls back to that file. All sources resolve from the selected project root, including with `--config`.
+
+Each configured source must match at least one file. Absolute paths, parent traversal, negated patterns, backslashes, symlink escapes, non-YAML matches, and overlapping lexical or canonical file claims fail. Files are loaded deterministically; no nested `include` or implicit repository search exists.
+
+Every shard uses the same schema:
 
 ```yaml
 scopes:
@@ -61,9 +69,11 @@ scopes:
         nativeId: EXPLICIT-HOST-ID
 ```
 
-Each entry requires a nonempty `evidence` list. `source` is present only for external binding and contains exactly `path` and `nativeId`. Unknown fields and duplicate YAML fields fail validation. An empty `scopes: {}` registry is valid only as an empty all-scope selection when no documents are discovered; the registry file may not be omitted.
+Each entry requires a nonempty `evidence` list. `source` is present only for external binding and contains exactly `path` and `nativeId`. Unknown fields and duplicate YAML fields fail validation. A selected `(scope, ID)` may occur only once across all files; duplicates fail with both locations, without merging evidence or choosing a winner. File placement does not change identity or imply scope ownership. Empty `scopes: {}` files are permitted, but all configured sources remain required; an empty logical registry succeeds only for an empty all-scope selection with no discovered documents.
 
 Evidence stays out of native documents. Multiple references on one entry form an AND contract. The selector is opaque to core, and only the first `::` separates the runner ID. Use `planned:` only while the exact target is absent; strict validation and `run` reject planned references.
+
+The public API is `loadEvidenceRegistry(projectRoot, files?, selectedScope?, selectedScenarioId?)`; pass `config.evidence?.files` as its second argument. It returns named `EvidenceRegistry` with `entries`, sorted loaded `files`, and `violations`. Each `EvidenceEntry` exposes diagnostic-only `registryPath` and `line`, separate from optional native `source` binding metadata. Scope/ID selection arguments now follow the source list.
 
 ## Bind a native item
 
@@ -119,7 +129,7 @@ scopes:
 
 The declaration must occur explicitly and uniquely in that path. `focused-spec` never guesses identity from a heading, line number, or similar behavior wording. If generated output has no stable explicit native ID, external binding is unsupported; do not create a companion that duplicates the behavior merely to enroll it.
 
-Supported explicit declarations are a leading bold or inline-code ID alone or followed by `:` in a Markdown item, a heading `{#ID}` anchor, or a scenario-local non-focused Gherkin tag. Markdown token IDs contain letters, digits, `.`, `_`, or `-`. Plain-text mentions do not declare an ID. `source.path` names one configured document; `./` is normalized, traversal and symlink escapes are rejected. The fixed registry file must also remain inside the project.
+Supported explicit declarations are a leading bold or inline-code ID alone or followed by `:` in a Markdown item, a heading `{#ID}` anchor, or a scenario-local non-focused Gherkin tag. Markdown token IDs contain letters, digits, `.`, `_`, or `-`. Plain-text mentions do not declare an ID. `source.path` names one configured document; `./` is normalized, traversal and symlink escapes are rejected. Every registry file must also remain inside the project.
 
 ## Binding and selection rules
 
@@ -128,6 +138,8 @@ Every marked item needs a registry entry in the same scope, and every registry e
 Identity is `(scope, ID)`. The same ID may appear in different scopes only as independent entries with independent bindings and evidence. Evidence never inherits, and there is no relationship field.
 
 Without `--scope`, validation and execution select all scopes. With `--scope <name>`, both select only that scope. `run --scenario <id>` further isolates the matching entries, their bindings, and their evidence from unrelated failures. See the [CLI reference](../reference/cli.md) for result fields.
+
+Scope and scenario selection isolate unrelated entry semantics and cross-file duplicate identities. Source safety, missing sources, YAML syntax, and duplicate YAML fields remain errors because they prevent reliable composition. Registry entry/binding violations identify the actual shard and line.
 
 ## Verify
 

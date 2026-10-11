@@ -5,6 +5,7 @@ import { discoverDocuments, loadConfig, loadEvidenceRegistry, parseNativeDocumen
 import type { EvalCase, EvalGate } from './types.ts'
 import { runProcess } from './process.ts'
 import { judgeEvidenceRepair } from './evidence-repair.ts'
+import { evalRepositoryRoot } from './provision.ts'
 
 const PROTECTED_PATHS = [
   'auth/auth.go',
@@ -137,7 +138,7 @@ function isLocalGuideCommand(command: string, workspace: string): boolean {
     return false
   }
   const args = tokens.slice(offset)
-  if (args[0] !== 'agent-guide') return false
+  if (args[0] !== 'instructions') return false
   let protocol: string | undefined
   let topic: string | undefined
   let json = false
@@ -242,7 +243,7 @@ export async function guidanceActivationGate(workspace: string, workflowSteps: r
 
 export async function snapshotProtectedFiles(workspace: string, editablePaths: readonly string[] = []): Promise<ReadonlyMap<string, string>> {
   const snapshots = new Map<string, string>()
-  const paths = new Set([...PROTECTED_PATHS, ...await fg(['tests/**/*', 'specs/**/*', '.focused-spec/**/*'], { cwd: workspace, onlyFiles: true, dot: true })])
+  const paths = new Set([...PROTECTED_PATHS, ...await fg(['app/**/*', 'auth/**/*', 'tests/**/*', 'specs/**/*', '.focused-spec/**/*'], { cwd: workspace, onlyFiles: true, dot: true })])
   for (const path of paths) {
     if (!editablePaths.includes(path)) snapshots.set(path, await readFile(join(workspace, path), 'utf8'))
   }
@@ -581,7 +582,9 @@ async function registryCheckpoint(workspace: string, scope: string, id: string):
   readonly checkpoint?: RegistryCheckpoint
   readonly violations: readonly { readonly path: string; readonly message: string }[]
 }> {
-  const registry = await loadEvidenceRegistry(workspace, scope, id)
+  const loaded = await loadConfig(workspace)
+  if (loaded.config === undefined) return { violations: loaded.violations }
+  const registry = await loadEvidenceRegistry(workspace, loaded.config.evidence?.files, scope, id)
   const entries = registry.entries.filter(entry => entry.scope === scope && entry.id === id)
   return {
     ...(entries.length === 1 ? { checkpoint: {
@@ -675,8 +678,9 @@ export async function brownfieldGate(
     return [gate('brownfield-contract', false, workingDiscovery.violations.map(violation => violation.message).join('\n'))]
   }
   const workingDocument = workingDiscovery?.scopes.get(changeName)?.find(document => document.path === workingPath)
-  const workingSource = workingDocument === undefined ? checkpoint?.source : await readFile(join(workspace, workingPath), 'utf8')
-  const workingRegistry = workingDocument === undefined
+  const workingBindingActive = workingDocument?.scenarios.some(scenario => scenario.id === expectedId) === true
+  const workingSource = workingBindingActive ? await readFile(join(workspace, workingPath), 'utf8') : checkpoint?.source
+  const workingRegistry = !workingBindingActive
     ? checkpoint?.registry
     : (await registryCheckpoint(workspace, changeName, expectedId)).checkpoint
   if (workingSource === undefined || workingRegistry === undefined) {
@@ -692,7 +696,7 @@ export async function brownfieldGate(
   const originalOutcome = originalScenarios.find(match => match[1] === 'Blocked account with valid credentials')?.[2]
   const historical = originalScenarios.filter(match => match[1] !== 'Blocked account with valid credentials').map(match => match[0])
   const preservedHistorical = historical.filter(scenario => mainSource.includes(scenario)).length
-  const mainScopeRegistry = await loadEvidenceRegistry(workspace, main.scope)
+  const mainScopeRegistry = await loadEvidenceRegistry(workspace, loaded.config.evidence?.files, main.scope)
   const mainMarkers = mainNative.items.filter(item => item.markerId !== undefined)
   const historicalPreserved = historical.length === 3 && preservedHistorical === historical.length
     && !archiveSource.includes('focused-spec:id=') && !/\*\*(?:ID|EVIDENCE)\*\*/u.test(archiveSource)
@@ -760,6 +764,37 @@ export async function brownfieldGate(
   ]
 }
 
+export async function registryPlacementGate(workspace: string, evalCase: EvalCase, selectedScenarioId?: string): Promise<EvalGate> {
+  const baselineRoot = join(evalRepositoryRoot(), 'evals', evalCase.overlay ?? '')
+  const [before, after] = await Promise.all([loadConfig(baselineRoot), loadConfig(workspace)])
+  if (before.config === undefined || after.config === undefined || selectedScenarioId === undefined) {
+    return gate('registry-placement', false, 'valid baseline, configured registry and selected native identity required')
+  }
+  const [original, registry] = await Promise.all([
+    loadEvidenceRegistry(baselineRoot, before.config.evidence?.files),
+    loadEvidenceRegistry(workspace, after.config.evidence?.files),
+  ])
+  const { evidence: _originalEvidence, ...originalConfig } = before.config
+  const { evidence: _currentEvidence, ...currentConfig } = after.config
+  const unchangedConfiguration = JSON.stringify(originalConfig) === JSON.stringify(currentConfig)
+  const retained = original.entries.every(entry => registry.entries.some(actual => actual.scope === entry.scope
+    && actual.id === entry.id && actual.registryPath === entry.registryPath
+    && JSON.stringify(actual.evidence) === JSON.stringify(entry.evidence)
+    && JSON.stringify(actual.source) === JSON.stringify(entry.source)))
+  const selected = registry.entries.filter(entry => entry.scope === 'current' && entry.id === selectedScenarioId)
+  const target = selected.length === 1 ? selected[0] : undefined
+  const addedFiles = registry.files.filter(path => !original.files.includes(path))
+  const placement = evalCase.registryPlacement === 'reuse'
+    ? target?.registryPath === '.focused-spec/evidence/auth.yaml' && addedFiles.length === 0
+    : target !== undefined && addedFiles.length === 1 && addedFiles[0] === target.registryPath
+      && target.registryPath.startsWith('.focused-spec/evidence/')
+  const monolithAbsent = !await exists(join(workspace, '.focused-spec/evidence.yaml'))
+  const allFilesRetained = original.files.every(path => registry.files.includes(path))
+  const passed = original.violations.length === 0 && registry.violations.length === 0 && unchangedConfiguration
+    && retained && allFilesRetained && placement && monolithAbsent
+  return gate('registry-placement', passed, `mode=${evalCase.registryPlacement}; target=${target?.registryPath ?? 'missing'}; original registrations retained=${retained}; original sources retained=${allFilesRetained}; other configuration unchanged=${unchangedConfiguration}; no monolith=${monolithAbsent}; new sources=${addedFiles.join(', ') || 'none'}`)
+}
+
 export async function judgeCompletedWorkspace(
   workspace: string,
   evalCase: EvalCase,
@@ -808,6 +843,7 @@ export async function judgeCompletedWorkspace(
   gates.push(await behaviorGate(workspace))
   gates.push(await integrityGate(workspace, snapshots, transcripts))
   const effectiveScenarioId = scenario.selectedScenarioId ?? selectedScenarioId
+  if (evalCase.registryPlacement !== undefined) gates.push(await registryPlacementGate(workspace, evalCase, effectiveScenarioId))
   if (evalCase.id === 'vacuous-evidence') gates.push(...await judgeEvidenceRepair(workspace, transcripts))
   else if (strict?.code === 0 && run?.code === 0) gates.push(await mutationGate(workspace, evalCase, scope, effectiveScenarioId))
   else gates.push(gate('mutation-sensitivity', false, 'focused validation or execution failed'))

@@ -4,6 +4,18 @@ specifications:
     - match: openspec/specs/**/spec.md
       scope: current
     - match: openspec/changes/{scope}/specs/**/spec.md
+evidence:
+  files:
+    - .focused-spec/evidence/agent-guidance.yaml
+    - .focused-spec/evidence/agent-workflow.yaml
+    - .focused-spec/evidence/cli-help.yaml
+    - .focused-spec/evidence/distribution.yaml
+    - .focused-spec/evidence/evidence-registry-sharding.yaml
+    - .focused-spec/evidence/project-configuration.yaml
+    - .focused-spec/evidence/runner-protocol.yaml
+    - .focused-spec/evidence/scenario-authoring.yaml
+    - .focused-spec/evidence/scenario-execution.yaml
+    - .focused-spec/evidence/validation.yaml
 runners:
   vitest:
     module: ./.focused-spec/runners/vitest.ts

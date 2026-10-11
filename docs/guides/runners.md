@@ -2,7 +2,7 @@
 
 Use the public [runner API contract](../reference/runner-api.md), not internal package modules or implementation details. It defines `RunnerPlugin`, selector resolution, target results, request context, and optional partitioning. A runner is project-local and must distinguish an executed selected test from a skipped, missing, or unreported test; a successful framework process exit alone may not establish `pass`.
 
-For an agent implementing or repairing a runner, the package-owned [runner guidance](../../guidance/runners.md) owns the exact selector, collection, report-interpretation, and verification steps. The project's installed CLI serves it through `agent-guide --protocol 1 --topic runners --json`; no skill-local reference or source-checkout access is required. Start with serial execution; only add partitioning after auditing shared resources.
+For an agent implementing or repairing a runner, the package-owned [runner guidance](../../guidance/runners.md) owns the exact selector, collection, report-interpretation, and verification steps. The project's installed CLI serves it through `instructions --protocol 1 --topic runners --json`; no skill-local reference or source-checkout access is required. Start with serial execution; only add partitioning after auditing shared resources.
 
 The [Go](../../examples/openspec/.focused-spec/runners/go-test.ts) and [pytest](../../examples/openspec/.focused-spec/runners/pytest.ts) examples illustrate framework-specific collection and invocation, not a production result parser: both classify by process exit code and need adaptation to detect skipped or unexecuted selected tests. Do not copy another project's source parser or resource policy.
 

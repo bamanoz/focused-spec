@@ -1,7 +1,8 @@
 ## ADDED Requirements
 
 ### Requirement: Offline package-owned guidance
-The CLI SHALL provide `agent-guide [--protocol <version>] [--topic workflow|runners] [--json]` independently of project configuration, evidence registries, native documents, runners, and network access. The default protocol SHALL be 1 and the default topic SHALL be `workflow`. Guidance and package identity SHALL come from the package owning the invoked CLI, not the current directory, another CLI on PATH, or a remotely downloaded release. Reading guidance SHALL NOT install or modify project or agent files and SHALL NOT count as validation or executable evidence.
+The CLI SHALL provide `instructions [--protocol <version>] [--topic workflow|runners] [--json]` independently of project configuration, evidence registries, native documents, runners, and network access. The default protocol SHALL be 1 and the default topic SHALL be `workflow`. Guidance and package identity SHALL come from the package owning the invoked CLI, not the current directory, another CLI on PATH, or a remotely downloaded release. Reading guidance SHALL NOT install or modify project or agent files and SHALL NOT count as validation or executable evidence.
+The command name SHALL be `instructions` only; the previous `agent-guide` invocation and its help forms SHALL fail as unknown commands rather than remain compatibility aliases.
 
 <!-- focused-spec:id=guidance.delivery.offline -->
 #### Scenario: Workflow is available before project setup
@@ -12,6 +13,11 @@ The CLI SHALL provide `agent-guide [--protocol <version>] [--topic workflow|runn
 #### Scenario: Runner guidance is available on demand
 - **WHEN** the installed CLI is asked for the `runners` topic
 - **THEN** it returns the same package's complete runner authoring and verification guidance without requiring access to the focused-spec source repository
+
+<!-- focused-spec:id=guidance.delivery.command-name -->
+#### Scenario: The previous command is not a compatibility alias
+- **WHEN** a consumer invokes the previous `agent-guide` command or requests its command-specific help
+- **THEN** the CLI rejects the invocation with a nonzero exit and no usable guidance while directing the consumer to current command help
 
 ### Requirement: Versioned guidance response
 For protocol 1, JSON output SHALL be one object with `protocolVersion: 1`, `package: { name: "focused-spec", version: <installed package version> }`, `topic: "workflow" | "runners"`, and nonempty Markdown `content`. Text output SHALL identify the serving package version, protocol, and topic and contain the corresponding guidance. Package versions, configuration versions, and runner API versions SHALL NOT be interpreted as loader protocol versions. A compatible package update SHALL NOT require changing the loader merely because the package version changed.

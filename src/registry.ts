@@ -1,12 +1,15 @@
 import { readFile, realpath } from 'node:fs/promises'
 import { isAbsolute, posix, relative, resolve, sep } from 'node:path'
+import fg from 'fast-glob'
 import { LineCounter, parseDocument } from 'yaml'
 import type { EvidenceEntry, Violation } from './model.js'
 import { STABLE_ID } from './parser.js'
 import { isScopeName } from './sources.js'
+import { parseEvidenceConfig } from './config.js'
 
 export interface EvidenceRegistry {
   readonly entries: readonly EvidenceEntry[]
+  readonly files: readonly string[]
   readonly violations: readonly Violation[]
 }
 
@@ -22,18 +25,19 @@ export function parseEvidenceRegistry(
 ): EvidenceRegistry {
   const entries: EvidenceEntry[] = []
   const violations: Violation[] = []
+  const files = [path]
   const lineCounter = new LineCounter()
   const document = parseDocument(source, { lineCounter })
-  if (document.errors.length > 0) return { entries, violations: document.errors.map(error => ({ path, line: lineCounter.linePos(error.pos[0]).line, message: `invalid evidence registry YAML: ${error.message}` })) }
+  if (document.errors.length > 0) return { entries, files, violations: document.errors.map(error => ({ path, line: lineCounter.linePos(error.pos[0]).line, message: `invalid evidence registry YAML: ${error.message}` })) }
   let value: unknown
   try { value = document.toJS({ maxAliasCount: 0 }) }
-  catch (error) { return { entries, violations: [{ path, message: `invalid evidence registry: ${error instanceof Error ? error.message : String(error)}` }] } }
+  catch (error) { return { entries, files, violations: [{ path, message: `invalid evidence registry: ${error instanceof Error ? error.message : String(error)}` }] } }
   const root = record(value)
   if (root === undefined || Object.keys(root).length !== 1 || !Object.hasOwn(root, 'scopes')) {
-    return { entries, violations: [{ path, message: 'evidence registry must contain only a scopes mapping; behavior belongs in native items' }] }
+    return { entries, files, violations: [{ path, message: 'evidence registry must contain only a scopes mapping; behavior belongs in native items' }] }
   }
   const scopes = record(root.scopes)
-  if (scopes === undefined) return { entries, violations: [{ path, message: 'evidence registry scopes must be a mapping' }] }
+  if (scopes === undefined) return { entries, files, violations: [{ path, message: 'evidence registry scopes must be a mapping' }] }
   for (const [scope, rawEntries] of Object.entries(scopes)) {
     if (selectedScope !== undefined && selectedScope !== scope) continue
     if (!isScopeName(scope)) { violations.push({ path, message: `invalid registry scope name ${scope}` }); continue }
@@ -64,20 +68,84 @@ export function parseEvidenceRegistry(
           binding = { path: posix.normalize(rawBinding.path), nativeId: rawBinding.nativeId }
         }
       }
-      if (previous === violations.length) entries.push({ scope, id, line, evidence: entry.evidence as string[], ...(binding === undefined ? {} : { source: binding }) })
+      if (previous === violations.length) entries.push({ scope, id, line, registryPath: path, evidence: entry.evidence as string[], ...(binding === undefined ? {} : { source: binding }) })
     }
   }
-  return { entries, violations }
+  return { entries, files, violations }
 }
 
-export async function loadEvidenceRegistry(projectRoot: string, selectedScope?: string, selectedScenarioId?: string): Promise<EvidenceRegistry> {
-  const path = '.focused-spec/evidence.yaml'
-  try {
-    const [root, registry] = await Promise.all([realpath(projectRoot), realpath(resolve(projectRoot, path))])
-    const fromRoot = relative(root, registry)
-    if (isAbsolute(fromRoot) || fromRoot === '..' || fromRoot.startsWith(`..${sep}`)) return { entries: [], violations: [{ path, message: 'evidence registry resolves outside project root' }] }
-    return parseEvidenceRegistry(await readFile(registry, 'utf8'), path, selectedScope, selectedScenarioId)
-  } catch (error) {
-    return { entries: [], violations: [{ path, message: `cannot read evidence registry: ${error instanceof Error ? error.message : String(error)}` }] }
+export async function loadEvidenceRegistry(
+  projectRoot: string,
+  files: readonly string[] = ['.focused-spec/evidence.yaml'],
+  selectedScope?: string,
+  selectedScenarioId?: string,
+): Promise<EvidenceRegistry> {
+  const entries: EvidenceEntry[] = []
+  const violations: Violation[] = []
+  const registryFiles: string[] = []
+  parseEvidenceConfig({ files }, '.focused-spec/config.yaml', violations)
+  if (violations.length > 0) return { entries, files: registryFiles, violations }
+  let root: string
+  try { root = await realpath(projectRoot) }
+  catch (error) { return { entries, files: registryFiles, violations: [{ path: projectRoot, message: `cannot resolve registry project root: ${error instanceof Error ? error.message : String(error)}` }] } }
+  const claims = new Map<string, string>()
+  const canonicalClaims = new Map<string, string>()
+  const identities = new Map<string, EvidenceEntry>()
+  const duplicates = new Set<string>()
+  for (const pattern of files) {
+    let paths: string[]
+    try {
+      paths = await fg(pattern, { cwd: projectRoot, dot: true, onlyFiles: true, followSymbolicLinks: true, throwErrorOnBrokenSymbolicLink: true, unique: true })
+    } catch (error) {
+      violations.push({ path: pattern, message: `cannot discover evidence registry: ${error instanceof Error ? error.message : String(error)}` })
+      continue
+    }
+    if (paths.length === 0) violations.push({ path: pattern, message: `cannot read evidence registry: missing source ${pattern}; pattern matched no files` })
+    for (const matched of paths.sort()) {
+      const path = posix.normalize(matched)
+      const previousPattern = claims.get(path)
+      if (previousPattern !== undefined) {
+        violations.push({ path, message: `evidence registry is claimed more than once by ${previousPattern} and ${pattern}` })
+        continue
+      }
+      claims.set(path, pattern)
+      if (!/\.(?:yaml|yml)$/iu.test(path)) {
+        violations.push({ path, message: 'evidence registry source must be a .yaml or .yml file' })
+        continue
+      }
+      try {
+        const registry = await realpath(resolve(projectRoot, path))
+        const fromRoot = relative(root, registry)
+        if (isAbsolute(fromRoot) || fromRoot === '..' || fromRoot.startsWith(`..${sep}`)) {
+          violations.push({ path, message: 'evidence registry resolves outside project root' })
+          continue
+        }
+        const previousPath = canonicalClaims.get(registry)
+        if (previousPath !== undefined) {
+          violations.push({ path, message: `evidence registry is also claimed through ${previousPath}` })
+          continue
+        }
+        canonicalClaims.set(registry, path)
+        const parsed = parseEvidenceRegistry(await readFile(registry, 'utf8'), path, selectedScope, selectedScenarioId)
+        registryFiles.push(path)
+        violations.push(...parsed.violations)
+        for (const entry of parsed.entries) {
+          const key = `${entry.scope}\u0000${entry.id}`
+          const previous = identities.get(key)
+          if (previous === undefined) identities.set(key, entry)
+          else {
+            duplicates.add(key)
+            violations.push({ path: entry.registryPath, line: entry.line, scenarioId: entry.id,
+              message: `duplicate registry identity ${entry.scope}/${entry.id}; also registered at ${previous.registryPath}:${previous.line}` })
+          }
+        }
+      } catch (error) {
+        violations.push({ path, message: `cannot read evidence registry: ${error instanceof Error ? error.message : String(error)}` })
+      }
+    }
   }
+  for (const [key, entry] of identities) if (!duplicates.has(key)) entries.push(entry)
+  entries.sort((left, right) => left.registryPath.localeCompare(right.registryPath) || left.line - right.line)
+  violations.sort((left, right) => left.path.localeCompare(right.path) || (left.line ?? 0) - (right.line ?? 0) || left.message.localeCompare(right.message))
+  return { entries, files: registryFiles.sort(), violations }
 }

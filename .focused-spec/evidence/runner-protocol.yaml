@@ -1,0 +1,35 @@
+scopes:
+  current:
+    runner.lifecycle.real-invocation:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > resolve and execute exact evidence through an isolated runner host
+    runner.lifecycle.timeout:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > reports an unresponsive runner as an error after timeout
+    runner.resolve.unresolved:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > reports reached timings on unresolved evidence without starting execution
+    runner.resolve.cardinality:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > rejects duplicate missing and unknown selector resolutions
+    runner.resolve.source-boundary:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > rejects a resolved source outside the project root
+    runner.run.cardinality:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > rejects missing duplicate and unknown target results
+    runner.partition.selected-targets:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > partitions only selected targets into exact executable groups
+    runner.partition.invalid:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > rejects an invalid partition without running that runner's targets
+    runner.partition.legacy-exclusive:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > runs an unmodified runner exclusively with bounded concurrency
+    runner.partition.default-serial:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > leaves partition dormant with the default serial limit
+    runner.partition.uncovered-exclusive:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > keeps targets with unknown resource compatibility exclusive

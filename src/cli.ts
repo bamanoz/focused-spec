@@ -2,7 +2,7 @@
 import process from 'node:process'
 import { performance } from 'node:perf_hooks'
 import { isAbsolute, resolve } from 'node:path'
-import { agentGuide, AGENT_GUIDE_HELP } from './agent-guide.js'
+import { instructions, INSTRUCTIONS_HELP } from './instructions.js'
 import { loadConfig } from './config.js'
 import { executePlan } from './executor.js'
 import type { ExecutionPlan, ExecutionResult, SpecDocument, Violation } from './model.js'
@@ -32,7 +32,7 @@ Usage:
 Commands:
   validate  Check native bindings and resolve registry evidence without running tests
   run       Strictly validate, then execute selected evidence
-  agent-guide  Read version-compatible agent workflow or runner guidance from this package
+  instructions  Read version-compatible agent workflow or runner guidance from this package
 
 Options:
   -h, --help  Show this help
@@ -63,7 +63,7 @@ Options:
 Without --strict, planned: evidence is allowed in every scope and is not resolved.
 Full validation resolves concrete evidence but never executes tests.
 Configuration version 3 selects native Markdown/Gherkin documents.
-Identity and evidence live in .focused-spec/evidence.yaml; behavior stays in the native item.
+Identity and evidence live in configured evidence.files (default: .focused-spec/evidence.yaml); behavior stays in the native item.
 This command does not certify host format validity or unregistered native outcomes.
 
 Examples:
@@ -89,7 +89,7 @@ Options:
   -h, --help        Show this help
 
 Run always validates strictly before starting tests; planned: evidence blocks execution.
-Evidence is declared in .focused-spec/evidence.yaml; behavior stays in the native item.
+Evidence is declared in configured evidence.files (default: .focused-spec/evidence.yaml); behavior stays in the native item.
 Each scope/ID must uniquely bind a native marker, Gherkin scenario tag, or explicit native ID.
 Only registered items and executed evidence are reported; native validation belongs to the host.
 
@@ -109,14 +109,14 @@ function requestedHelp(argumentsList: readonly string[]): string | undefined {
     if (command === 'help' && argumentsList.length === 2) {
       if (argumentsList[1] === 'validate') return VALIDATE_HELP
       if (argumentsList[1] === 'run') return RUN_HELP
-      if (argumentsList[1] === 'agent-guide') return AGENT_GUIDE_HELP
+      if (argumentsList[1] === 'instructions') return INSTRUCTIONS_HELP
       throw argumentError(`unknown help command ${String(argumentsList[1])}`)
     }
     throw argumentError('unexpected arguments for help')
   }
-  if (command === 'validate' || command === 'run' || command === 'agent-guide') {
+  if (command === 'validate' || command === 'run' || command === 'instructions') {
     if (argumentsList.includes('--help') || argumentsList.includes('-h')) {
-      return command === 'agent-guide' ? AGENT_GUIDE_HELP : command === 'validate' ? VALIDATE_HELP : RUN_HELP
+      return command === 'instructions' ? INSTRUCTIONS_HELP : command === 'validate' ? VALIDATE_HELP : RUN_HELP
     }
   }
   return undefined
@@ -326,8 +326,8 @@ async function main(argumentsList: readonly string[]): Promise<number> {
     process.stdout.write(help)
     return 0
   }
-  if (argumentsList[0] === 'agent-guide') {
-    process.stdout.write(await agentGuide(argumentsList.slice(1)))
+  if (argumentsList[0] === 'instructions') {
+    process.stdout.write(await instructions(argumentsList.slice(1)))
     return 0
   }
   const options = parseArguments(argumentsList)

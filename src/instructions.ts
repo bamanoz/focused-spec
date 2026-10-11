@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises'
 
-export const AGENT_GUIDE_HELP = `Read authoritative agent guidance from the installed focused-spec package.
+export const INSTRUCTIONS_HELP = `Read authoritative agent guidance from the installed focused-spec package.
 
 Usage:
-  focused-spec agent-guide [options]
+  focused-spec instructions [options]
 
 Options:
   --protocol <version>  Loader protocol, independent of package/config/runner versions (default: 1)
@@ -16,15 +16,15 @@ Unsupported protocols fail without returning instructions. Use the project's ins
 Guidance is not validation or executable evidence.
 
 Examples:
-  ./node_modules/.bin/focused-spec agent-guide --protocol 1 --json
-  ./node_modules/.bin/focused-spec agent-guide --protocol 1 --topic runners --json
+  ./node_modules/.bin/focused-spec instructions --protocol 1 --json
+  ./node_modules/.bin/focused-spec instructions --protocol 1 --topic runners --json
 `
 
 function argumentError(message: string): Error {
-  return new Error(`${message}\nRun 'focused-spec agent-guide --help' for usage.`)
+  return new Error(`${message}\nRun 'focused-spec instructions --help' for usage.`)
 }
 
-export async function agentGuide(argumentsList: readonly string[]): Promise<string> {
+export async function instructions(argumentsList: readonly string[]): Promise<string> {
   let protocol = 1
   let topic: 'workflow' | 'runners' = 'workflow'
   let json = false

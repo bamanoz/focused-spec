@@ -4,10 +4,10 @@ The CLI and separately installed focused-spec skill can come from different rele
 
 ## What Changes
 
-- Add an offline `agent-guide` CLI command serving package-owned workflow and on-demand runner guidance, independently of project configuration.
+- Add an offline `instructions` CLI command serving package-owned workflow and on-demand runner guidance, independently of project configuration.
 - Replace the installed skill's full workflow with a small discoverable loader that obtains instructions from the consuming project's installed CLI before focused-spec work.
 - Introduce loader protocol version 1, distinct from package versions, configuration version 3, and runner API version 1. Unsupported protocol requests fail without emitting usable guidance.
-- **BREAKING**: only the new loader and CLI-owned guidance format are supported. Do not retain legacy full-text skills, format readers, aliases, shims, conversion commands, or fallback paths. The new loader requires a CLI supporting `agent-guide`; unsupported installations fail explicitly. Existing `validate`, `run`, public types, current configuration, and runner contracts remain unchanged.
+- **BREAKING**: only the new loader and CLI-owned guidance format are supported. Do not retain legacy full-text skills, format readers, aliases, shims, conversion commands, or fallback paths. The new loader requires a CLI supporting `instructions`; unsupported installations fail explicitly. Existing `validate`, `run`, public types, current configuration, and runner contracts remain unchanged.
 - Keep full workflow guidance authoritative in the npm package, not duplicated in installed skills. Reload it for subsequent workflow steps and after a CLI update.
 - Existing consumer projects are migrated separately by their agents at the user's request, not by product migration tooling. Document the new installation and session-reload requirements; do not silently rewrite customized instructions or claim already-read session text can be retracted.
 - Extend help and black-box activation checks to distinguish loading the skill from successfully obtaining the installed CLI's workflow.
@@ -21,7 +21,7 @@ The CLI and separately installed focused-spec skill can come from different rele
 ### Modified Capabilities
 
 - `distribution`: packed installs include the authoritative guidance as well as the separately installable loader.
-- `cli-help`: discover and explain `agent-guide` alongside `validate` and `run`.
+- `cli-help`: discover and explain `instructions` alongside `validate` and `run`.
 - `agent-workflow`: load guidance from the project-local CLI, fail closed when unavailable, and verify actual guidance acquisition in new black-box evaluations.
 
 ## Impact

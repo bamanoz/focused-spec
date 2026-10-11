@@ -86,7 +86,7 @@ async function expectInstalledGuide(project: string, topic: GuideTopic): Promise
   expect(content.trim()).not.toBe('')
 
   const cli = join(packageRoot, 'dist/cli.js')
-  const argumentsList = ['agent-guide', '--protocol', '1', '--topic', topic]
+  const argumentsList = ['instructions', '--protocol', '1', '--topic', topic]
   const json = spawnSync(process.execPath, [cli, ...argumentsList, '--json'], { cwd: project, encoding: 'utf8' })
   expect(json.status, json.stderr).toBe(0)
   expect(json.stderr).toBe('')
@@ -245,7 +245,7 @@ describe('package distribution', () => {
       const packageRoot = join(incompleteConsumer, 'node_modules/focused-spec')
       await rm(join(packageRoot, 'guidance/workflow.md'))
       const cli = join(packageRoot, 'dist/cli.js')
-      const result = spawnSync(process.execPath, [cli, 'agent-guide', '--protocol', '1', '--topic', 'workflow', '--json'], {
+      const result = spawnSync(process.execPath, [cli, 'instructions', '--protocol', '1', '--topic', 'workflow', '--json'], {
         cwd: incompleteConsumer,
         encoding: 'utf8',
       })

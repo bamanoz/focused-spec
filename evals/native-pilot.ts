@@ -2,10 +2,10 @@
 /** Black-box authoring pilot using the same packed focused-spec CLI exposed to evaluated agents. */
 import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fg from 'fast-glob'
-import { parseEvidenceRegistry, parseNativeDocument } from '../dist/index.js'
+import { loadConfig, loadEvidenceRegistry, parseNativeDocument } from '../dist/index.js'
 import type { NativeItem } from '../dist/index.js'
 import { OmpAgentDriver } from './omp-agent.ts'
 import { runProcess } from './process.ts'
@@ -16,8 +16,9 @@ import { runPlanningDialogue } from './acp-agent.ts'
 import type { PlanningResult } from './acp-agent.ts'
 import { interviewFailedAgent } from './diagnostic.ts'
 
-const root = fileURLToPath(new URL('..', import.meta.url))
-function selectedKind(reference: string): 'go' | 'python' | undefined {
+export const nativePilotRoot = fileURLToPath(new URL('..', import.meta.url))
+const root = nativePilotRoot
+export function selectedKind(reference: string): 'go' | 'python' | undefined {
   if (/^[a-z0-9]+(?:[.-][a-z0-9]+)*::(?:\.\/auth|auth\/auth_test\.go)::TestBlockedAccount$/u.test(reference)) return 'go'
   if (/^[a-z0-9]+(?:[.-][a-z0-9]+)*::tests\/functional\/test_auth\.py::test_blocked_account$/u.test(reference)) return 'python'
   return undefined
@@ -27,7 +28,7 @@ function markers(source: string, name: NativeCase): { text: string; id: string }
     : /<!-- focused-spec:id=([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+) -->/gu
   return [...source.matchAll(pattern)].map(match => ({ text: match[0], id: match[1] ?? '' }))
 }
-const cases = {
+export const nativeCases = {
   openspec: {
     path: 'openspec/changes/link-blocked-account/specs/auth/spec.md',
     text: '## ADDED Requirements\n\n### Requirement: Blocked accounts cannot authenticate\nA blocked account SHALL be rejected independently of credential validity.\n\n#### Scenario: Blocked account submits valid credentials\n- **WHEN** a blocked account submits valid credentials\n- **THEN** authentication is rejected\n',
@@ -64,13 +65,14 @@ const cases = {
     item: '  Scenario: Blocked account submits valid credentials',
   },
 } as const
+const cases = nativeCases
 
-type NativeCase = keyof typeof cases
-interface Gate { name: string; passed: boolean | null; detail: string; blockedBy?: string }
-const gate = (name: string, passed: boolean | null, detail: string): Gate => ({ name, passed, detail })
-type Verdict = 'passed' | 'failed' | 'unverified'
-interface Outcome { status: Verdict; detail: string }
-const outcome = (status: Verdict, detail: string): Outcome => ({ status, detail })
+export type NativeCase = keyof typeof nativeCases
+export interface Gate { name: string; passed: boolean | null; detail: string; blockedBy?: string }
+export const gate = (name: string, passed: boolean | null, detail: string): Gate => ({ name, passed, detail })
+export type Verdict = 'passed' | 'failed' | 'unverified'
+export interface Outcome { status: Verdict; detail: string }
+export const outcome = (status: Verdict, detail: string): Outcome => ({ status, detail })
 export function judged(gates: Gate[], names: string[]): Outcome {
   const selected = gates.filter(item => names.includes(item.name))
   const failures = selected.filter(item => item.passed === false)
@@ -78,7 +80,7 @@ export function judged(gates: Gate[], names: string[]): Outcome {
   const blocked = selected.filter(item => item.passed === null)
   return outcome(blocked.length > 0 ? 'unverified' : 'passed', blocked.map(item => item.detail).join('; ') || 'all required gates passed')
 }
-function initialSpecification(name: NativeCase): string {
+export function initialSpecification(name: NativeCase): string {
   return cases[name].text
     .replaceAll('with valid credentials', 'with supplied credentials')
     .replaceAll('submits valid credentials', 'submits credentials')
@@ -161,7 +163,7 @@ export default {
 }
 `)
 }
-async function prepare(workspace: string, name: NativeCase, create: boolean): Promise<void> {
+export async function prepareNativeWorkspace(workspace: string, name: NativeCase, create: boolean): Promise<void> {
   await cp(join(root, 'evals/fixtures/polyglot'), workspace, { recursive: true })
   await installPackedFocusedSpec(workspace, name === 'gherkin')
   await provisionRunners(workspace)
@@ -207,7 +209,7 @@ async function prepare(workspace: string, name: NativeCase, create: boolean): Pr
   const fixture = cases[name]
   if (!create) await put(workspace, fixture.path, initialSpecification(name))
   if (name === 'openspec') {
-    for (const skill of ['openspec-propose', 'openspec-update-change', 'openspec-explore']) {
+    for (const skill of ['openspec-propose', 'openspec-update-change', 'openspec-apply-change', 'openspec-sync-specs', 'openspec-archive-change', 'openspec-explore']) {
       await cp(join(root, '.omp/skills', skill), join(workspace, '.omp/skills', skill), { recursive: true })
     }
     await put(workspace, 'openspec/config.yaml', 'schema: spec-driven\n')
@@ -294,7 +296,7 @@ Provenance: host integration of the installed official \`.agents/skills/bmad-spe
   }
 }
 function deniesAuthentication(text: string): boolean {
-  return /reject|denied|denial|cannot|prevent|returns false|must not (?:log\s*in|authenticate)/iu.test(text)
+  return /reject|den(?:y|ies|ied|ial)|cannot|prevent|returns false|(?:must|is|are) not (?:log\s*in|authenticated?)/iu.test(text)
 }
 
 function atomicBlockedOutcome(source: string): boolean {
@@ -304,29 +306,7 @@ function atomicBlockedOutcome(source: string): boolean {
   return /block/iu.test(intent) && /valid/iu.test(success) && deniesAuthentication(success)
     && !/\b(active|unblocked|accepted)\b/iu.test(success)
 }
-function nativeItem(name: NativeCase, source: string): string {
-  const patterns: Partial<Record<NativeCase, RegExp>> = {
-    openspec: /^#### Scenario: [^\n]+/mu,
-    'spec-kit': /^\d+\. \*\*Given\*\*[^\n]+/mu,
-    kiro: /^ *(?:\d+\. )?WHEN [^\n]*?\s+THE SYSTEM SHALL [^\n]+/imu,
-    gsd: /^- \[.\] \*\*AUTH-01\*\*:[^\n]+/mu,
-    'agent-os': /^- [^\n]*block[^\n]*/imu,
-    gherkin: /^ *Scenario: [^\n]+/mu,
-  }
-  return source.match(patterns[name] ?? /$^/u)?.[0].trimEnd() ?? ''
-}
-function adjacent(source: string, item: string, marker: string): boolean {
-  if (!item || !marker) return false
-  const itemStart = source.indexOf(item)
-  const markStart = source.indexOf(marker)
-  if (itemStart < 0 || markStart < 0) return false
-  const before = markStart < itemStart && source.slice(markStart + marker.length, itemStart).trim() === ''
-    && source.slice(markStart + marker.length, itemStart).split('\n').length <= 2
-  const after = markStart >= itemStart + item.length && source.slice(itemStart + item.length, markStart).trim() === ''
-    && source.slice(itemStart + item.length, markStart).split('\n').length <= 2
-  return before || after
-}
-function markerGate(name: NativeCase, source: string): Gate {
+export function nativeSingleSourceGate(name: NativeCase, source: string): Gate {
   const parsed = parseNativeDocument(cases[name].path, source, 'pilot')
   if (name === 'bmad') {
     const preserved = atomicBlockedOutcome(source)
@@ -337,28 +317,25 @@ function markerGate(name: NativeCase, source: string): Gate {
       `native success criterion retained=${preserved}; native CAP-1 claims=${nativeClaims.length}; generated source unmarked=${unmarked}; parser violations=${parsed.violations.length}`)
   }
   const found = markers(source, name)
-  const expected = found[0]?.text ?? ''
   const occurrences = found.length
-  const normalized = name === 'gherkin'
-    ? source.replace(/^ *@focused\.[^\s]+\n/gmu, '')
-    : source.replace(/^ *<!-- focused-spec:id=[^>]+ -->\n/gmu, '').replace(/ <!-- focused-spec:id=[^>]+ -->/gu, '')
-  const item = nativeItem(name, normalized).trimEnd()
-  const afterItem = normalized.slice(normalized.indexOf(item) + item.length)
-  const scenario = name === 'openspec' ? afterItem.split(/^#### Scenario:|^### Requirement:/mu)[0] ?? ''
-    : name === 'gherkin' ? afterItem.split(/^ *Scenario:|^Feature:/mu)[0] ?? '' : ''
-  const target = `${item} ${scenario}`
-  const preserved = /block/iu.test(target) && /valid/iu.test(target) && deniesAuthentication(target)
-  const attached = adjacent(source, nativeItem(name, source).replace(expected, '').trimEnd(), expected)
-  const boundItems = parsed.items.filter(value => value.markerId === found[0]?.id)
+  const boundItems = found[0] === undefined ? [] : parsed.items.filter(value => value.markerId === found[0]!.id)
+  const outcomeText = boundItems[0] === undefined ? '' : boundNativeText(name, source, boundItems[0])
+  const preserved = /block/iu.test(outcomeText) && /valid/iu.test(outcomeText) && deniesAuthentication(outcomeText)
+  const attached = parsed.violations.length === 0 && boundItems.length === 1
   const noDuplicate = (name !== 'openspec' || (source.match(/^#### Scenario:/gmu) ?? []).length === 1)
     && (name !== 'spec-kit' || (source.match(/^\d+\. \*\*Given\*\*/gmu) ?? []).length === 1)
   const passed = parsed.violations.length === 0 && occurrences === 1 && boundItems.length === 1 && preserved && attached && noDuplicate
   return gate('native-item-single-source', passed,
     `markers=${occurrences} bound native items=${boundItems.length} native text preserved=${preserved} marker attached=${attached} extra scenario=${!noDuplicate} parser violations=${parsed.violations.length}`)
 }
-function boundNativeText(source: string, item: NativeItem): string {
+function boundNativeText(name: NativeCase, source: string, item: NativeItem): string {
   const lines = source.split('\n')
   const start = item.line - 1
+  if (name === 'gherkin') {
+    let end = item.line
+    while (end < lines.length && !/^\s*(?:Feature|Rule|Background|Scenario(?: Outline)?):/u.test(lines[end]!)) end += 1
+    return lines.slice(start, end).join('\n')
+  }
   const heading = lines[start]?.match(/^(#{1,6})\s/u)?.[1]
   if (heading === undefined) return item.name
   let end = start + 1
@@ -373,15 +350,12 @@ function boundNativeText(source: string, item: NativeItem): string {
 export function creationGate(name: NativeCase, source: string): Gate {
   const parsed = parseNativeDocument(cases[name].path, source, 'pilot')
   const found = markers(source, name)
-  const marker = found[0]?.text ?? ''
-  const item = nativeItem(name, source).replace(marker, '').trimEnd()
-  const flexibleNativeItem = name === 'openspec' || name === 'agent-os'
   const forms: Record<NativeCase, boolean> = {
     openspec: /^## ADDED Requirements$/mu.test(source) && /^### Requirement:/mu.test(source)
       && /^#### Scenario:/mu.test(source) && /^- \*\*WHEN\*\* /mu.test(source) && /^- \*\*THEN\*\* /mu.test(source),
     'spec-kit': /^### User Story /mu.test(source) && /\*\*Acceptance Scenarios\*\*/u.test(source)
       && /^\d+\. \*\*Given\*\* .*\*\*When\*\* .*\*\*Then\*\* /mu.test(source),
-    kiro: /^ *(?:\d+\. )?WHEN [^\n]*?\s+THE SYSTEM SHALL [^\n]+/imu.test(source),
+    kiro: /^ *(?:\d+\. )?WHEN [^\n]*?\s+THE [^\r\n]+? SHALL [^\r\n]+/imu.test(source),
     bmad: /^- \*\*CAP-1\*\*$/mu.test(source) && atomicBlockedOutcome(source)
       && ['## Why', '## Capabilities', '## Constraints', '## Non-goals', '## Success signal'].every(section => source.includes(section))
       && found.length === 0,
@@ -392,15 +366,18 @@ export function creationGate(name: NativeCase, source: string): Gate {
   }
   const identityCount = found.length
   const boundItems = name === 'bmad' ? parsed.items.filter(value => value.nativeIds.includes('CAP-1'))
-    : parsed.items.filter(value => value.markerId === found[0]?.id)
-  const expectedBindingCount = 1
-  const nativeIdentityValid = parsed.violations.length === 0 && boundItems.length === expectedBindingCount
-  const attached = flexibleNativeItem ? nativeIdentityValid : name === 'bmad' ? found.length === 0 : adjacent(source, item, marker)
-  const outcomeText = flexibleNativeItem && boundItems[0] !== undefined ? boundNativeText(source, boundItems[0]) : source
-  const semanticOutcome = /block/iu.test(outcomeText) && /valid/iu.test(outcomeText) && deniesAuthentication(outcomeText)
-  const passed = forms[name] && semanticOutcome && attached && nativeIdentityValid && (name === 'bmad' ? identityCount === 0 : identityCount === 1)
+    : found[0] === undefined ? [] : parsed.items.filter(value => value.markerId === found[0]!.id)
+  const nativeIdentityValid = parsed.violations.length === 0 && boundItems.length === 1
+  const attached = name === 'bmad' ? found.length === 0 && nativeIdentityValid : nativeIdentityValid
+  const outcomeText = boundItems[0] === undefined ? '' : boundNativeText(name, source, boundItems[0])
+  const semanticOutcome = name === 'bmad' ? atomicBlockedOutcome(source)
+    : /block/iu.test(outcomeText) && /valid/iu.test(outcomeText) && deniesAuthentication(outcomeText)
+  const noDuplicate = (name !== 'openspec' || (source.match(/^#### Scenario:/gmu) ?? []).length === 1)
+    && (name !== 'spec-kit' || (source.match(/^\d+\. \*\*Given\*\*/gmu) ?? []).length === 1)
+  const passed = forms[name] && semanticOutcome && attached && nativeIdentityValid && noDuplicate
+    && (name === 'bmad' ? identityCount === 0 : identityCount === 1)
   return gate('native-item-created', passed,
-    `native form=${forms[name]} blocked/valid/rejected outcome=${semanticOutcome} identity count=${identityCount} bound native items=${boundItems.length} marker attached=${attached} parser violations=${parsed.violations.length}`)
+    `native form=${forms[name]} blocked/valid/rejected outcome=${semanticOutcome} identity count=${identityCount} bound native items=${boundItems.length} marker attached=${attached} extra scenario=${!noDuplicate} parser violations=${parsed.violations.length}`)
 }
 export function hostWorkflowGate(name: NativeCase, transcript: string, create = false): Gate {
   const skill = name === 'openspec' ? create ? 'openspec-propose' : 'openspec-update-change'
@@ -444,14 +421,14 @@ export function hostPrerequisiteGate(name: NativeCase, planning?: PlanningResult
     `genuine ACP plan mode entered; explicit plan approval=${planning.planApproved}; actual user questions=${questions}`)
 }
 
-async function authoringSnapshot(workspace: string, name: NativeCase): Promise<Map<string, string>> {
+export async function authoringSnapshot(workspace: string, name: NativeCase): Promise<Map<string, string>> {
   const paths = await fg([`${name === 'openspec' ? 'openspec' : 'agent-os'}/**`, '.focused-spec/**'], { cwd: workspace, onlyFiles: true, dot: true })
   const files = new Map<string, string>()
   for (const path of paths) files.set(path, await readFile(join(workspace, path), 'utf8'))
   return files
 }
-async function infrastructureSnapshot(workspace: string): Promise<Map<string, string>> {
-  const paths = await fg(['.focused-spec/runners/**', 'node_modules/focused-spec/**', '.omp/skills/**', '.omp/extensions/**', '.agents/**'], {
+export async function infrastructureSnapshot(workspace: string): Promise<Map<string, string>> {
+  const paths = await fg(['.focused-spec/runners/**', 'node_modules/focused-spec/**', '.omp/skills/**', '.omp/extensions/**', '.agents/**', '.pi/gsd-core/**'], {
     cwd: workspace, onlyFiles: true, dot: true,
   })
   const files = new Map<string, string>()
@@ -459,7 +436,7 @@ async function infrastructureSnapshot(workspace: string): Promise<Map<string, st
   return files
 }
 
-async function infrastructureIntegrityGate(workspace: string, before: ReadonlyMap<string, string>): Promise<Gate> {
+export async function infrastructureIntegrityGate(workspace: string, before: ReadonlyMap<string, string>): Promise<Gate> {
   const after = await infrastructureSnapshot(workspace)
   const paths = new Set([...before.keys(), ...after.keys()])
   const changed = [...paths].filter(path => before.get(path) !== after.get(path))
@@ -487,10 +464,49 @@ async function bmadLifecycleGate(workspace: string, transcript: string, create: 
   return gate('bmad-memlog-workflow', memlog.includes('CAP-1') && usedMemlog,
     `memlog has CAP-1=${memlog.includes('CAP-1')}; agent ${create ? 'initialized and appended' : 'appended'}=${usedMemlog}`)
 }
+export async function registrySnapshot(workspace: string): Promise<Readonly<Record<string, string>>> {
+  const loaded = await loadConfig(workspace)
+  if (loaded.config === undefined) throw new Error(loaded.violations.map(item => item.message).join('; '))
+  const registry = await loadEvidenceRegistry(workspace, loaded.config.evidence?.files)
+  if (registry.violations.length > 0) throw new Error(registry.violations.map(item => `${item.path}: ${item.message}`).join('; '))
+  return Object.fromEntries(await Promise.all(registry.files.map(async path => [path, await readFile(join(workspace, path), 'utf8')])))
+}
+
+export function canonicalMemlogReadGate(workspace: string, transcript: string): Gate {
+  const memlog = resolve(workspace, '_bmad-output/specs/spec-blocked-login/.memlog.md')
+  const kernel = resolve(workspace, cases.bmad.path)
+  const pathOf = (path: string) => resolve(workspace, path.replace(/(?::(?:raw|-?\d+(?:[-+]\d*)?(?:,\d+(?:[-+]\d*)?)*))+$/u, ''))
+  const reads = new Set<string>()
+  let read = false
+  for (const line of transcript.split('\n')) {
+    try {
+      const event = JSON.parse(line) as {
+        type?: string; toolName?: string; toolCallId?: string
+        args?: { path?: string; input?: string; command?: string }
+        isError?: boolean; result?: { isError?: boolean }
+      }
+      if (event.type === 'tool_execution_start') {
+        if (event.toolName === 'read' && event.toolCallId !== undefined && typeof event.args?.path === 'string'
+          && pathOf(event.args.path) === memlog) reads.add(event.toolCallId)
+        const writesKernel = event.toolName === 'write' && typeof event.args?.path === 'string' && pathOf(event.args.path) === kernel
+          || event.toolName === 'edit' && typeof event.args?.input === 'string'
+            && [cases.bmad.path, kernel].some(path => event.args!.input!.includes(`[${path}#`))
+          || event.toolName === 'bash' && typeof event.args?.command === 'string'
+            && event.args.command.includes(cases.bmad.path)
+            && /(?:^|\s)(?:cp|mv|rm|touch|tee|python(?:3)?|node|bun|uv)\b|>/u.test(event.args.command)
+        if (writesKernel) return gate('canonical-memlog-read', read, `canonical memlog successfully read before regeneration=${read}`)
+      }
+      if (event.type === 'tool_execution_end' && event.toolName === 'read' && event.toolCallId !== undefined
+        && reads.has(event.toolCallId) && event.isError !== true && event.result !== undefined && event.result.isError !== true) read = true
+    } catch { continue }
+  }
+  return gate('canonical-memlog-read', read, `canonical memlog successfully read before regeneration=${read}`)
+}
+
 async function regenerateBmad(workspace: string, model: string): Promise<{ gates: Gate[]; verdict: Outcome; transcript: string }> {
   const path = cases.bmad.path
   const before = await readFile(join(workspace, path), 'utf8')
-  const registry = await readFile(join(workspace, '.focused-spec/evidence.yaml'), 'utf8')
+  const registry = await registrySnapshot(workspace)
   const config = await readFile(join(workspace, '.focused-spec/config.yaml'), 'utf8')
   await rm(join(workspace, path))
   const agent = await new OmpAgentDriver().run({ workspace, model, sessionDir: join(workspace, '.omp-regeneration-sessions'), skills: ['focused-spec', 'bmad-spec'], timeoutMs: 600_000,
@@ -500,17 +516,11 @@ async function regenerateBmad(workspace: string, model: string): Promise<{ gates
   const after = await readFile(join(workspace, path), 'utf8').catch(() => '')
   const binding = await evidenceGate(workspace, 'bmad', after)
   const cli = await focusedCliGates(workspace, binding)
-  const registryPreserved = await readFile(join(workspace, '.focused-spec/evidence.yaml'), 'utf8').catch(() => '') === registry
+  const registryPreserved = await registrySnapshot(workspace).then(after => JSON.stringify(after) === JSON.stringify(registry), () => false)
   const configPreserved = await readFile(join(workspace, '.focused-spec/config.yaml'), 'utf8').catch(() => '') === config
   const unique = (after.match(/^- \*\*CAP-1\*\*$/gmu) ?? []).length === 1 && !/^- \*\*CAP-2\*\*$/mu.test(after)
   const hostLoaded = hostWorkflowGate('bmad', agent.output).passed
-  const memlogRead = agent.output.split('\n').some(line => {
-    try {
-      const event = JSON.parse(line) as { type?: string; toolName?: string; args?: { path?: string } }
-      return event.type === 'tool_execution_start' && event.toolName === 'read'
-        && event.args?.path === '_bmad-output/specs/spec-blocked-login/.memlog.md'
-    } catch { return false }
-  })
+  const memlogRead = canonicalMemlogReadGate(workspace, agent.output).passed
   const singleSource = (await companionGate(workspace, 'bmad')).passed
   const productPreserved = (await Promise.all(['auth/auth.go', 'auth/auth_test.go', 'app/auth.py', 'tests/functional/test_auth.py'].map(async file =>
     await readFile(join(workspace, file), 'utf8') === await readFile(join(root, 'evals/fixtures/polyglot', file), 'utf8')))).every(Boolean)
@@ -522,16 +532,31 @@ async function regenerateBmad(workspace: string, model: string): Promise<{ gates
   return { gates: [focusedSkill, workflow, regeneration], verdict: outcome(stable ? 'passed' : 'failed', detail), transcript: agent.output }
 }
 
-async function companionGate(workspace: string, name: NativeCase): Promise<Gate> {
-  const paths = await fg(['**/*.md', '**/*.feature', '!node_modules/**', '!.omp/**', '!.omp-eval-sessions/**', '!.agents/**', '!.specify/**'], { cwd: workspace, onlyFiles: true, dot: true })
-  const companions = paths.filter(path => /(?:^|\/)scenarios\.(?:md|feature)$/u.test(path))
+export async function companionGate(workspace: string, name: NativeCase): Promise<Gate> {
+  const paths = await fg([
+    '**/*.md', '**/*.feature',
+    '!node_modules/**', '!.omp/**', '!.omp-*-sessions/**', '!.agents/**', '!.specify/**',
+    '!.pi/gsd-core/**', '!.home/.npm/**',
+  ], { cwd: workspace, onlyFiles: true, dot: true })
+  const companions = paths.filter(path => /(?:^|\/)scenarios\.(?:md|feature)$/u.test(path)).sort()
+  const matches: { path: string; count: number }[] = []
+  const violations: string[] = []
   let occurrences = 0
   for (const path of paths) {
     const content = await readFile(join(workspace, path), 'utf8')
-    occurrences += name === 'bmad' ? (content.match(/^- \*\*CAP-1\*\*$/gmu) ?? []).length : markers(content, name).length
+    const document = parseNativeDocument(path, content, 'current')
+    let count = 0
+    for (const item of document.items) {
+      if (name === 'bmad' ? item.nativeIds.includes('CAP-1') : item.markerId !== undefined) count += 1
+    }
+    for (const violation of document.violations) violations.push(`${path}:${violation.line ?? 1}: ${violation.message}`)
+    occurrences += count
+    if (count > 0) matches.push({ path, count })
   }
-  const passed = companions.length === 0 && occurrences === 1
-  return gate('one-behavior-source', passed, `item/marker occurrences=${occurrences}; companion files=${companions.join(', ') || 'none'}`)
+  const passed = companions.length === 0 && occurrences === 1 && violations.length === 0
+  const matched = matches.sort((left, right) => left.path.localeCompare(right.path))
+    .map(item => `${item.path} (${item.count})`).join(', ') || 'none'
+  return gate('one-behavior-source', passed, `native item occurrences=${occurrences}; companion files=${companions.join(', ') || 'none'}${passed ? '' : `; matched behavior paths=${matched}; native violations=${violations.join('; ') || 'none'}`}`)
 }
 
 function testCommand(reference: string): { command: string; args: string[]; assertion: string } {
@@ -557,14 +582,18 @@ export function agentEvidenceGate(transcript: string, references: string[]): Gat
       }
     } catch { /* Only structured tool events establish execution. */ }
   }
-  const cliRun = /(?:^|&&|;)\s*(?:(?:(?:npx|npm exec)(?:\s+--[\w-]+)*\s+)?(?:\S*\/)?focused-spec\s+run\b|node\s+\S*focused-spec\/dist\/cli\.js\s+run\b)/u
+  const cliRun = /(?:^|&&|;)\s*(?:(?:(?:npx|npm exec)(?:\s+--[\w-]+)*\s+)?(?:\S*\/)?focused-spec\s+(?:run\b|transition\s+prepare\b)|node\s+\S*focused-spec\/dist\/cli\.js\s+(?:run\b|transition\s+prepare\b))/u
   const executed = references.every(reference => completed.some(({ command, output }) => {
     if (cliRun.test(command) && !/(?:^|\s)(?:--help|-h)(?:\s|$)/u.test(command)) {
       if (output.split('\n').some(line => line.trim() === `PASS ${reference}`)) return true
       try {
         const result = JSON.parse(output.slice(output.indexOf('{'), output.lastIndexOf('}') + 1)) as {
-          success?: boolean; executionStarted?: boolean; scenarios?: { evidence?: { reference?: string; status?: string }[] }[] }
-        if (result.success === true && result.executionStarted === true && result.scenarios?.some(scenario =>
+          success?: boolean; executionStarted?: boolean
+          scenarios?: { evidence?: { reference?: string; status?: string }[] }[]
+          execution?: { scenarios?: { evidence?: { reference?: string; status?: string }[] }[] }
+        }
+        const scenarios = result.execution?.scenarios ?? result.scenarios
+        if (result.success === true && result.executionStarted === true && scenarios?.some(scenario =>
           scenario.evidence?.some(evidence => evidence.reference === reference && evidence.status === 'PASS'))) return true
       } catch { /* Non-JSON CLI output is checked through exact evidence rows above. */ }
     }
@@ -575,7 +604,7 @@ export function agentEvidenceGate(transcript: string, references: string[]): Gat
   }))
   return gate('agent-executed-selected-evidence', executed, executed ? references.join(', ') : 'no completed matching test execution in agent transcript')
 }
-async function sensitivityGate(workspace: string, references: string[]): Promise<Gate> {
+export async function sensitivityGate(workspace: string, references: string[]): Promise<Gate> {
   if (references.length === 0) return { name: 'selected-test-sensitivity', passed: null,
     blockedBy: 'evidence-only-registry', detail: 'not run: no valid registry selection for a sensitivity probe' }
   const results = []
@@ -595,19 +624,22 @@ async function sensitivityGate(workspace: string, references: string[]): Promise
   }
   return gate('selected-test-sensitivity', results.length === references.length && results.every(result => result.endsWith('assertion failed as expected')), results.join('; '))
 }
-export async function evidenceGate(workspace: string, name: NativeCase, sourceText: string): Promise<{
+export async function evidenceGate(workspace: string, name: NativeCase, sourceText: string, expectedScope?: string): Promise<{
   gate: Gate
   references: string[]
   scope?: string
   id?: string
 }> {
   try {
-    const path = '.focused-spec/evidence.yaml'
-    const raw = await readFile(join(workspace, path), 'utf8')
-    const registry = parseEvidenceRegistry(raw, path)
+    const loaded = await loadConfig(workspace)
+    if (loaded.config === undefined) throw new Error(loaded.violations.map(item => item.message).join('; '))
+    const registry = await loadEvidenceRegistry(workspace, loaded.config.evidence?.files, expectedScope)
     if (registry.violations.length > 0) throw new Error(registry.violations.map(item => `${item.path}${item.line === undefined ? '' : `:${item.line}`}: ${item.message}`).join('; '))
-    if (registry.entries.length !== 1) throw new Error(`expected one registry entry; found ${registry.entries.length}`)
-    const entry = registry.entries[0]!
+    const candidates = expectedScope === undefined ? registry.entries : registry.entries.filter(item => item.scope === expectedScope)
+    if (candidates.length !== 1 || expectedScope === undefined && registry.entries.length !== 1) {
+      throw new Error(`expected one${expectedScope === undefined ? '' : ` ${expectedScope}`} registry entry; found ${candidates.length}`)
+    }
+    const entry = candidates[0]!
     const parsed = parseNativeDocument(cases[name].path, sourceText, entry.scope)
     if (/^\s*- \*\*(?:ID|EVIDENCE)\*\*:/mu.test(sourceText)) throw new Error('native source contains legacy ID or EVIDENCE rows')
     if (parsed.violations.length > 0) throw new Error(parsed.violations.map(item => item.message).join('; '))
@@ -630,15 +662,13 @@ export async function evidenceGate(workspace: string, name: NativeCase, sourceTe
       throw new Error('evidence selector must identify TestBlockedAccount or test_blocked_account with a valid runner ID')
     }
     if (new Set(references.map(value => selectedKind(value))).size !== references.length) throw new Error('evidence repeats the same selected test')
-    if (raw.includes('WHEN') || raw.includes('THEN') || raw.includes('Given')) throw new Error('registry repeats behavioral text instead of identity and evidence only')
     return { gate: gate('evidence-only-registry', true, `${entry.scope}/${entry.id}: ${references.join(', ')}`), references, scope: entry.scope, id: entry.id }
   } catch (error) {
-    const missing = error instanceof Error && 'code' in error && error.code === 'ENOENT'
-    return { gate: gate('evidence-only-registry', false, missing ? 'registry file missing: .focused-spec/evidence.yaml' : `registry rejected: ${String(error)}`), references: [] }
+    return { gate: gate('evidence-only-registry', false, `registry rejected: ${String(error)}`), references: [] }
   }
 }
 
-async function focusedCliGates(workspace: string, selection: { scope?: string; id?: string; references: string[] }): Promise<Gate[]> {
+export async function focusedCliGates(workspace: string, selection: { scope?: string; id?: string; references: string[] }): Promise<Gate[]> {
   if (selection.scope === undefined || selection.id === undefined || selection.references.length === 0) {
     return [
       gate('focused-cli-validation', false, 'registry selection unavailable'),
@@ -665,7 +695,7 @@ async function focusedCliGates(workspace: string, selection: { scope?: string; i
     gate('focused-cli-execution', executionPassed, (execution.stdout || execution.stderr).trim()),
   ]
 }
-async function nativeGate(workspace: string, name: NativeCase): Promise<{ gate: Gate | null; verdict: Outcome }> {
+export async function nativeGate(workspace: string, name: NativeCase): Promise<{ gate: Gate | null; verdict: Outcome }> {
   if (name === 'openspec') {
     const command = 'openspec validate link-blocked-account --strict --no-interactive'
     const result = await runProcess('openspec', ['validate', 'link-blocked-account', '--strict', '--no-interactive'], { cwd: workspace, timeoutMs: 60_000 })
@@ -680,7 +710,7 @@ async function nativeGate(workspace: string, name: NativeCase): Promise<{ gate: 
   }
   return { gate: null, verdict: outcome('unverified', `${name} has no runnable native format validator in this fixture`) }
 }
-async function behaviorGate(workspace: string, references: string[]): Promise<Gate> {
+export async function behaviorGate(workspace: string, references: string[]): Promise<Gate> {
   if (references.length === 0) return { name: 'selected-test-executes', passed: null,
     blockedBy: 'evidence-only-registry', detail: 'not run: no valid registry selection for evidence execution' }
   const results = []
@@ -693,7 +723,7 @@ async function behaviorGate(workspace: string, references: string[]): Promise<Ga
   return gate('selected-test-executes', results.every(result => result.passed), results.map(result => `${result.reference}: ${result.output}`).join('\n'))
 }
 
-async function evaluate(name: NativeCase, model: string, keep: boolean, create: boolean): Promise<void> {
+export async function evaluateNativePilot(name: NativeCase, model: string, keep: boolean, create: boolean): Promise<void> {
   const workspace = await mkdtemp(join(tmpdir(), `focused-native-${name}-`))
   const sessionDir = join(workspace, '.omp-eval-sessions')
   const gates: Gate[] = []
@@ -704,7 +734,7 @@ async function evaluate(name: NativeCase, model: string, keep: boolean, create: 
   let dialogue: DialogueResult | null = null
   let planning: PlanningResult | null = null
   try {
-    await prepare(workspace, name, create)
+    await prepareNativeWorkspace(workspace, name, create)
     const protectedInfrastructure = await infrastructureSnapshot(workspace)
     const fixture = cases[name]
     const prompt = create
@@ -738,7 +768,7 @@ async function evaluate(name: NativeCase, model: string, keep: boolean, create: 
       if (prerequisite === null || prerequisite.passed === true) {
         const source = await readFile(join(workspace, fixture.path), 'utf8').catch(() => '')
         const evidence = await evidenceGate(workspace, name, source)
-        gates.push(create ? creationGate(name, source) : markerGate(name, source), evidence.gate, await companionGate(workspace, name))
+        gates.push(create ? creationGate(name, source) : nativeSingleSourceGate(name, source), evidence.gate, await companionGate(workspace, name))
         gates.push(...await focusedCliGates(workspace, evidence))
         const native = await nativeGate(workspace, name)
         validation = native.verdict
@@ -789,6 +819,6 @@ async function evaluate(name: NativeCase, model: string, keep: boolean, create: 
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const name = process.argv[2] as NativeCase | undefined
-  if (name === undefined || !(name in cases)) throw new Error(`Usage: node --experimental-strip-types evals/native-pilot.ts <${Object.keys(cases).join('|')}> [model] [--create] [--keep-workspace]`)
-  await evaluate(name, process.argv[3]?.startsWith('--') ? 'externcash/gpt-6-sol' : process.argv[3] ?? 'externcash/gpt-6-sol', process.argv.includes('--keep-workspace'), process.argv.includes('--create'))
+  if (name === undefined || !(name in nativeCases)) throw new Error(`Usage: node --experimental-strip-types evals/native-pilot.ts <${Object.keys(nativeCases).join('|')}> [model] [--create] [--keep-workspace]`)
+  await evaluateNativePilot(name, process.argv[3]?.startsWith('--') ? 'externcash/gpt-6-sol' : process.argv[3] ?? 'externcash/gpt-6-sol', process.argv.includes('--keep-workspace'), process.argv.includes('--create'))
 }

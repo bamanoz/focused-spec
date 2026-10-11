@@ -1,0 +1,121 @@
+scopes:
+  current:
+    agent.proposal.planning-only:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects a proposal that creates configuration or a planned evidence registry
+    agent.apply.mutation-sensitive:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects applied evidence that misses a controlled product regression
+    agent.evidence.vacuous-repair:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects vacuous evidence even after product repair and requires an agent sensitivity probe
+    agent.eval.failed-turn:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > records a failed agent turn without running downstream judges
+        - vitest::test/evals.spec.ts::agent eval harness > keeps post-failure recommendations outside scored agent turns
+        - vitest::test/evals.spec.ts::agent eval harness > retains the failed score when the research interview cannot complete
+    agent.eval.protected-files:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects protected test and package changes in an evaluated workspace
+    agent.eval.skill-activation:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > stops an OpenSpec turn before judging artifacts if the agent skipped the skill
+    agent.eval.native-cli-evidence:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > recognizes completed selected CLI evidence without crediting validation or failed commands
+    agent.adoption.preserve-native:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery
+    agent.adoption.surviving-evidence:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery
+        - vitest::test/evals.spec.ts::agent eval harness > retains executed checkpoints after working identity and registry retire in place
+    agent.adoption.evidence-continuity:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > detects lost or altered evidence across document transitions
+    agent.eval.scoped-identity:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > judges the selected scope when another scope has the same ID
+    agent.eval.provisioning-isolation:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > provisions parallel workspaces without rebuilding shared distribution
+    agent.eval.lifecycle-checkpoint:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > judges working evidence before sync removes its discovery
+    agent.eval.lifecycle-stop:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > stops before sync when working evidence fails
+    agent.eval.authored-identity:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > accepts a newly authored valid identity when the task prescribes none
+        - vitest::test/evals.spec.ts::agent eval harness > rejects a renamed, ambiguous, missing, or invalid identity after selection
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > accepts the bound native outcome without requiring hidden host headings
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > ignores quoted native payloads but rejects live duplicates and detached markers
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > counts live external BMad capabilities rather than fenced kernel examples
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > counts focused Gherkin scenarios rather than quoted tags
+    agent.eval.prescribed-identity:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects replacement of a prescribed identity
+    agent.eval.host-guidance:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > accepts only completed reads of applicable Spec Kit authoring guidance
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > requires the official BMad workflow even when integration guidance is loaded
+    agent.eval.plan-confirmation:
+      evidence:
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > accepts only explicit proposed-path consent and preserves cancellation or refinement
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > keeps host questions independent from runtime plan approval
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > recognizes exact companion paths from the authoritative submitted plan
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > authorizes compact companion lists only within their explicit directory
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > resolves listed companions only in an unambiguous requested folder
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > approves the current submitted file after edits and rejects unavailable resources
+    agent.eval.native-denial:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > accepts denial wording only for one unmarked atomic BMad CAP-1 outcome
+    agent.eval.configured-working-scope:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > executes the named change in its configured scope and rejects ambiguous or foreign bindings
+    agent.eval.host-dialogue:
+      evidence:
+        - vitest::test/dialogue.spec.ts::authoring dialogue consent > permits the confirmed revision without authorizing a different metadata file
+        - vitest::test/dialogue.spec.ts::authoring dialogue consent > fails unfinished dialogue at the turn limit instead of claiming completion
+  cli-owned-agent-guidance:
+    agent.guidance.project-local:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects global guidance in place of the project installation
+    agent.guidance.unavailable:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects absent or legacy local guidance activation
+    agent.guidance.invalid-response:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects completed but unusable guidance responses
+    agent.guidance.session-refresh:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > requires fresh guidance for a subsequent workflow step
+    agent.eval.failed-turn:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > records a failed agent turn without running downstream judges
+        - vitest::test/evals.spec.ts::agent eval harness > keeps post-failure recommendations outside scored agent turns
+        - vitest::test/evals.spec.ts::agent eval harness > retains the failed score when the research interview cannot complete
+    agent.eval.protected-files:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects protected test and package changes in an evaluated workspace
+    agent.eval.skill-activation:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects agent turns that never load the focused-spec skill
+    agent.eval.native-cli-evidence:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > recognizes completed selected CLI evidence without crediting validation or failed commands
+    agent.eval.guidance-activation:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > requires completed local workflow guidance after loader activation
+  remove-checked-transitions:
+    agent.adoption.preserve-native:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery
+    agent.adoption.surviving-evidence:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery
+        - vitest::test/evals.spec.ts::agent eval harness > retains executed checkpoints after working identity and registry retire in place
+    agent.adoption.evidence-continuity:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > detects lost or altered evidence across document transitions

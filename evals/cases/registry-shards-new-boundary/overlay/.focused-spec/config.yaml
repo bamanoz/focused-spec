@@ -1,0 +1,17 @@
+version: 3
+specifications:
+  documents:
+    - match: specs/account-authentication.md
+      scope: current
+    - match: specs/notifications.md
+      scope: notifications
+evidence:
+  files:
+    - .focused-spec/evidence/notifications.yaml
+runners:
+  go-unit:
+    module: ./.focused-spec/runners/go-test.ts
+    timeoutMs: 120000
+  pytest-functional:
+    module: ./.focused-spec/runners/pytest.ts
+    timeoutMs: 120000

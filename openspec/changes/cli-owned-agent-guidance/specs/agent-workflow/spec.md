@@ -10,7 +10,7 @@ The focused-spec loader SHALL obtain protocol-1 JSON workflow guidance from the 
 
 <!-- focused-spec:id=agent.guidance.unavailable -->
 #### Scenario: An absent or legacy local CLI stops focused-spec work
-- **WHEN** the project's CLI is absent or predates the `agent-guide` command
+- **WHEN** the project's CLI is absent or predates the `instructions` command
 - **THEN** the loader reports the missing compatible installation and does not continue using global, downloaded, or embedded stale focused-spec instructions
 
 <!-- focused-spec:id=agent.guidance.invalid-response -->

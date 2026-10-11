@@ -1,0 +1,15 @@
+scopes:
+  current:
+    distribution.package.cli:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > installs and executes the packed CLI from a consumer project
+    distribution.package.runner-api:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > typechecks a consumer plugin against focused-spec runner
+    distribution.skill.separate-install:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > installs the CLI without creating an agent skill or runner
+  cli-owned-agent-guidance:
+    distribution.package.agent-guidance:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > serves guidance from a source-independent packed installation

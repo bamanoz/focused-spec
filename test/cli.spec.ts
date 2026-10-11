@@ -142,7 +142,7 @@ describe('focused-spec CLI', () => {
       expect(result.stderr).toBe('')
       expect(result.stdout).toMatch(/^\s+validate\s/mu)
       expect(result.stdout).toMatch(/^\s+run\s/mu)
-      expect(result.stdout).toMatch(/^\s+agent-guide\s/mu)
+      expect(result.stdout).toMatch(/^\s+instructions\s/mu)
     }
     for (const command of ['validate', 'run']) {
       for (const args of [[command, '--help'], [command, '-h'], ['help', command]]) {
@@ -165,7 +165,7 @@ describe('focused-spec CLI', () => {
     await put(root, '.focused-spec/config.yaml', 'invalid: [')
     await put(root, '.focused-spec/evidence.yaml', 'invalid: [')
     const before = await readdir(root, { recursive: true })
-    const result = spawnSync(process.execPath, [cli, 'agent-guide', '--protocol', '1', '--json'], {
+    const result = spawnSync(process.execPath, [cli, 'instructions', '--protocol', '1', '--json'], {
       cwd: root, encoding: 'utf8',
       env: { ...process.env, npm_config_offline: 'true', HTTPS_PROXY: 'http://127.0.0.1:1' },
     })
@@ -176,7 +176,7 @@ describe('focused-spec CLI', () => {
     expect(response).toMatchObject({ protocolVersion: 1, package: { name: 'focused-spec', version: metadata.version }, topic: 'workflow' })
     expect(response.content).toBe(await readFile(new URL('../guidance/workflow.md', import.meta.url), 'utf8'))
     expect(await readdir(root, { recursive: true })).toEqual(before)
-    const text = spawnSync(process.execPath, [cli, 'agent-guide'], { cwd: root, encoding: 'utf8' })
+    const text = spawnSync(process.execPath, [cli, 'instructions'], { cwd: root, encoding: 'utf8' })
     expect(text.status, text.stderr).toBe(0)
     expect(text.stdout).toContain(String(response.content))
     expect(text.stdout).toContain(metadata.version)
@@ -184,7 +184,7 @@ describe('focused-spec CLI', () => {
 
   it('rejects unsupported guide protocols without returning instructions', async () => {
     const root = await emptyFixture()
-    const result = spawnSync(process.execPath, [cli, 'agent-guide', '--protocol', '2', '--json'], { cwd: root, encoding: 'utf8' })
+    const result = spawnSync(process.execPath, [cli, 'instructions', '--protocol', '2', '--json'], { cwd: root, encoding: 'utf8' })
     expect(result.status).toBe(1)
     expect(result.stdout).toBe('')
     expect(result.stderr).toMatch(/protocol 2.*supported protocols: 1/u)
@@ -193,10 +193,10 @@ describe('focused-spec CLI', () => {
   it('rejects invalid guide requests with actionable help', async () => {
     const root = await emptyFixture()
     for (const args of [['--topic', 'unknown'], ['--protocol', '0'], ['--protocol', '1.5'], ['--protocol'], ['--topic'], ['--strict'], ['--root', root]]) {
-      const result = spawnSync(process.execPath, [cli, 'agent-guide', ...args], { cwd: root, encoding: 'utf8' })
+      const result = spawnSync(process.execPath, [cli, 'instructions', ...args], { cwd: root, encoding: 'utf8' })
       expect(result.status).toBe(1)
       expect(result.stdout).toBe('')
-      expect(result.stderr).toContain('agent-guide --help')
+      expect(result.stderr).toContain('instructions --help')
     }
   })
 
@@ -207,7 +207,7 @@ describe('focused-spec CLI', () => {
     await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir')
     await put(root, 'package.json', '{"type":"module"}')
     await put(root, '.focused-spec/config.yaml', 'invalid: [')
-    for (const args of [['agent-guide', '--help'], ['agent-guide', '-h'], ['help', 'agent-guide'], ['agent-guide', '--protocol', '2', '--json', '--help']]) {
+    for (const args of [['instructions', '--help'], ['instructions', '-h'], ['help', 'instructions'], ['instructions', '--protocol', '2', '--json', '--help']]) {
       const result = spawnSync(process.execPath, [join(root, 'dist/cli.js'), ...args], { cwd: root, encoding: 'utf8' })
       expect(result.status, result.stderr).toBe(0)
       expect(result.stderr).toBe('')
@@ -220,7 +220,7 @@ describe('focused-spec CLI', () => {
 
   it('rejects invalid invocations without treating them as successful help', async () => {
     const root = await emptyFixture()
-    for (const args of [[], ['unknown'], ['help', 'unknown'], ['run', '--unknown'], ['run', '--scope'], ['validate', '--scenario', 'fixture.current.passes']]) {
+    for (const args of [[], ['unknown'], ['help', 'unknown'], ['agent-guide'], ['agent-guide', '--help'], ['help', 'agent-guide'], ['transition'], ['transition', '--help'], ['help', 'transition'], ['transition', 'prepare', '--help'], ['transition', 'verify', '--help'], ['transition', 'prepare', 'plan.yaml', '--snapshot', 'snapshot.json'], ['transition', 'verify', 'snapshot.json', '--final'], ['run', '--unknown'], ['run', '--scope'], ['validate', '--scenario', 'fixture.current.passes']]) {
       const result = spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: 'utf8' })
       expect(result.status).toBe(1)
       expect(result.stdout).toBe('')

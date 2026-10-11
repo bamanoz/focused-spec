@@ -10,7 +10,7 @@ Before a later focused-spec workflow step, resolve the local installation again 
 
 ## Respect the current phase
 
-During an explicitly planning-only task or the host's proposal phase, author only permitted planning artifacts and native identity binding. Record the intended exact runner and selector in the design or implementation tasks; defer `.focused-spec/evidence.yaml`, configuration, runners, and product changes until their implementation is authorized. A registry containing `planned:` references is still integration setup, not a planning artifact. Use existing permitted native-format checks, but do not create setup merely to validate a proposal.
+During an explicitly planning-only task or the host's proposal phase, author only permitted planning artifacts and native identity binding. Record the intended exact runner and selector in the design or implementation tasks; defer evidence-registry files, configuration, runners, and product changes until their implementation is authorized. A registry containing `planned:` references is still integration setup, not a planning artifact. Use existing permitted native-format checks, but do not create setup merely to validate a proposal.
 
 A request to complete a native specification for already-implemented behavior is not itself a request to stop at a proposal. Finish the host's planning phase, then explicitly propose and obtain any required authorization for the final identity/evidence integration against existing tests. Do not change product code to bind existing evidence or report the specification complete merely because its native format validates. If integration belongs to a later phase, ask to enter that phase rather than silently omit it.
 
@@ -21,7 +21,7 @@ A request to complete a native specification for already-implemented behavior is
    - Editable Markdown: attach `<!-- focused-spec:id=<lowercase.dotted.id> -->` immediately before one heading, paragraph, or list item, or inline after a paragraph or list item.
    - Gherkin: attach `@focused.<lowercase.dotted.id>` to one `Scenario` or `Scenario Outline`, never to `Feature`, `Rule`, `Background`, or `Examples`.
    - Generated or metadata-hostile source: leave it unmarked and use registry `source.path` plus an explicit stable `source.nativeId`. If no stable native ID exists, report binding as unsupported; never guess from a heading, line number, or wording.
-3. Once integration implementation is authorized, record the same `(scope, ID)` in `.focused-spec/evidence.yaml` with one or more exact evidence references. Do not put evidence or another copy of the behavior in the native document or registry.
+3. Once integration implementation is authorized, record the same `(scope, ID)` in a configured registry file with one or more exact evidence references. Read `evidence.files` first; if omitted, the registry is `.focused-spec/evidence.yaml`. Do not put evidence or another copy of the behavior in the native document or registry.
 4. Ensure the source item still expresses the same single independently failing outcome after authoring, regeneration, or movement. A marker or tag must resolve to exactly one adjacent item; an external native ID must resolve explicitly and uniquely in its declared path. Missing, detached, duplicate, conflicting, or ambiguous bindings fail.
 
 Do not widen the requested outcome with adjacent success or failure cases or attach their tests to the same ID. Add separate native items through the host workflow only when those outcomes are in scope. Leave unrelated native content unmarked; focused-spec neither validates nor counts it as coverage.
@@ -41,7 +41,11 @@ Propose the final registry contents, not just a file name. Approval covers the p
 
 ## Evidence registry
 
-Every configured project requires `.focused-spec/evidence.yaml`:
+Every configured project requires one logical evidence registry. Optional version-3 `evidence.files` explicitly names project-relative YAML paths or glob patterns; omission uses `.focused-spec/evidence.yaml` through the same loader. Explicit sources never trigger fallback or implicit repository-wide discovery. Each pattern must match at least one `.yaml`/`.yml` file; overlapping lexical/canonical claims, unsafe paths, missing sources, and symlink escapes fail. Nested `include` is unsupported.
+
+Inspect configured sources and existing ownership before editing. Reuse the shard for the affected domain/module, following the project's existing boundaries. Create a new shard only for a genuine new ownership boundary and explicitly connect it through configuration. Do not reorganize the whole registry for one task. A small project may keep one file. Include every touched shard and any configuration change in required host approval; propose complete final entries, not only shard names.
+
+Each shard uses the same evidence-only schema:
 
 ```yaml
 scopes:
@@ -66,9 +70,9 @@ scopes:
 
 Each entry has exactly `evidence` and optional `source`; `source` has exactly `path` and `nativeId`. Unknown or duplicate YAML fields fail. Evidence is `[planned:]<runner-id>::<opaque selector>`; only the first `::` separates the runner ID. Multiple references form an AND contract.
 
-Identity is `(scope, ID)`. The same ID may appear in multiple scopes, but each occurrence needs its own binding and explicit evidence. Scopes are execution contexts, not ancestry; evidence never inherits. Do not add relationship fields or infer semantic equivalence from reused IDs.
+Identity is `(scope, ID)`. The same ID may appear in multiple scopes, but each occurrence needs its own binding and explicit evidence. A selected `(scope, ID)` may occur only once across all configured files; cross-file duplicates are errors with both locations, not evidence merges or last-wins overrides. File placement is not identity or ancestry. Scopes are execution contexts, not ancestry; evidence never inherits. Do not add relationship fields or infer semantic equivalence from reused IDs.
 
-Use `planned:` only while the exact test is absent. Planned evidence is allowed by non-strict validation but rejected by strict validation and `run`. An empty `scopes: {}` registry is valid only for an empty all-scope selection with no discovered documents; the registry file itself remains required.
+Use `planned:` only while the exact test is absent. Planned evidence is allowed by non-strict validation but rejected by strict validation and `run`. Empty `scopes: {}` files are allowed, but every configured source remains required. An empty logical registry is valid only for an empty all-scope selection with no discovered documents.
 
 ## Configure focused-spec
 
@@ -82,6 +86,9 @@ specifications:
       scope: current
       exclude: [specs/archive/**]
     - match: changes/{scope}/spec.md
+evidence:
+  files:
+    - .focused-spec/evidence/auth.yaml
 runners:
   project-tests:
     module: ./.focused-spec/runners/project-tests.ts
@@ -92,16 +99,15 @@ Every layout either has `scope: <name>` and no `{scope}` token, or exactly one `
 
 Register a functional runner for every concrete evidence type, not a placeholder. A runner module stays inside the project and uses `.ts`, `.mts`, `.js`, or `.mjs`. The public runner API remains `apiVersion: 1`.
 
-## Maintain bindings through host lifecycles
+## Preserve surviving evidence through host operations
 
-Before the host publishes, moves, regenerates, archives, or removes native items, inventory every affected `(scope, ID)`, binding, and evidence list. Let the host workflow perform the transformation. Then:
+The host owns publication, movement, regeneration, archive, and removal. Use its authoring and approval workflow; never hand-edit a generated artifact outside its owning workflow.
 
-1. move each surviving registration with its native item or external binding;
-2. remove entries whose native item was intentionally removed;
-3. recheck that every selected entry binds uniquely and every marker/tag has one entry;
-4. execute the surviving evidence in its final selected scope.
+1. Keep every still-relevant enrolled outcome explicitly registered and uniquely bound in its final selected scope. Evidence never inherits from a disappearing scope; matching IDs alone do not transfer evidence or establish equivalent behavior.
+2. Let the host perform the approved operation. Update surviving native bindings and evidence in the configured registry shards. Retire obsolete working registrations and orphaned markers through the host workflow when their items leave discovery.
+3. Validate the final selection and run its exact surviving evidence using the ordinary commands below. Host structural validation is separate from executable evidence; passing registered outcomes do not certify unregistered native history.
 
-Do not preserve an obsolete companion, marker generated output, invent an owner/revision edge, or inherit evidence from an earlier scope.
+No transition command, plan, snapshot, or replacement checkpoint is required. Validation checks the current native bindings and registry in both directions; it cannot detect historical loss when an item and its registration are both removed consistently. Preserve the intended outcomes through host review and actual evidence execution, not a claimed historical guarantee.
 
 ## Discover CLI commands and options
 
@@ -109,7 +115,7 @@ Consult `<project-local-focused-spec> --help`, `<project-local-focused-spec> val
 
 ## Implement a runner only when evidence needs one
 
-When creating or changing a runner, obtain the complete runner workflow from the same installed package by invoking `<project-local-focused-spec> agent-guide --protocol 1 --topic runners --json`. Wait for successful completion and accept it only when the response identifies protocol 1, package `focused-spec` at the resolved installation's version, topic `runners`, and nonempty Markdown content. Follow that content together with this workflow. Do not use a skill-local reference, repository documentation, a global binary, or stale runner instructions.
+When creating or changing a runner, obtain the complete runner workflow from the same installed package by invoking `<project-local-focused-spec> instructions --protocol 1 --topic runners --json`. Wait for successful completion and accept it only when the response identifies protocol 1, package `focused-spec` at the resolved installation's version, topic `runners`, and nonempty Markdown content. Follow that content together with this workflow. Do not use a skill-local reference, repository documentation, a global binary, or stale runner instructions.
 
 Inspect existing configuration and project-local runner modules first. Reuse an applicable runner and its selector contract rather than creating another or overwriting it. A runner already present but not yet registered may need only an approved configuration entry.
 
@@ -126,7 +132,7 @@ If a safe controlled regression is unavailable, explain what was not checked and
 
 ## Verify
 
-Run the same explicitly resolved project-local CLI against the intended project root. The selected root supplies version-3 configuration, `.focused-spec/evidence.yaml`, native documents, and project-local runners; installing the CLI alone supplies neither test dependencies nor runners.
+Run the same explicitly resolved project-local CLI against the intended project root. The selected root supplies version-3 configuration, its configured registry files, native documents, and project-local runners; installing the CLI alone supplies neither test dependencies nor runners.
 
 While selected evidence remains planned:
 
@@ -143,3 +149,5 @@ Syntax-only validation checks native parsing, registry shape, and binding withou
 ```
 
 `run` always performs strict validation first. `run --scenario <id>` isolates matching entries, bindings, and evidence in the selected scope or scopes from unrelated failures; it does not certify the rest of a scope. Run the full completed scope before declaring it complete. Use `--allow-skip` only for an explicit project policy; `SKIP` and `ERROR` are not success otherwise.
+
+Scope/ID selection isolates unrelated semantic entry errors and duplicate identities. Source safety and YAML structural errors remain errors. Entry and binding diagnostics point to the actual shard and line.

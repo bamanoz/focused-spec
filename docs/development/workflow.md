@@ -7,9 +7,10 @@ This repository uses specification-driven development (SDD) with OpenSpec. For e
 1. Read `AGENTS.md`, `docs/README.md`, and the owning documentation page; inspect the existing contract and neighboring implementation.
 2. For a behavior change, write the OpenSpec proposal, delta specs, and tasks (plus design when needed) under `openspec/changes/<name>/`. Validate the change with `openspec validate <name> --strict` before implementing it.
 3. Apply the tasks in the smallest modules that own the behavior. Bind each changed native item to exact registry evidence; update owning documentation and affected tests in the same change.
-4. Run the narrowest behavioral check, then `npm test` and the affected real CLI/example path. Strict focused-spec validation resolves evidence but does not execute it: run the selected scope to prove behavior.
-5. Once implementation and evidence pass, sync the delta into `openspec/specs/`, validate the resulting specs with `openspec validate --specs --strict`, then archive the change. Do not present a direct master-spec edit as a completed OpenSpec change.
-6. Report the exact commands and observed results.
+4. Let OpenSpec or the native host own approved publication, movement, regeneration, archive, and removal. Keep explicit scope-local registrations and unique native bindings for surviving outcomes, retire obsolete working registrations when their documents leave discovery, then validate and run the final selection. The authoritative offline procedure is served from `guidance/workflow.md`; matching IDs do not infer evidence or behavior semantics.
+5. Run the narrowest behavioral check, then `npm test` and the affected real CLI/example path. Strict focused-spec validation resolves evidence but does not execute it: run the selected scope to prove behavior.
+6. Once implementation and evidence pass, sync the delta into `openspec/specs/`, validate the resulting specs with `openspec validate --specs --strict`, then archive the change. Do not present a direct master-spec edit as a completed OpenSpec change.
+7. Report the exact commands and observed results.
 
 ## Tests
 
@@ -19,15 +20,17 @@ This repository uses specification-driven development (SDD) with OpenSpec. For e
 - `npm run smoke` runs the real [OpenSpec example](../../examples/openspec/) with Go and pytest evidence.
 - `node dist/cli.js validate --strict` resolves the repository's own [focused-spec contract](../../openspec/specs/scenario-authoring/spec.md) across every discovered scope without executing tests. `node dist/cli.js run` then performs strict validation and uses `.focused-spec/runners/vitest.ts` to execute the exact Vitest evidence.
 
+The repository Vitest runner batches selected targets by test file and uses an anchored union of their exact test names. Unselected tests remain skipped; a failed selected test does not relabel a passing selected test. The runner timeout covers the complete batch, not a separate budget for each test.
+
 Tests protect observable behavior: parser boundaries, configuration errors, runner resolution/execution, CLI status, isolation, and failure handling. Do not add tests that only assert source layout or incidental implementation details.
 
 ## OpenSpec
 
-OpenSpec owns this repository's proposal/apply/sync/archive lifecycle; focused-spec consumes native items from explicit version-3 document layouts and binds them through `.focused-spec/evidence.yaml`. Proposal workflows are planning-only: intended exact evidence belongs in design/tasks, not a new or revised executable registry, product code, runner code, or configuration. Apply workflows implement the artifacts, add required project-local runners or configuration, and replace every `planned:` reference when its exact test exists.
+OpenSpec owns this repository's proposal/apply/sync/archive lifecycle; focused-spec consumes native items from explicit version-3 document layouts and binds them through the configured evidence-registry files. Proposal workflows are planning-only: intended exact evidence belongs in design/tasks, not a new or revised executable registry, product code, runner code, or configuration. Apply workflows implement the artifacts, add required project-local runners or configuration, and replace every `planned:` reference when its exact test exists.
 
 Focused IDs are unique within each scope. A delta may retain the same ID as `current`, but each `(scope, ID)` occurrence must bind its own native item and declare its own evidence. Scopes are execution contexts rather than ownership or revision ancestry; OpenSpec operation headings do not create evidence inheritance. OpenSpec remains responsible for validating proposal and delta schema.
 
-This repository's `.focused-spec/config.yaml` registers the project-local Vitest runner, selects `openspec/specs/**/spec.md` as `current`, and captures active change names as scopes. Its registry carries the evidence separately from those native documents. If authorized integration setup already exists, planning can use `node dist/cli.js validate --scope <name>` without `--strict`; planned targets are not resolved or executed. Missing setup is deferred to apply, not created to validate a proposal. Before syncing a completed delta into `openspec/specs/`, remove all `planned:` prefixes and run:
+This repository's `.focused-spec/config.yaml` registers the project-local Vitest runner, selects `openspec/specs/**/spec.md` as `current`, captures active change names as scopes, and explicitly connects capability-owned `.focused-spec/evidence/<capability>.yaml` shards. Together those files form one logical registry, with scope-local evidence separate from native documents. If authorized integration setup already exists, planning can use `node dist/cli.js validate --scope <name>` without `--strict`; planned targets are not resolved or executed. Missing setup is deferred to apply, not created to validate a proposal. Before syncing a completed delta into `openspec/specs/`, remove all `planned:` prefixes and run:
 
 ```sh
 node dist/cli.js validate --scope <name> --strict

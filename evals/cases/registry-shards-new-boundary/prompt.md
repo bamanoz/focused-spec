@@ -1,0 +1,1 @@
+Update the account-authentication specification at specs/account-authentication.md: an account blocked by an administrator must not log in even with valid credentials. The implementation and its Go unit and Python functional tests already exist; use both as executable evidence. Preserve the existing domain ownership and unrelated specifications.

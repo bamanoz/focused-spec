@@ -190,7 +190,7 @@ export async function discoverDocuments(
     else existing.push(bound)
   }
 
-  const registry = await loadEvidenceRegistry(projectRoot, selectedScope, selectedScenarioId)
+  const registry = await loadEvidenceRegistry(projectRoot, config.evidence?.files, selectedScope, selectedScenarioId)
   violations.push(...registry.violations)
   const byMarker = new Map<string, NativeItem[]>()
   const byDocument = new Map<string, NativeDocument>()
@@ -216,7 +216,7 @@ export async function discoverDocuments(
       ? byMarker.get(key) ?? []
       : (byDocument.get(`${entry.scope}\u0000${entry.source.path}`)?.items ?? []).filter(item => item.nativeIds.includes(entry.source!.nativeId))
     if (matches.length !== 1) {
-      violations.push({ path: '.focused-spec/evidence.yaml', line: entry.line, scenarioId: entry.id,
+      violations.push({ path: entry.registryPath, line: entry.line, scenarioId: entry.id,
         message: `registry binding ${entry.scope}/${entry.id} must resolve uniquely to one native item; found ${matches.length}` })
       continue
     }

@@ -1,0 +1,56 @@
+scopes:
+  current:
+    execution.selection.current:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > runs all scopes and disambiguates repeated scenario IDs
+    execution.selection.change-scenario:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > reports selected scope and scenario execution independently
+    execution.selection.shared-id:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > validates and runs every matching scope for a selected scenario ID
+    execution.selection.missing-scenario:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid or missing selected scenarios before execution
+    execution.selection.missing-scope:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects a selected scope with no documents
+    execution.targets.shared:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > runs one shared target once for two scenarios
+    execution.status.skip-policy:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > does not claim skipped evidence as passing
+    execution.status.fail:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > propagates a failing target to the scenario and process result
+    execution.status.error:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > reports runner execution errors without a false pass
+    execution.status.empty:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > preserves successful validation and execution for an empty registry
+    execution.resolution.reuse:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > resolves a shared target once for scoped execution
+    execution.resolution.scoped-id:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > executes only selected-scope evidence for the same scenario ID
+    execution.resolution.strict-unselected:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > runs a selected scenario despite unrelated entry binding and evidence failures
+    execution.timings.opt-in:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > reports phase timings only when requested
+    execution.timings.failure:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > reports reached timings on unresolved evidence without starting execution
+    execution.groups.independent:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > overlaps independent groups within the configured limit
+    execution.groups.conflict:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > serializes groups with a shared resource across runners
+    execution.groups.failure:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > reports grouped runner failures without claiming evidence passed

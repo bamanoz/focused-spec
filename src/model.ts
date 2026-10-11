@@ -21,6 +21,7 @@ export interface EvidenceEntry {
   readonly scope: string
   readonly id: string
   readonly line: number
+  readonly registryPath: string
   readonly evidence: readonly string[]
   readonly source?: { readonly path: string; readonly nativeId: string }
 }
@@ -64,6 +65,9 @@ export interface FocusedSpecConfig {
   readonly version: 3
   readonly specifications: {
     readonly documents: readonly DocumentLayout[]
+  }
+  readonly evidence?: {
+    readonly files: readonly string[]
   }
   readonly runners: Readonly<Record<string, RunnerConfig>>
   readonly execution?: {

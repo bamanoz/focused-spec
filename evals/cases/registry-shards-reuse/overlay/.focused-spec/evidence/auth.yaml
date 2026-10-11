@@ -1,0 +1,6 @@
+scopes:
+  auth-baseline:
+    auth.login.active-account:
+      evidence:
+        - go-unit::./auth::TestValidActiveAccount
+        - pytest-functional::tests/functional/test_auth.py::test_valid_active_account

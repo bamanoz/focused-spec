@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentDriver, AgentRequest, AgentResult, EvalCase } from '../evals/types.ts'
 import { runEval } from '../evals/harness.ts'
-import { brownfieldGate, guidanceActivationGate, integrityGate, judgeCompletedWorkspace, judgeProposalCheckpoint, judgeWorkingCheckpoint, mutationGate, scenarioGate, skillActivationGate, snapshotProtectedFiles } from '../evals/judge.ts'
+import { brownfieldGate, guidanceActivationGate, integrityGate, judgeCompletedWorkspace, judgeProposalCheckpoint, judgeWorkingCheckpoint, mutationGate, registryPlacementGate, scenarioGate, skillActivationGate, snapshotProtectedFiles } from '../evals/judge.ts'
 import { judgeEvidenceRepair } from '../evals/evidence-repair.ts'
 import { evalCase } from '../evals/cases.ts'
 import { provisionWorkspace } from '../evals/provision.ts'
@@ -69,7 +69,7 @@ interface GuideTranscriptOptions {
 function guidanceTranscript(workspace: string, options: GuideTranscriptOptions = {}): string {
   const callId = 'workflow-guide'
   const cli = join(workspace, 'node_modules', 'focused-spec', 'dist', 'cli.js')
-  const command = options.command ?? `${JSON.stringify(process.execPath)} ${JSON.stringify(cli)} agent-guide --protocol 1 --topic workflow --json`
+  const command = options.command ?? `${JSON.stringify(process.execPath)} ${JSON.stringify(cli)} instructions --protocol 1 --topic workflow --json`
   const response = options.response ?? {
     protocolVersion: 1,
     package: { name: 'focused-spec', version: '0.6.0' },
@@ -100,7 +100,7 @@ function artifactGuidanceTranscript(workspace: string, options: ArtifactTranscri
   const artifact = options.artifact ?? 'artifact://0'
   const linked = 'artifact://0'
   const cli = join(workspace, 'node_modules', 'focused-spec', 'dist', 'cli.js')
-  const command = `${JSON.stringify(process.execPath)} ${JSON.stringify(cli)} agent-guide --protocol 1 --topic workflow --json`
+  const command = `${JSON.stringify(process.execPath)} ${JSON.stringify(cli)} instructions --protocol 1 --topic workflow --json`
   const response = options.response ?? {
     protocolVersion: 1,
     package: { name: 'focused-spec', version: '0.6.0' },
@@ -228,6 +228,47 @@ class FakeDriver implements AgentDriver {
 }
 
 describe('agent eval harness', () => {
+  it('rejects domain reorganization and loss of existing registrations despite valid new evidence', async () => {
+    const selected = evalCase('registry-shards-reuse')!
+    const root = await mkdtemp(join(tmpdir(), 'focused-eval-shards-'))
+    roots.push(root)
+    await cp(join(repository, 'evals', selected.overlay!), root, { recursive: true })
+    const path = '.focused-spec/evidence/auth.yaml'
+    const initial = await readFile(join(root, path), 'utf8')
+    const entry = '  current:\n    auth.login.blocked:\n      evidence:\n        - go-unit::./auth::TestBlockedAccount\n        - pytest-functional::tests/functional/test_auth.py::test_blocked_account\n'
+    await put(root, path, initial + entry)
+    expect(await registryPlacementGate(root, selected, 'auth.login.blocked')).toMatchObject({ passed: true })
+    await put(root, path, `scopes:\n${entry}`)
+    expect(await registryPlacementGate(root, selected, 'auth.login.blocked')).toMatchObject({ passed: false })
+    await put(root, path, initial)
+    await put(root, '.focused-spec/evidence/blocked.yaml', `scopes:\n${entry}`)
+    const config = await readFile(join(root, '.focused-spec/config.yaml'), 'utf8')
+    await put(root, '.focused-spec/config.yaml', config.replace('runners:', '    - .focused-spec/evidence/blocked.yaml\nrunners:'))
+    expect(await registryPlacementGate(root, selected, 'auth.login.blocked')).toMatchObject({ passed: false })
+  })
+
+  it('requires explicit new-domain composition and protects unrelated infrastructure', async () => {
+    const selected = evalCase('registry-shards-new-boundary')!
+    const root = await mkdtemp(join(tmpdir(), 'focused-eval-new-shard-'))
+    roots.push(root)
+    await cp(join(repository, 'evals/fixtures/polyglot'), root, { recursive: true })
+    await cp(join(repository, 'evals', selected.overlay!), root, { recursive: true })
+    const protectedFiles = await snapshotProtectedFiles(root, selected.editablePaths)
+    const config = await readFile(join(root, '.focused-spec/config.yaml'), 'utf8')
+    const entry = 'scopes:\n  current:\n    auth.login.blocked:\n      evidence:\n        - go-unit::./auth::TestBlockedAccount\n        - pytest-functional::tests/functional/test_auth.py::test_blocked_account\n'
+    await put(root, '.focused-spec/evidence/login.yaml', entry)
+    expect(await registryPlacementGate(root, selected, 'auth.login.blocked')).toMatchObject({ passed: false })
+    await put(root, '.focused-spec/config.yaml', config.replace('runners:', '    - .focused-spec/evidence/login.yaml\nrunners:'))
+    expect(await registryPlacementGate(root, selected, 'auth.login.blocked')).toMatchObject({ passed: true })
+    await put(root, '.focused-spec/evidence.yaml', entry)
+    expect(await registryPlacementGate(root, selected, 'auth.login.blocked')).toMatchObject({ passed: false })
+    await rm(join(root, '.focused-spec/evidence.yaml'))
+    await put(root, 'app/notifications.py', 'def should_deliver(enabled):\n    return True\n')
+    expect(await integrityGate(root, protectedFiles, [])).toMatchObject({ passed: false })
+    await put(root, '.focused-spec/config.yaml', config.replace('runners:', '    - .focused-spec/evidence/login.yaml\nrunners:').replace('runners/go-test.ts', 'runners/fabricated.ts'))
+    expect(await registryPlacementGate(root, selected, 'auth.login.blocked')).toMatchObject({ passed: false })
+  })
+
   it('provisions parallel workspaces without rebuilding shared distribution', async () => {
     const selected = evalCase('files-source-bootstrap')!
     const distribution = join(repository, 'dist/cli.js')
@@ -287,7 +328,8 @@ describe('agent eval harness', () => {
         ].join('\n'))
         await put(request.workspace, 'runner.js', 'export default { apiVersion: 1, async resolve({ selectors }) { return { targets: selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] } }, async run({ targets }) { return { results: targets.map(target => ({ targetId: target.targetId, status: "fail" })) } } }\n')
         const workflow = await readFile(join(request.workspace, 'node_modules/focused-spec/guidance/workflow.md'), 'utf8')
-        const response = { protocolVersion: 1, package: { name: 'focused-spec', version: '0.6.0' }, topic: 'workflow', content: workflow }
+        const metadata = JSON.parse(await readFile(join(request.workspace, 'node_modules/focused-spec/package.json'), 'utf8')) as { name: string; version: string }
+        const response = { protocolVersion: 1, package: { name: metadata.name, version: metadata.version }, topic: 'workflow', content: workflow }
         return { success: true, output: `${skillReadTranscript()}\n${guidanceTranscript(request.workspace, { response })}`, exitCode: 0, durationMs: 1 }
       },
     }
@@ -377,7 +419,7 @@ describe('agent eval harness', () => {
 
   it('rejects global guidance in place of the project installation', async () => {
     const root = await activationFixture()
-    const args = 'agent-guide --protocol 1 --topic workflow --json'
+    const args = 'instructions --protocol 1 --topic workflow --json'
     for (const command of [`focused-spec ${args}`, `/usr/local/bin/focused-spec ${args}`,
       `${join(root, '..', 'other', 'node_modules', '.bin', 'focused-spec')} ${args}`]) {
       expect(await guidanceActivationGate(root, [guidanceTranscript(root, { command })]), command).toMatchObject({ passed: false })
@@ -415,9 +457,10 @@ describe('agent eval harness', () => {
       { response: { ...valid, package: { ...valid.package, version: '9.9.9' } } },
       { response: { ...valid, content: '  ' } },
       { response: { ...valid, extra: true } },
-      { command: `${join(root, 'node_modules', '.bin', 'focused-spec')} agent-guide --help`,
-        rawOutput: 'Usage: focused-spec agent-guide [options]' },
-      { command: `${join(root, 'node_modules', '.bin', 'focused-spec')} agent-guide --protocol 1 --topic runners --json`,
+      { command: `${join(root, 'node_modules', '.bin', 'focused-spec')} agent-guide --protocol 1 --topic workflow --json` },
+      { command: `${join(root, 'node_modules', '.bin', 'focused-spec')} instructions --help`,
+        rawOutput: 'Usage: focused-spec instructions [options]' },
+      { command: `${join(root, 'node_modules', '.bin', 'focused-spec')} instructions --protocol 1 --topic runners --json`,
         response: { ...valid, topic: 'runners' } },
     ]
     for (const options of invalid) {
@@ -634,7 +677,7 @@ describe('agent eval harness', () => {
     const transcript = (toolName: string, args: object) => JSON.stringify({ type: 'tool_execution_start', toolName, args })
     const cli = 'node_modules/focused-spec/dist/cli.js'
     expect(await integrityGate(root, snapshots, [transcript('bash', {
-      command: `node ${cli} --help && node ${cli} agent-guide --protocol 1 --topic workflow --json`,
+      command: `node ${cli} --help && node ${cli} instructions --protocol 1 --topic workflow --json`,
     })])).toMatchObject({ passed: true })
     for (const [toolName, args] of [
       ['read', { path: cli }],
@@ -710,6 +753,25 @@ describe('agent eval harness', () => {
     const regression = await brownfieldGate(root, brownfieldChange, checkpoint)
     expect(regression.find(gate => gate.name === 'main-scope-evidence')).toMatchObject({ passed: false })
     expect(regression.find(gate => gate.name === 'transition-stable-evidence')).toMatchObject({ passed: false })
+  })
+
+  it('retains executed checkpoints after working identity and registry retire in place', async () => {
+    const root = await brownfieldFixture()
+    const checkpoint = await judgeWorkingCheckpoint(root, brownfieldChange)
+    expect(checkpoint.gates.every(gate => gate.passed)).toBe(true)
+    const path = 'openspec/changes/add-auth/specs/account-authentication/spec.md'
+    await put(root, path, (await readFile(join(root, path), 'utf8')).replace('<!-- focused-spec:id=auth.login.blocked-account -->\n', ''))
+    await put(root, '.focused-spec/evidence.yaml', JSON.stringify({ scopes: { current: {
+      'auth.login.blocked-account': { evidence: checkpoint.registry!.evidence },
+    } } }))
+    expect((await brownfieldGate(root, brownfieldChange, checkpoint)).map(gate => ({ name: gate.name, passed: gate.passed }))).toEqual([
+      { name: 'native-history-preservation', passed: true },
+      { name: 'main-scope-evidence', passed: true },
+      { name: 'transition-stable-evidence', passed: true },
+    ])
+    expect(await brownfieldGate(root, brownfieldChange)).toEqual([
+      expect.objectContaining({ name: 'brownfield-contract', passed: false }),
+    ])
   })
 
   it('judges the selected scope when another scope has the same ID', async () => {

@@ -26,6 +26,7 @@ export interface EvalCase {
   readonly expectedSelectorFragments: readonly string[]
   readonly expectedSelectorAlternatives?: readonly string[]
   readonly editablePaths?: readonly string[]
+  readonly registryPlacement?: 'reuse' | 'new-boundary'
 }
 
 export interface AgentRequest {

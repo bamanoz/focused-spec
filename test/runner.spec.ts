@@ -33,5 +33,10 @@ describe('project Vitest evidence runner', () => {
     expect(passed.results).toEqual([{ targetId: passing, status: 'pass' }])
     const failed = await runner.run({ ...context, targets: [resolution.targets[1]!] })
     expect(failed.results).toEqual([{ targetId: failing, status: 'fail', diagnostic: expect.stringContaining('expected 4 to be 5') }])
+    const mixed = await runner.run({ ...context, targets: resolution.targets })
+    expect(mixed.results).toEqual([
+      { targetId: passing, status: 'pass' },
+      { targetId: failing, status: 'fail', diagnostic: expect.stringContaining('expected 4 to be 5') },
+    ])
   })
 })

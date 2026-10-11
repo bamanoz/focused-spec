@@ -7,20 +7,22 @@ The binary is `focused-spec`.
 ```text
 focused-spec validate [--root <path>] [--config <path>] [--scope <name>] [--strict] [--syntax-only] [--json] [--timings]
 focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--json] [--timings]
-focused-spec agent-guide [--protocol <version>] [--topic workflow|runners] [--json]
+focused-spec instructions [--protocol <version>] [--topic workflow|runners] [--json]
 ```
 
 Scope names are path-safe single fragments. The CLI preserves the selected name exactly; it never treats it as a glob or path.
 
 ## Help and argument errors
 
-Use `focused-spec --help` and `<command> --help` for the installed command's options, defaults, selection rules, and examples. Explicit help exits zero without reading project configuration, the evidence registry, runner modules, or guidance assets. For a known command, help takes precedence over other options, including `--json`.
+Use `focused-spec --help`, `<command> --help`, and `focused-spec help <command>` for the installed command's options, defaults, selection rules, and examples. Explicit help exits zero without reading project configuration, the evidence registry, runner modules, or guidance assets. For a known command, help takes precedence over other options, including `--json`. The retired `transition` command and its help forms are unknown commands, not aliases.
 
-No command, an unknown command or option, a missing value, or an unknown `help` target exits nonzero with a diagnostic and the relevant help pointer.
+No command, an unknown command or option, an extra positional argument, a duplicate option, a missing value, or an unknown `help` target exits nonzero with a diagnostic and the relevant help pointer.
 
 ## Package-owned agent guidance
 
-`agent-guide` reads the invoked package's authoritative workflow (default topic) or complete runner guidance (`--topic runners`). It works offline before project setup, creates no project or agent files, and does not perform validation or evidence execution. Invoke the consuming project's explicit installed CLI, not an unverified global binary or a downloading `npx` invocation.
+`instructions` reads the invoked package's authoritative workflow (default topic) or complete runner guidance (`--topic runners`). It works offline before project setup, creates no project or agent files, and does not perform validation or evidence execution. Invoke the consuming project's explicit installed CLI, not an unverified global binary or a downloading `npx` invocation.
+
+The previous `agent-guide` command is not an alias. Refresh the installed loader when moving to `instructions`; protocol 1, topic names and response fields are unchanged.
 
 Loader protocol defaults to 1; it is independent of package versions, configuration version 3, and runner API version 1. The loader requests it explicitly. Protocol-1 JSON is:
 
@@ -36,13 +38,13 @@ Loader protocol defaults to 1; it is independent of package versions, configurat
 Text output identifies the installed package version, protocol, and topic before the Markdown. An unsupported protocol, invalid option/topic, missing value, or incomplete package exits nonzero with stderr diagnostics and no usable guidance on stdout. An explicit unsupported protocol is never silently replaced with the default. No legacy full-text skill or alternate installation is used as a fallback.
 
 ```sh
-./node_modules/.bin/focused-spec agent-guide --protocol 1 --json
-./node_modules/.bin/focused-spec agent-guide --protocol 1 --topic runners --json
+./node_modules/.bin/focused-spec instructions --protocol 1 --json
+./node_modules/.bin/focused-spec instructions --protocol 1 --topic runners --json
 ```
 
 ## Validation
 
-Validation reads version-3 configuration, the required `.focused-spec/evidence.yaml`, and selected native `.md` or `.feature` documents. It binds every selected registry entry to exactly one native item and rejects marked items without entries. Missing, detached, duplicate, conflicting, unbound, or ambiguous identities are violations.
+Validation reads version-3 configuration, its configured evidence-registry files (default `.focused-spec/evidence.yaml`), and selected native `.md` or `.feature` documents. It binds every selected registry entry to exactly one native item and rejects marked items without entries. Missing, detached, duplicate, conflicting, unbound, or ambiguous identities are violations.
 
 `validate --syntax-only` checks configuration, registry syntax, native document syntax, scope-local identity, and binding without loading runner modules. Full `validate` additionally loads runners and resolves concrete evidence, but never executes tests. A successful full-validation JSON result retains:
 
@@ -110,6 +112,6 @@ If configuration, registry parsing, native binding, selected evidence resolution
 
 ## Configuration and version-2 migration
 
-The default config is `.focused-spec/config.yaml` under `--root`; a relative `--config` path resolves from that root. Configuration requires `version: 3`, a nonempty `specifications.documents` list, and a `runners` object. The required evidence registry remains at `.focused-spec/evidence.yaml` even when `--config` selects another config path.
+The default config is `.focused-spec/config.yaml` under `--root`; a relative `--config` path resolves from that root. Configuration requires `version: 3`, a nonempty `specifications.documents` list, and a `runners` object. Optional `evidence.files` selects explicit project-relative YAML paths or patterns. Omission uses `.focused-spec/evidence.yaml`; explicit sources never fall back to it. Registry paths resolve from `--root`, not the configuration file's directory. Missing matches, overlapping file claims, unsafe paths, and selected cross-file identity duplicates fail. See the [registry contract](../guides/configuration.md#required-evidence-registry).
 
 Version 2 has no compatibility alias. Upgrade the version, keep document layouts and runner/execution settings, move bold `ID`/`EVIDENCE` rows into the registry, and bind IDs on canonical native items. The [configuration guide](../guides/configuration.md#migrate-from-version-2) is the migration reference. Runner plugins remain on `apiVersion: 1` and require no migration.

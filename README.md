@@ -4,7 +4,7 @@
 
 **Make each behavioral promise answerable by a test result.**
 
-`focused-spec` binds a stable ID on a framework's native checkable item to exact executable evidence. The native item remains the only copy of the behavior; `.focused-spec/evidence.yaml` records identity and tests, and project-local runners execute those tests. OpenSpec, Spec Kit, BMad, Gherkin, and other authoring systems keep ownership of their document rules and validation.
+`focused-spec` binds a stable ID on a framework's native checkable item to exact executable evidence. The native item remains the only copy of the behavior; a configured YAML registry records identity and tests, and project-local runners execute those tests. The registry may be one file or explicit domain shards. OpenSpec, Spec Kit, BMad, Gherkin, and other authoring systems keep ownership of their document rules and validation.
 
 ## See the contract
 
@@ -58,7 +58,7 @@ npx --yes skills add bamanoz/focused-spec --skill focused-spec
 ```
 
 1. Create a [version-3 configuration](docs/guides/configuration.md) that selects the native `.md` and `.feature` documents and registers each project-local runner.
-2. Attach one focused ID to each in-scope native item and add the matching `(scope, ID)` entry to `.focused-spec/evidence.yaml`.
+2. Attach one focused ID to each in-scope native item and add the matching `(scope, ID)` entry to a configured registry file (default `.focused-spec/evidence.yaml`).
 3. Validate and run the completed selection:
 
    ```sh

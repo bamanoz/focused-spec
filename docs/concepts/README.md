@@ -5,7 +5,7 @@
 A focused specification protects the smallest product-boundary outcome that can fail independently. The owning framework's native checkable item remains the only behavioral text. `focused-spec` adds only:
 
 - a lowercase dotted ID bound to that item;
-- one or more exact evidence references in `.focused-spec/evidence.yaml`;
+- one or more exact evidence references in a configured YAML registry, optionally split into domain files;
 - execution results from project-local runners.
 
 The ID is not a second requirement, and the registry must not repeat or reinterpret the behavior.
