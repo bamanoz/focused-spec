@@ -20,11 +20,42 @@ Installing from a Git checkout or packing for npm builds `dist/` automatically v
 
 Node.js 22.16 and 22.17 need the experimental type-stripping flag to load project-local `.ts`/`.mts` runners; the CLI supplies that flag to its isolated runner process automatically. Write runner plugins using erasable TypeScript syntax and `import type`; JavaScript plugins need no flag.
 
+Repository verification additionally uses Python 3.11+ (`tomllib`) to parse installed native TOML wrappers, and Python's standard-library PTY for POSIX terminal checks. These are development-check prerequisites, not CLI/installer runtime dependencies; Windows terminal interaction remains uncertified.
+
 ## Agent skill
 
 The CLI can validate and run manually bound native items without an installed skill. For agent-led specification authoring and evidence verification, install the skill for the agent doing that work; npm installation alone does not activate it.
 
-Install the skill separately from GitHub in the consuming project:
+### Bundled agent integration
+
+Use the CLI installed in the consuming project to copy its bundled loader and minimal command wrappers, without downloading skills:
+
+```sh
+./node_modules/.bin/focused-spec init --tools oh-my-pi,claude
+./node_modules/.bin/focused-spec init ../project --tools codex --dry-run --json
+```
+
+The optional path must name an existing directory; cwd is the default, with no ancestor discovery. The installer supports all 50 canonical targets from OpenSpec 1.14.1, plus alias `windsurf` → `devin`. See the [complete destination catalog](../reference/cli.md#agent-initialization): 34 targets receive native Markdown/TOML commands, prompt files or workflows; 16 receive only the loader. No OpenSpec installation or network access is required.
+
+MiniMax Code is the sole **global-only** target: explicitly selecting `minimax-code` authorizes `~/.minimax/skills/focused-spec/SKILL.md`. Terminal selection labels this home destination before confirmation. It never writes a project `.minimax` or `.mavis`, host settings, commands or a global package. Other targets stay project-local and do not inspect home integration. Preview it before installing:
+
+```sh
+./node_modules/.bin/focused-spec init --tools minimax-code --dry-run --json
+```
+
+The global loader still resolves guidance from the consuming project’s local CLI. JSON keeps the project root and project-relative paths; MiniMax file/error paths are canonical absolute home paths.
+
+Amp, Antigravity, Codex, GSD, Zed and `agents` share one `.agents/skills` loader; Antigravity also receives its workflow. The Windsurf alias writes only `.devin`, preserving existing `.windsurf` files. Other integrations are untouched. Without `--tools`, terminal users must confirm a nonempty comma-separated selection; detected paths are suggestions, not permission. Empty input, Ctrl-C or EOF cancels without writes. Scripts and `--json` require explicit `--tools`; no `all`/`none` aliases exist.
+
+Repeat initialization leaves identical files untouched. A divergent selected file in either project or home blocks all planned writes in both unless `--replace` explicitly authorizes replacing selected regular integration files. Neighbors/unselected targets are preserved. Unsafe roots, symlinked components, non-directory ancestors and non-regular destinations remain errors with replacement. `--dry-run` performs the same checks without writes; conflicts still fail. Later I/O errors can leave partial writes, reported honestly without promised rollback. See the [JSON and safety contract](../reference/cli.md#agent-initialization).
+
+Success means installation only: init does not create native specifications, configuration, evidence registry, runners, dependencies, global settings, or `AGENTS.md`. It neither certifies agent activation nor executes evidence. npm installation remains side-effect-free; use init explicitly. The wrappers only request skill loading, not a second workflow. Host routing may choose the same-name skill directly, and host tool permissions still govern guidance commands.
+
+Use `/focused-spec <task>` on native command hosts, `@focused-spec` in Amazon Q, `$focused-spec` in Codex, `/skill:focused-spec` in Kimi, or Continue’s prompt selector. Skills-only hosts use native skill invocation or a natural-language request. Hermes requires the project’s `.hermes/skills` in `skills.external_dirs`; init provides the hint, not a config edit. Copilot prompt files are IDE integrations, not CLI/cloud setup. Devin Desktop uses the workflow; Devin Local uses the skill.
+
+### External skills installer
+
+Alternatively, install the skill separately from GitHub:
 
 ```sh
 npx --yes skills add bamanoz/focused-spec --skill focused-spec

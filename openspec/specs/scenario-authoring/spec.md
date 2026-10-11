@@ -25,12 +25,14 @@ Each bound native item SHALL have one lowercase dotted stable ID unique within i
 - **THEN** validation rejects the selected occurrence without inheriting evidence
 
 ### Requirement: Evidence rows
-Evidence SHALL live only in the required logical evidence registry composed from configured YAML files, keyed by scope and stable ID. The registry SHALL contain only a scopes mapping; entries SHALL contain a nonempty evidence list and optional external source mapping containing exactly path and nativeId. Unknown or duplicate fields and behavioral text fields SHALL fail validation. References SHALL use [planned:]<runner-id>::<opaque selector>; every reference SHALL be checked and multiple references form an AND contract.
+Evidence SHALL live only in the required logical evidence registry composed from configured YAML files, keyed by scope and stable ID.
+
 
 <!-- focused-spec:id=scenario.evidence.required -->
 #### Scenario: Every occurrence needs explicit evidence
 - **WHEN** a native marker has no own scope-local registry evidence
 - **THEN** validation rejects that occurrence even when another scope has evidence
+- **AND** The registry SHALL contain only a scopes mapping; entries SHALL contain a nonempty evidence list and optional external source mapping containing exactly path and nativeId. Unknown or duplicate fields and behavioral text fields SHALL fail validation. References SHALL use [planned:]<runner-id>::<opaque selector>; every reference SHALL be checked and multiple references form an AND contract.
 
 <!-- focused-spec:id=scenario.evidence.malformed-row -->
 #### Scenario: Malformed evidence cannot be hidden by valid evidence
@@ -48,12 +50,14 @@ Evidence SHALL live only in the required logical evidence registry composed from
 - **THEN** the registry is rejected rather than treating it as another behavior source
 
 ### Requirement: Native scenario enrollment
-Behavior SHALL remain solely in the host native checkable item. Editable Markdown SHALL bind one heading, paragraph, or list item through an adjacent focused-spec HTML marker placed before the item, or inline at the end of a paragraph/list item. At most one blank line is permitted; intervening structural nodes and larger gaps detach the marker. Markers inside code examples SHALL NOT enroll an item. Gherkin focused tags SHALL bind only Scenario or Scenario Outline, not inherited Feature/Rule/Examples tags. Generated or unmarked items MAY use an explicit registry source.path and source.nativeId declaration; resolution SHALL be unique within that exact configured document, never inferred from headings, lines, or wording. Every marker SHALL have a registry entry and every registration SHALL uniquely bind one native item. Obsolete inline focused rows SHALL be rejected. Host behavioral meaning and native-format validity SHALL NOT be certified by focused-spec.
+Behavior SHALL remain solely in the host native checkable item.
+
 
 <!-- focused-spec:id=scenario.enrollment.mixed-document -->
 #### Scenario: Registered evidence beside untouched native content
 - **WHEN** a document contains one marked item and unrelated unmarked native content
 - **THEN** only the registered item executes and receives a focused result
+- **AND** Editable Markdown SHALL bind one heading, paragraph, or list item through an adjacent focused-spec HTML marker placed before the item, or inline at the end of a paragraph/list item. At most one blank line is permitted; intervening structural nodes and larger gaps detach the marker. Markers inside code examples SHALL NOT enroll an item. Gherkin focused tags SHALL bind only Scenario or Scenario Outline, not inherited Feature/Rule/Examples tags. Generated or unmarked items MAY use an explicit registry source.path and source.nativeId declaration; resolution SHALL be unique within that exact configured document, never inferred from headings, lines, or wording. Every marker SHALL have a registry entry and every registration SHALL uniquely bind one native item. Obsolete inline focused rows SHALL be rejected. Host behavioral meaning and native-format validity SHALL NOT be certified by focused-spec.
 
 <!-- focused-spec:id=native.binding.markdown.heading -->
 #### Scenario: Marker binds the following native heading

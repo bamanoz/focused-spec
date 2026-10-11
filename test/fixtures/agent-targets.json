@@ -1,0 +1,478 @@
+[
+  {
+    "id": "amazon-q",
+    "skill": ".amazonq/skills/focused-spec/SKILL.md",
+    "command": ".amazonq/prompts/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "amp",
+    "skill": ".agents/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "antigravity",
+    "skill": ".agents/skills/focused-spec/SKILL.md",
+    "command": ".agents/workflows/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "atomcode",
+    "skill": ".atomcode/skills/focused-spec/SKILL.md",
+    "command": ".atomcode/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {
+      "name": "focused-spec",
+      "args": "optional"
+    },
+    "arguments": "$ARGUMENTS"
+  },
+  {
+    "id": "auggie",
+    "skill": ".augment/skills/focused-spec/SKILL.md",
+    "command": ".augment/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "bob",
+    "skill": ".bob/skills/focused-spec/SKILL.md",
+    "command": ".bob/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "claude",
+    "skill": ".claude/skills/focused-spec/SKILL.md",
+    "command": ".claude/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": "$ARGUMENTS"
+  },
+  {
+    "id": "cline",
+    "skill": ".cline/skills/focused-spec/SKILL.md",
+    "command": ".clinerules/workflows/focused-spec.md",
+    "home": false,
+    "format": "heading",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "command-code",
+    "skill": ".commandcode/skills/focused-spec/SKILL.md",
+    "command": ".commandcode/commands/focused-spec.md",
+    "home": false,
+    "format": "plain",
+    "metadata": {},
+    "arguments": "$ARGUMENTS"
+  },
+  {
+    "id": "codeartsagent",
+    "skill": ".codeartsdoer/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "codex",
+    "skill": ".agents/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "dsh",
+    "skill": ".dsh/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "devin",
+    "skill": ".devin/skills/focused-spec/SKILL.md",
+    "command": ".devin/workflows/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {
+      "name": "focused-spec"
+    },
+    "arguments": null
+  },
+  {
+    "id": "forgecode",
+    "skill": ".forge/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "codebuddy",
+    "skill": ".codebuddy/skills/focused-spec/SKILL.md",
+    "command": ".codebuddy/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {
+      "name": "focused-spec"
+    },
+    "arguments": null
+  },
+  {
+    "id": "codestudio",
+    "skill": ".codestudio/skills/focused-spec/SKILL.md",
+    "command": ".codestudio/prompts/focused-spec.prompt.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "continue",
+    "skill": ".continue/skills/focused-spec/SKILL.md",
+    "command": ".continue/prompts/focused-spec.prompt",
+    "home": false,
+    "format": "yaml",
+    "metadata": {
+      "name": "focused-spec",
+      "invokable": true
+    },
+    "arguments": null
+  },
+  {
+    "id": "costrict",
+    "skill": ".cospec/skills/focused-spec/SKILL.md",
+    "command": ".cospec/openspec/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "crush",
+    "skill": ".crush/skills/focused-spec/SKILL.md",
+    "command": ".crush/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {
+      "name": "focused-spec"
+    },
+    "arguments": null
+  },
+  {
+    "id": "cursor",
+    "skill": ".cursor/skills/focused-spec/SKILL.md",
+    "command": ".cursor/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {
+      "name": "/focused-spec",
+      "id": "focused-spec"
+    },
+    "arguments": null
+  },
+  {
+    "id": "easycode",
+    "skill": ".easycode/skills/focused-spec/SKILL.md",
+    "command": ".easycode/commands/focused-spec.toml",
+    "home": false,
+    "format": "toml",
+    "metadata": {},
+    "arguments": "{{args}}"
+  },
+  {
+    "id": "factory",
+    "skill": ".factory/skills/focused-spec/SKILL.md",
+    "command": ".factory/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "gemini",
+    "skill": ".gemini/skills/focused-spec/SKILL.md",
+    "command": ".gemini/commands/focused-spec.toml",
+    "home": false,
+    "format": "toml",
+    "metadata": {},
+    "arguments": "{{args}}"
+  },
+  {
+    "id": "github-copilot",
+    "skill": ".github/skills/focused-spec/SKILL.md",
+    "command": ".github/prompts/focused-spec.prompt.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "gigacode",
+    "skill": ".gigacode/skills/focused-spec/SKILL.md",
+    "command": ".gigacode/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "grok",
+    "skill": ".grok/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "gsd",
+    "skill": ".agents/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "hermes",
+    "skill": ".hermes/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "iflow",
+    "skill": ".iflow/skills/focused-spec/SKILL.md",
+    "command": ".iflow/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {
+      "name": "/focused-spec",
+      "id": "focused-spec"
+    },
+    "arguments": null
+  },
+  {
+    "id": "junie",
+    "skill": ".junie/skills/focused-spec/SKILL.md",
+    "command": ".junie/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "kilocode",
+    "skill": ".kilocode/skills/focused-spec/SKILL.md",
+    "command": ".kilo/command/focused-spec.md",
+    "home": false,
+    "format": "plain",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "kimi",
+    "skill": ".kimi-code/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "kiro",
+    "skill": ".kiro/skills/focused-spec/SKILL.md",
+    "command": ".kiro/prompts/focused-spec.prompt.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "lingma",
+    "skill": ".lingma/skills/focused-spec/SKILL.md",
+    "command": ".lingma/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {
+      "name": "focused-spec"
+    },
+    "arguments": null
+  },
+  {
+    "id": "minimax-code",
+    "skill": ".minimax/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": true,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "vibe",
+    "skill": ".vibe/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "oh-my-pi",
+    "skill": ".omp/skills/focused-spec/SKILL.md",
+    "command": ".omp/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": "$ARGUMENTS"
+  },
+  {
+    "id": "opencode",
+    "skill": ".opencode/skills/focused-spec/SKILL.md",
+    "command": ".opencode/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": "$ARGUMENTS"
+  },
+  {
+    "id": "pi",
+    "skill": ".pi/skills/focused-spec/SKILL.md",
+    "command": ".pi/prompts/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": "$@"
+  },
+  {
+    "id": "codeassistant",
+    "skill": ".codeassistant/skills/focused-spec/SKILL.md",
+    "command": ".codeassistant/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "qoder",
+    "skill": ".qoder/skills/focused-spec/SKILL.md",
+    "command": ".qoder/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {
+      "name": "focused-spec"
+    },
+    "arguments": null
+  },
+  {
+    "id": "qwen",
+    "skill": ".qwen/skills/focused-spec/SKILL.md",
+    "command": ".qwen/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "rovodev",
+    "skill": ".rovodev/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "roocode",
+    "skill": ".roo/skills/focused-spec/SKILL.md",
+    "command": ".roo/commands/focused-spec.md",
+    "home": false,
+    "format": "heading",
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "trae",
+    "skill": ".trae/skills/focused-spec/SKILL.md",
+    "command": ".trae/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {
+      "name": "focused-spec"
+    },
+    "arguments": null
+  },
+  {
+    "id": "veai",
+    "skill": ".veai/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "warp",
+    "skill": ".warp/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "zed",
+    "skill": ".agents/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  },
+  {
+    "id": "zcode",
+    "skill": ".zcode/skills/focused-spec/SKILL.md",
+    "command": ".zcode/commands/focused-spec.md",
+    "home": false,
+    "format": "yaml",
+    "metadata": {
+      "name": "focused-spec"
+    },
+    "arguments": null
+  },
+  {
+    "id": "agents",
+    "skill": ".agents/skills/focused-spec/SKILL.md",
+    "command": null,
+    "home": false,
+    "format": null,
+    "metadata": {},
+    "arguments": null
+  }
+]

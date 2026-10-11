@@ -72,6 +72,23 @@ describe('authoring dialogue consent', () => {
     expect(result.unauthorizedPaths).toEqual(['spec.md'])
   })
 
+  it('rejects a basename approval that only occurs inside a nested proposed path', async () => {
+    const { workspace, sessionDir, snapshot } = await fixture()
+    const driver = scripted([
+      async () => message('I propose updating changes/login/spec.md. Do you approve?'),
+      async () => message(JSON.stringify({ reply: 'Approved.', approvedPaths: ['spec.md'] })),
+      async () => {
+        await writeFile(join(workspace, 'spec.md'), 'wrong root-level file')
+        return message('Done.')
+      },
+      async () => message(JSON.stringify({ reply: null, approvedPaths: [] })),
+    ])
+    const result = await runAuthoringDialogue({ workspace, sessionDir, skills: [], prompt: 'Clarify blocked login in changes/login/spec.md.', timeoutMs: 1000 }, driver, snapshot, true)
+    expect(result.completed).toBe(false)
+    expect(result.agent.success).toBe(false)
+    expect(await readFile(join(workspace, 'spec.md'), 'utf8')).toBe('old outcome')
+  })
+
   it('fails unfinished dialogue at the turn limit instead of claiming completion', async () => {
     const { workspace, sessionDir, snapshot } = await fixture()
     const driver = scripted([

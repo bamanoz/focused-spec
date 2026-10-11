@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { cp, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 const roots: string[] = []
 const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url))
+const initTargets: { id: string; skill: string; command: string | null; home: boolean }[] = JSON.parse(await readFile(new URL('./fixtures/agent-targets.json', import.meta.url), 'utf8'))
 
 interface Layout {
   readonly match: string
@@ -143,6 +144,7 @@ describe('focused-spec CLI', () => {
       expect(result.stdout).toMatch(/^\s+validate\s/mu)
       expect(result.stdout).toMatch(/^\s+run\s/mu)
       expect(result.stdout).toMatch(/^\s+instructions\s/mu)
+      expect(result.stdout).toMatch(/^\s+init\s/mu)
     }
     for (const command of ['validate', 'run']) {
       for (const args of [[command, '--help'], [command, '-h'], ['help', command]]) {
@@ -156,6 +158,150 @@ describe('focused-spec CLI', () => {
       }
     }
   })
+
+  it('requires explicit init targets without interactive input', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-init-explicit-'))
+    roots.push(root)
+    await mkdir(join(root, '.claude'))
+    for (const args of [[], ['--json']]) {
+      const result = spawnSync(process.execPath, [cli, 'init', ...args], { cwd: root, encoding: 'utf8' })
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain('--tools')
+      expect(await readdir(root, { recursive: true })).toEqual(['.claude'])
+    }
+  })
+
+  it('rejects invalid init arguments before writing files', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-init-invalid-'))
+    roots.push(root)
+    for (const args of [['--tools', 'unknown'], ['--tools', 'all'], ['--tools', 'none'], ['--tools', 'claude,'], ['--tools', ''], ['--tools'], ['--wat'], ['--tools', 'claude', '--tools', 'codex'], [root, root, '--tools', 'claude']]) {
+      const result = spawnSync(process.execPath, [cli, 'init', ...args], { cwd: root, encoding: 'utf8' })
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain('init --help')
+      expect(await readdir(root)).toEqual([])
+    }
+  })
+
+  it('rejects unavailable init roots without creating a project', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-init-root-'))
+    roots.push(root)
+    await put(root, 'file', 'not a directory')
+    for (const path of [join(root, 'missing'), join(root, 'file')]) {
+      const result = spawnSync(process.execPath, [cli, 'init', path, '--tools', 'claude', '--json'], { cwd: root, encoding: 'utf8' })
+      expect(result.status).toBe(1)
+      expect(json(result.stdout)).toMatchObject({ root: null, files: [], errors: expect.arrayContaining([expect.objectContaining({ message: expect.any(String) })]) })
+    }
+    expect(await readdir(root)).toEqual(['file'])
+  })
+
+  it('reports actual init actions and conflicts as one JSON document', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-init-json-'))
+    roots.push(root)
+    const invoke = (...args: string[]) => spawnSync(process.execPath, [cli, 'init', root, '--tools', ' agents,codex,agents ', '--json', ...args], { encoding: 'utf8' })
+    const preview = invoke('--dry-run')
+    expect(preview.status, preview.stderr).toBe(0)
+    expect(json(preview.stdout)).toMatchObject({ tools: ['agents', 'codex'], dryRun: true, files: [{ path: '.agents/skills/focused-spec/SKILL.md', action: 'install', applied: false }], errors: [] })
+    const installed = invoke()
+    expect(installed.status, installed.stderr).toBe(0)
+    expect(json(installed.stdout)).toMatchObject({ files: [{ path: '.agents/skills/focused-spec/SKILL.md', action: 'install', applied: true }], errors: [] })
+    await put(root, '.agents/skills/focused-spec/SKILL.md', 'custom loader')
+    const conflict = invoke()
+    expect(conflict.status).toBe(1)
+    expect(json(conflict.stdout)).toMatchObject({ files: [{ path: '.agents/skills/focused-spec/SKILL.md', action: 'conflict', applied: false }], errors: expect.arrayContaining([expect.objectContaining({ path: '.agents/skills/focused-spec/SKILL.md' })]) })
+    expect(await readFile(join(root, '.agents/skills/focused-spec/SKILL.md'), 'utf8')).toBe('custom loader')
+  })
+
+  it('explains initialization without reading or modifying project state', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-init-help-'))
+    roots.push(root)
+    await cp(new URL('../dist/', import.meta.url), join(root, 'dist'), { recursive: true })
+    await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir')
+    await put(root, 'package.json', '{"type":"module"}')
+    await put(root, '.focused-spec/config.yaml', 'invalid: [')
+    const before = await readdir(root, { recursive: true })
+    const home = join(root, 'missing-home')
+    for (const args of [['init', '--help'], ['init', '-h'], ['help', 'init'], ['init', '--json', '--help']]) {
+      const result = spawnSync(process.execPath, [join(root, 'dist/cli.js'), ...args], { cwd: root, encoding: 'utf8', env: { ...process.env, HOME: home, USERPROFILE: home } })
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stderr).toBe('')
+      expect(result.stdout).toContain('--replace')
+      expect(result.stdout).toContain('--dry-run')
+      for (const target of initTargets) {
+        expect(result.stdout).toContain(target.id)
+        expect(result.stdout).toContain(`${target.home ? '~/' : ''}${target.skill}`)
+        if (target.command !== null) expect(result.stdout).toContain(target.command)
+      }
+      expect(result.stdout).toMatch(/windsurf\s*->\s*devin/)
+      expect(result.stdout).toMatch(/global-only/i)
+      expect(result.stdout).toMatch(/canonical absolute/i)
+      expect(await readdir(root, { recursive: true })).toEqual(before)
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')('installs only confirmed interactive init targets', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-init-terminal-'))
+    roots.push(root)
+    await mkdir(join(root, '.omp'))
+    const home = await mkdtemp(join(tmpdir(), 'focused-init-terminal-home-'))
+    roots.push(home)
+    const interact = async (answer: string): Promise<{ code: number | null; output: string }> => {
+      return await new Promise((resolve, reject) => {
+        // Python's standard-library PTY avoids Darwin script's rejection of pipe descriptors.
+        const terminal = `import os, pty, select, sys
+pid, master = pty.fork()
+if pid == 0:
+    os.execv(sys.argv[1], sys.argv[1:])
+inputs = [master, 0]
+while True:
+    ready, _, _ = select.select(inputs, [], [])
+    done = False
+    for descriptor in ready:
+        try:
+            data = os.read(descriptor, 65536)
+        except OSError:
+            done = True
+            break
+        if descriptor == master:
+            if not data:
+                done = True
+                break
+            os.write(1, data)
+        elif data:
+            os.write(master, data)
+        else:
+            inputs.remove(0)
+            os.write(master, b'\\x04')
+    if done:
+        break
+_, status = os.waitpid(pid, 0)
+code = os.waitstatus_to_exitcode(status)
+sys.exit(code if code >= 0 else 128 - code)
+`
+        const child = spawn('python3', ['-c', terminal, process.execPath, cli, 'init', root], { cwd: root, env: { ...process.env, HOME: home, USERPROFILE: home } })
+        let output = ''
+        let sent = false
+        const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error(`interactive init timed out: ${output}`)) }, 10000)
+        child.stdout.on('data', chunk => {
+          output += String(chunk)
+          if (!sent && output.includes('empty cancels):')) { sent = true; child.stdin.write(answer) }
+        })
+        child.stderr.on('data', chunk => { output += String(chunk) })
+        child.once('error', error => { clearTimeout(timer); reject(error) })
+        child.once('close', code => { clearTimeout(timer); resolve({ code, output }) })
+      })
+    }
+    for (const answer of ['\n', '\u0003', '\u0004']) {
+      const cancelled = await interact(answer)
+      expect(cancelled.code, cancelled.output).toBe(1)
+      expect(await readdir(root, { recursive: true })).toEqual(['.omp'])
+    }
+    const installed = await interact('claude\n')
+    expect(installed.output).toContain(`GLOBAL: ${join(home, '.minimax/skills/focused-spec/SKILL.md')}`)
+    expect(installed.code, installed.output).toBe(0)
+    expect(await readFile(join(root, '.claude/skills/focused-spec/SKILL.md'), 'utf8')).toContain('name: focused-spec')
+    expect(await readdir(join(root, '.omp'))).toEqual([])
+    expect(await readdir(home)).toEqual([])
+  }, 30000)
 
   it('serves workflow guidance without project setup', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-guide-offline-'))

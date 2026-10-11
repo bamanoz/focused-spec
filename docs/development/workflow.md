@@ -20,6 +20,8 @@ This repository uses specification-driven development (SDD) with OpenSpec. For e
 - `npm run smoke` runs the real [OpenSpec example](../../examples/openspec/) with Go and pytest evidence.
 - `node dist/cli.js validate --strict` resolves the repository's own [focused-spec contract](../../openspec/specs/scenario-authoring/spec.md) across every discovered scope without executing tests. `node dist/cli.js run` then performs strict validation and uses `.focused-spec/runners/vitest.ts` to execute the exact Vitest evidence.
 
+The POSIX interactive init check uses Python 3's standard-library PTY to exercise real selection, empty-input/Ctrl-C/EOF cancellation, and confirmed installation. Install Python 3 before running that suite on macOS/Linux; the terminal check is skipped on Windows, not certified there. Core CLI installation does not depend on Python.
+
 The repository Vitest runner batches selected targets by test file and uses an anchored union of their exact test names. Unselected tests remain skipped; a failed selected test does not relabel a passing selected test. The runner timeout covers the complete batch, not a separate budget for each test.
 
 Tests protect observable behavior: parser boundaries, configuration errors, runner resolution/execution, CLI status, isolation, and failure handling. Do not add tests that only assert source layout or incidental implementation details.

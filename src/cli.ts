@@ -3,6 +3,7 @@ import process from 'node:process'
 import { performance } from 'node:perf_hooks'
 import { isAbsolute, resolve } from 'node:path'
 import { instructions, INSTRUCTIONS_HELP } from './instructions.js'
+import { initialize, INIT_HELP } from './init.js'
 import { loadConfig } from './config.js'
 import { executePlan } from './executor.js'
 import type { ExecutionPlan, ExecutionResult, SpecDocument, Violation } from './model.js'
@@ -33,6 +34,7 @@ Commands:
   validate  Check native bindings and resolve registry evidence without running tests
   run       Strictly validate, then execute selected evidence
   instructions  Read version-compatible agent workflow or runner guidance from this package
+  init      Install selected agent integrations without evidence setup
 
 Options:
   -h, --help  Show this help
@@ -110,13 +112,14 @@ function requestedHelp(argumentsList: readonly string[]): string | undefined {
       if (argumentsList[1] === 'validate') return VALIDATE_HELP
       if (argumentsList[1] === 'run') return RUN_HELP
       if (argumentsList[1] === 'instructions') return INSTRUCTIONS_HELP
+      if (argumentsList[1] === 'init') return INIT_HELP
       throw argumentError(`unknown help command ${String(argumentsList[1])}`)
     }
     throw argumentError('unexpected arguments for help')
   }
-  if (command === 'validate' || command === 'run' || command === 'instructions') {
+  if (command === 'validate' || command === 'run' || command === 'instructions' || command === 'init') {
     if (argumentsList.includes('--help') || argumentsList.includes('-h')) {
-      return command === 'instructions' ? INSTRUCTIONS_HELP : command === 'validate' ? VALIDATE_HELP : RUN_HELP
+      return command === 'init' ? INIT_HELP : command === 'instructions' ? INSTRUCTIONS_HELP : command === 'validate' ? VALIDATE_HELP : RUN_HELP
     }
   }
   return undefined
@@ -330,6 +333,7 @@ async function main(argumentsList: readonly string[]): Promise<number> {
     process.stdout.write(await instructions(argumentsList.slice(1)))
     return 0
   }
+  if (argumentsList[0] === 'init') return initialize(argumentsList.slice(1))
   const options = parseArguments(argumentsList)
   const context = options.command === 'run' ? runContext(options) : validationContext(options)
   const projectRoot = isAbsolute(options.root) ? options.root : resolve(options.root)

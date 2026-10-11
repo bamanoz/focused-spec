@@ -1,12 +1,14 @@
 ## ADDED Requirements
 
 ### Requirement: Project-local guidance bootstrap
-The focused-spec loader SHALL obtain protocol-1 JSON workflow guidance from the consuming project's installed CLI before each focused-spec workflow step. It SHALL identify the project or declared workspace installation root from project context and invoke that installation explicitly, rather than choosing an unverified global binary on PATH or downloading `latest`. The loader SHALL use that same installation for subsequent focused-spec commands in the step and obtain the `runners` topic when runner work is needed. It SHALL verify successful command completion, matching protocol, package identity, requested topic, and nonempty content before treating the returned workflow as authoritative. Loading guidance SHALL NOT authorize writes forbidden by the host's current phase or replace its approval, validation, lifecycle, or evidence requirements.
+The focused-spec loader SHALL obtain protocol-1 JSON workflow guidance from the consuming project's installed CLI before each focused-spec workflow step.
+
 
 <!-- focused-spec:id=agent.guidance.project-local -->
 #### Scenario: A global installation does not override the project's workflow
 - **WHEN** an agent loads focused-spec in a project with a local CLI and a different global CLI earlier on PATH
 - **THEN** it obtains guidance and executes focused-spec commands from the local installation
+- **AND** It SHALL identify the project or declared workspace installation root from project context and invoke that installation explicitly, rather than choosing an unverified global binary on PATH or downloading `latest`. The loader SHALL use that same installation for subsequent focused-spec commands in the step and obtain the `runners` topic when runner work is needed. It SHALL verify successful command completion, matching protocol, package identity, requested topic, and nonempty content before treating the returned workflow as authoritative. Loading guidance SHALL NOT authorize writes forbidden by the host's current phase or replace its approval, validation, lifecycle, or evidence requirements.
 
 <!-- focused-spec:id=agent.guidance.unavailable -->
 #### Scenario: An absent or legacy local CLI stops focused-spec work

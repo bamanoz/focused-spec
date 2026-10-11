@@ -45,6 +45,8 @@ Every configured project needs one logical evidence registry. Optional `evidence
 
 Each configured source must match at least one file. Absolute paths, parent traversal, negated patterns, backslashes, symlink escapes, non-YAML matches, and overlapping lexical or canonical file claims fail. Files are loaded deterministically; no nested `include` or implicit repository search exists.
 
+For example, `evidence.files: ['.focused-spec/evidence/**/*.{yaml,yml}']` automatically includes new YAML shards anywhere under that directory. Files already covered by a glob need no separate configuration entry; add a source only for a shard outside the configured patterns. This repository uses that recursive pattern.
+
 Every shard uses the same schema:
 
 ```yaml

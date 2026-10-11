@@ -15,20 +15,9 @@ scopes:
     cli.help.invalid-invocation:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid invocations without treating them as successful help
-  cli-owned-agent-guidance:
-    cli.help.overview:
+    cli.help.init:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state
-    cli.help.validate:
-      evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state
-    cli.help.run:
-      evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state
+        - vitest::test/cli.spec.ts::focused-spec CLI > explains initialization without reading or modifying project state
     cli.help.agent-guide:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > explains guide compatibility without loading package guidance
-  remove-checked-transitions:
-    cli.help.invalid-invocation:
-      evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid invocations without treating them as successful help

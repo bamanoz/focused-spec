@@ -33,7 +33,9 @@ When the host workflow requires approval before writing, propose the complete ch
 - the native behavioral revision;
 - the chosen identity binding;
 - the evidence-registry entry and exact selected test;
-- every file to create, modify, generate, move, or remove.
+- every file to create, modify, generate, move, or remove, using its complete project-relative path, including any later task-status or completion-document edits.
+
+Keep those exact paths in the approval request and the applied change. A basename or a path relative to the native document's folder does not authorize a different project-relative destination. If consent names only part of the work or an ambiguous path, clarify the missing exact path before writing it; do not infer permission from approval of the broader outcome.
 
 Keep behavior only in its canonical native item. Do not propose a wording-only change and silently omit identity or evidence work. If the user approves only part, apply only that part and request separate approval for what remains. Do not infer broader permission or declare the specification complete until the binding, registry, native validation, and selected-test execution are complete. Report unavailable host validators and unchecked evidence sensitivity as limitations, not passes.
 
@@ -43,7 +45,7 @@ Propose the final registry contents, not just a file name. Approval covers the p
 
 Every configured project requires one logical evidence registry. Optional version-3 `evidence.files` explicitly names project-relative YAML paths or glob patterns; omission uses `.focused-spec/evidence.yaml` through the same loader. Explicit sources never trigger fallback or implicit repository-wide discovery. Each pattern must match at least one `.yaml`/`.yml` file; overlapping lexical/canonical claims, unsafe paths, missing sources, and symlink escapes fail. Nested `include` is unsupported.
 
-Inspect configured sources and existing ownership before editing. Reuse the shard for the affected domain/module, following the project's existing boundaries. Create a new shard only for a genuine new ownership boundary and explicitly connect it through configuration. Do not reorganize the whole registry for one task. A small project may keep one file. Include every touched shard and any configuration change in required host approval; propose complete final entries, not only shard names.
+Inspect configured sources and existing ownership before editing. Reuse the shard for the affected domain/module, following the project's existing boundaries. Create a new shard only for a genuine new ownership boundary. Ensure its path is covered by an existing `evidence.files` path or glob: a matching glob automatically includes new files, so do not add redundant per-file entries or change configuration for an already-covered shard. Change configuration only when the new shard lies outside the configured sources; without `evidence.files`, only `.focused-spec/evidence.yaml` is loaded. Do not reorganize the whole registry for one task. A small project may keep one file. Include every touched shard and any necessary configuration change in required host approval; propose complete final entries, not only shard names.
 
 Each shard uses the same evidence-only schema:
 

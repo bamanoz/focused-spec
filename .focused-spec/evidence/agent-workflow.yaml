@@ -20,6 +20,7 @@ scopes:
     agent.eval.skill-activation:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > stops an OpenSpec turn before judging artifacts if the agent skipped the skill
+        - vitest::test/evals.spec.ts::agent eval harness > rejects agent turns that never load the focused-spec skill
     agent.eval.native-cli-evidence:
       evidence:
         - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > recognizes completed selected CLI evidence without crediting validation or failed commands
@@ -78,7 +79,6 @@ scopes:
       evidence:
         - vitest::test/dialogue.spec.ts::authoring dialogue consent > permits the confirmed revision without authorizing a different metadata file
         - vitest::test/dialogue.spec.ts::authoring dialogue consent > fails unfinished dialogue at the turn limit instead of claiming completion
-  cli-owned-agent-guidance:
     agent.guidance.project-local:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > rejects global guidance in place of the project installation
@@ -91,31 +91,6 @@ scopes:
     agent.guidance.session-refresh:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > requires fresh guidance for a subsequent workflow step
-    agent.eval.failed-turn:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > records a failed agent turn without running downstream judges
-        - vitest::test/evals.spec.ts::agent eval harness > keeps post-failure recommendations outside scored agent turns
-        - vitest::test/evals.spec.ts::agent eval harness > retains the failed score when the research interview cannot complete
-    agent.eval.protected-files:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects protected test and package changes in an evaluated workspace
-    agent.eval.skill-activation:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects agent turns that never load the focused-spec skill
-    agent.eval.native-cli-evidence:
-      evidence:
-        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > recognizes completed selected CLI evidence without crediting validation or failed commands
     agent.eval.guidance-activation:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > requires completed local workflow guidance after loader activation
-  remove-checked-transitions:
-    agent.adoption.preserve-native:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery
-    agent.adoption.surviving-evidence:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery
-        - vitest::test/evals.spec.ts::agent eval harness > retains executed checkpoints after working identity and registry retire in place
-    agent.adoption.evidence-continuity:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > detects lost or altered evidence across document transitions

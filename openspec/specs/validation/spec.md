@@ -33,12 +33,14 @@ Stable IDs SHALL be unique within each scope. The same ID in different scopes SH
 - **THEN** validation accepts both while retaining scope-local duplicate checks
 
 ### Requirement: Validation before selected execution
-Run SHALL strictly validate exactly its selection before starting tests: all discovered scopes without --scope, or only the explicitly named scope with it; when --scenario is present, only occurrences of that ID in the selected scopes SHALL have their native bindings, scope-local uniqueness, and evidence validated and resolved. An explicitly requested scope with no matching documents or a selected ID absent from its scope selection SHALL fail before execution. Same-ID occurrences in unselected scopes SHALL NOT create validation dependencies. Without --scenario, full-scope validation remains unchanged.
+Run SHALL strictly validate exactly its selection before starting tests: all discovered scopes without --scope, or only the explicitly named scope with it; when --scenario is present, only occurrences of that ID in the selected scopes SHALL have their native bindings, scope-local uniqueness, and evidence validated and resolved.
+
 
 <!-- focused-spec:id=validation.scope.unselected-error -->
 #### Scenario: Unrelated invalid scenario does not block selected run
 - **WHEN** a selected scenario has executable evidence while another scenario in its scope has malformed, planned, or unresolved evidence
 - **THEN** run executes the selected scenario without resolving the unrelated evidence
+- **AND** An explicitly requested scope with no matching documents or a selected ID absent from its scope selection SHALL fail before execution. Same-ID occurrences in unselected scopes SHALL NOT create validation dependencies. Without --scenario, full-scope validation remains unchanged.
 
 <!-- focused-spec:id=validation.scope.selected-own-errors -->
 #### Scenario: Selected scenario retains strict checks

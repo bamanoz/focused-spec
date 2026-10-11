@@ -8,6 +8,7 @@ The binary is `focused-spec`.
 focused-spec validate [--root <path>] [--config <path>] [--scope <name>] [--strict] [--syntax-only] [--json] [--timings]
 focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--json] [--timings]
 focused-spec instructions [--protocol <version>] [--topic workflow|runners] [--json]
+focused-spec init [path] [--tools <comma-separated IDs>] [--dry-run] [--json] [--replace]
 ```
 
 Scope names are path-safe single fragments. The CLI preserves the selected name exactly; it never treats it as a glob or path.
@@ -17,6 +18,96 @@ Scope names are path-safe single fragments. The CLI preserves the selected name 
 Use `focused-spec --help`, `<command> --help`, and `focused-spec help <command>` for the installed command's options, defaults, selection rules, and examples. Explicit help exits zero without reading project configuration, the evidence registry, runner modules, or guidance assets. For a known command, help takes precedence over other options, including `--json`. The retired `transition` command and its help forms are unknown commands, not aliases.
 
 No command, an unknown command or option, an extra positional argument, a duplicate option, a missing value, or an unknown `help` target exits nonzero with a diagnostic and the relevant help pointer.
+
+## Agent initialization
+
+`init` copies package-owned integration into the canonical explicitly named existing project directory, or cwd. Only explicit `minimax-code` selection additionally authorizes its global home skill. It does not search for an ancestor, download skills, install dependencies, load evidence configuration, or depend on OpenSpec. The fixed catalog below is audited against published OpenSpec 1.14.1: 50 canonical targets, 34 native wrappers, 16 skills-only targets. `~` denotes the existing canonical home root; all other paths are project-relative.
+
+| ID | Loader destination | Native wrapper destination |
+| --- | --- | --- |
+| `amazon-q` | `.amazonq/skills/focused-spec/SKILL.md` | `.amazonq/prompts/focused-spec.md` |
+| `amp` | `.agents/skills/focused-spec/SKILL.md` | skills only |
+| `antigravity` | `.agents/skills/focused-spec/SKILL.md` | `.agents/workflows/focused-spec.md` |
+| `atomcode` | `.atomcode/skills/focused-spec/SKILL.md` | `.atomcode/commands/focused-spec.md` |
+| `auggie` | `.augment/skills/focused-spec/SKILL.md` | `.augment/commands/focused-spec.md` |
+| `bob` | `.bob/skills/focused-spec/SKILL.md` | `.bob/commands/focused-spec.md` |
+| `claude` | `.claude/skills/focused-spec/SKILL.md` | `.claude/commands/focused-spec.md` |
+| `cline` | `.cline/skills/focused-spec/SKILL.md` | `.clinerules/workflows/focused-spec.md` |
+| `command-code` | `.commandcode/skills/focused-spec/SKILL.md` | `.commandcode/commands/focused-spec.md` |
+| `codeartsagent` | `.codeartsdoer/skills/focused-spec/SKILL.md` | skills only |
+| `codex` | `.agents/skills/focused-spec/SKILL.md` | skills only |
+| `dsh` | `.dsh/skills/focused-spec/SKILL.md` | skills only |
+| `devin` | `.devin/skills/focused-spec/SKILL.md` | `.devin/workflows/focused-spec.md` |
+| `forgecode` | `.forge/skills/focused-spec/SKILL.md` | skills only |
+| `codebuddy` | `.codebuddy/skills/focused-spec/SKILL.md` | `.codebuddy/commands/focused-spec.md` |
+| `codestudio` | `.codestudio/skills/focused-spec/SKILL.md` | `.codestudio/prompts/focused-spec.prompt.md` |
+| `continue` | `.continue/skills/focused-spec/SKILL.md` | `.continue/prompts/focused-spec.prompt` |
+| `costrict` | `.cospec/skills/focused-spec/SKILL.md` | `.cospec/openspec/commands/focused-spec.md` |
+| `crush` | `.crush/skills/focused-spec/SKILL.md` | `.crush/commands/focused-spec.md` |
+| `cursor` | `.cursor/skills/focused-spec/SKILL.md` | `.cursor/commands/focused-spec.md` |
+| `easycode` | `.easycode/skills/focused-spec/SKILL.md` | `.easycode/commands/focused-spec.toml` |
+| `factory` | `.factory/skills/focused-spec/SKILL.md` | `.factory/commands/focused-spec.md` |
+| `gemini` | `.gemini/skills/focused-spec/SKILL.md` | `.gemini/commands/focused-spec.toml` |
+| `github-copilot` | `.github/skills/focused-spec/SKILL.md` | `.github/prompts/focused-spec.prompt.md` |
+| `gigacode` | `.gigacode/skills/focused-spec/SKILL.md` | `.gigacode/commands/focused-spec.md` |
+| `grok` | `.grok/skills/focused-spec/SKILL.md` | skills only |
+| `gsd` | `.agents/skills/focused-spec/SKILL.md` | skills only |
+| `hermes` | `.hermes/skills/focused-spec/SKILL.md` | skills only |
+| `iflow` | `.iflow/skills/focused-spec/SKILL.md` | `.iflow/commands/focused-spec.md` |
+| `junie` | `.junie/skills/focused-spec/SKILL.md` | `.junie/commands/focused-spec.md` |
+| `kilocode` | `.kilocode/skills/focused-spec/SKILL.md` | `.kilo/command/focused-spec.md` |
+| `kimi` | `.kimi-code/skills/focused-spec/SKILL.md` | skills only |
+| `kiro` | `.kiro/skills/focused-spec/SKILL.md` | `.kiro/prompts/focused-spec.prompt.md` |
+| `lingma` | `.lingma/skills/focused-spec/SKILL.md` | `.lingma/commands/focused-spec.md` |
+| `minimax-code` | `~/.minimax/skills/focused-spec/SKILL.md` | skills only |
+| `vibe` | `.vibe/skills/focused-spec/SKILL.md` | skills only |
+| `oh-my-pi` | `.omp/skills/focused-spec/SKILL.md` | `.omp/commands/focused-spec.md` |
+| `opencode` | `.opencode/skills/focused-spec/SKILL.md` | `.opencode/commands/focused-spec.md` |
+| `pi` | `.pi/skills/focused-spec/SKILL.md` | `.pi/prompts/focused-spec.md` |
+| `codeassistant` | `.codeassistant/skills/focused-spec/SKILL.md` | `.codeassistant/commands/focused-spec.md` |
+| `qoder` | `.qoder/skills/focused-spec/SKILL.md` | `.qoder/commands/focused-spec.md` |
+| `qwen` | `.qwen/skills/focused-spec/SKILL.md` | `.qwen/commands/focused-spec.md` |
+| `rovodev` | `.rovodev/skills/focused-spec/SKILL.md` | skills only |
+| `roocode` | `.roo/skills/focused-spec/SKILL.md` | `.roo/commands/focused-spec.md` |
+| `trae` | `.trae/skills/focused-spec/SKILL.md` | `.trae/commands/focused-spec.md` |
+| `veai` | `.veai/skills/focused-spec/SKILL.md` | skills only |
+| `warp` | `.warp/skills/focused-spec/SKILL.md` | skills only |
+| `zed` | `.agents/skills/focused-spec/SKILL.md` | skills only |
+| `zcode` | `.zcode/skills/focused-spec/SKILL.md` | `.zcode/commands/focused-spec.md` |
+| `agents` | `.agents/skills/focused-spec/SKILL.md` | skills only |
+
+`--tools` trims comma-separated IDs and deduplicates IDs and shared destinations. Empty/unknown IDs, missing values, duplicate/unknown options, and extra paths fail before writing. There are no `all` or `none` aliases. Omitting `--tools` prompts only when stdin and stdout are terminals and `--json` is absent. Existing directories suggest choices; only a nonempty confirmed selection authorizes installation. Empty input, Ctrl-C, and EOF cancel with exit 1 and no writes.
+
+`windsurf` normalizes to `devin` before deduplication/reporting and writes only `.devin`; existing `.windsurf` content is untouched. Amp, Antigravity, Codex, GSD, Zed and agents share one identical `.agents/skills` loader. Antigravity additionally receives its workflow; Codex gets no `.codex` prompt. Interactive choices identify MiniMax as a global home destination before confirmation.
+
+MiniMax installs only `~/.minimax/skills/focused-spec/SKILL.md`, never a project `.minimax`/`.mavis`, settings, commands or global package. Home resolution/inspection occurs only when it is selected. Missing or non-directory home roots fail without creating a home. The global loader still resolves the consuming project’s local CLI, not a global installation.
+
+All selected assets and destinations across both canonical roots are checked before any mutation. Missing files are installed; byte-identical files are unchanged. Any divergent selected file in either root blocks all writes in both unless `--replace` explicitly authorizes replacement. Extras and unselected targets are preserved. Missing/non-directory roots, symlinked components below either root, non-directory ancestors and non-regular destinations fail even with `--replace`. A symlink naming a root itself resolves to its canonical directory. Missing, unreadable or empty selected assets fail without fallback. Destination state is rechecked before writing; this is not an atomic transaction or a sandbox against hostile races.
+
+`--dry-run` performs the same checks without creating or modifying files; `--replace --dry-run` previews replacement, and conflicts still exit 1. Successful install/no-op/preview exits 0; failures and cancellation exit 1. Later I/O failures may leave completed or partially written files: results retain completed writes, with the failed path in `errors`; no rollback is promised.
+
+Human output distinguishes installation from evidence readiness, skill activation and execution. Native command-file hosts generally use `/focused-spec <task>`; Amazon Q uses `@focused-spec`, Codex `$focused-spec`, Kimi `/skill:focused-spec`, and Continue its prompt selector. Devin workflows apply to Desktop; Local uses the skill. Skills-only/universal hosts use their native skill invocation or a natural-language request. Hermes needs the project’s `.hermes/skills` directory in `skills.external_dirs`; init prints the hint but never edits configuration. Copilot prompt files target IDEs, not Copilot CLI/cloud setup. Host routing and permissions remain authoritative; init does not certify the loader’s later local-CLI resolution.
+
+`--json` emits one stdout document with no progress prose, plus stderr diagnostics on failure:
+
+```json
+{
+  "root": "/canonical/project",
+  "tools": ["codex"],
+  "dryRun": true,
+  "files": [{ "path": ".agents/skills/focused-spec/SKILL.md", "action": "install", "applied": false }],
+  "errors": []
+}
+```
+
+`root` is the canonical project root, or null if its resolution fails; `tools` contains normalized distinct canonical IDs. Project file/error paths are project-relative; MiniMax file/error paths are canonical absolute home paths (an unavailable home is reported using its requested absolute destination). Actions are `install`, `unchanged`, `replace`, or `conflict`. `applied` is true only for completed writes, never unchanged/previewed files, and remains truthful after later I/O failures. Errors are `{ "path"?: "<destination>", "message": "<diagnostic>" }`; unsafe destinations may lack a file action. Help stays human-readable with `--json` and does not probe project/home integrations.
+
+```sh
+./node_modules/.bin/focused-spec init --tools oh-my-pi,claude
+./node_modules/.bin/focused-spec init ../project --tools codex --dry-run --json
+./node_modules/.bin/focused-spec init --tools claude --replace
+./node_modules/.bin/focused-spec init --tools minimax-code --dry-run --json
+```
 
 ## Package-owned agent guidance
 

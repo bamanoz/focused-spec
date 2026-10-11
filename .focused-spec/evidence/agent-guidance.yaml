@@ -1,5 +1,5 @@
 scopes:
-  cli-owned-agent-guidance:
+  current:
     guidance.delivery.offline:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > serves workflow guidance without project setup

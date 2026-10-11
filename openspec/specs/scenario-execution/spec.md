@@ -7,12 +7,14 @@ Selected evidence execution, status aggregation, and success policy.
 ## Requirements
 
 ### Requirement: Execution selection
-Run SHALL strictly validate and execute every discovered scope by default or only the explicitly selected scope; with --scenario, it SHALL select occurrences of that ID in the selected scopes. A requested scope with no matching documents or selected ID absent from its selection SHALL fail before execution. Results SHALL report actual validation and execution selections, and every scenario result SHALL include its scope so repeated IDs remain unambiguous. Same-ID occurrences SHALL execute their own explicit evidence without inheritance.
+Run SHALL strictly validate and execute every discovered scope by default or only the explicitly selected scope; with --scenario, it SHALL select occurrences of that ID in the selected scopes.
+
 
 <!-- focused-spec:id=execution.selection.current -->
 #### Scenario: Default execution includes and distinguishes all scopes
 - **WHEN** multiple scopes contain independent scenarios sharing one ID and run selects all scopes
 - **THEN** every occurrence executes its own evidence and its result identifies its scope
+- **AND** A requested scope with no matching documents or selected ID absent from its selection SHALL fail before execution. Results SHALL report actual validation and execution selections, and every scenario result SHALL include its scope so repeated IDs remain unambiguous. Same-ID occurrences SHALL execute their own explicit evidence without inheritance.
 
 <!-- focused-spec:id=execution.selection.change-scenario -->
 #### Scenario: Scope and scenario selection
@@ -94,12 +96,14 @@ Run SHALL resolve concrete evidence for exactly its strict validation selection 
 - **THEN** its failure output reports reached validation and resolution durations without claiming execution began
 
 ### Requirement: Compatible bounded execution
-`run` SHALL default to serial runner invocation. If a positive project-wide concurrency limit greater than one is configured, `run` SHALL execute at most that many opted-in groups simultaneously, SHALL NOT overlap groups sharing a resource key, and SHALL run legacy or explicitly exclusive groups without overlapping any other group. It SHALL not infer compatibility from scenario or target identity and SHALL preserve one actual result per selected runner/target pair and deterministic scenario/evidence result order regardless of completion order. Group failure SHALL yield errors for its affected targets without falsely passing them or suppressing unrelated execution.
+`run` SHALL default to serial runner invocation.
+
 
 <!-- focused-spec:id=execution.groups.independent -->
 #### Scenario: Independent groups overlap within the limit
 - **WHEN** a runner declares independent groups and concurrency greater than one is enabled
 - **THEN** compatible groups overlap without exceeding the configured number of active runner invocations
+- **AND** If a positive project-wide concurrency limit greater than one is configured, `run` SHALL execute at most that many opted-in groups simultaneously, SHALL NOT overlap groups sharing a resource key, and SHALL run legacy or explicitly exclusive groups without overlapping any other group. It SHALL not infer compatibility from scenario or target identity and SHALL preserve one actual result per selected runner/target pair and deterministic scenario/evidence result order regardless of completion order. Group failure SHALL yield errors for its affected targets without falsely passing them or suppressing unrelated execution.
 
 <!-- focused-spec:id=execution.groups.conflict -->
 #### Scenario: Shared resource serializes across runners

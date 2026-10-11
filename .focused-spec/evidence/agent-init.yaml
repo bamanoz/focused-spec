@@ -1,0 +1,71 @@
+scopes:
+  current:
+    init.install.selected-targets:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > installs selected agent integrations offline from the packed package
+    init.install.shared-root:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > deduplicates Codex and shared agent destinations
+    init.install.no-runtime-setup:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > installs agent integration without manufacturing evidence setup
+    init.selection.explicit:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > requires explicit init targets without interactive input
+    init.selection.interactive:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > installs only confirmed interactive init targets
+    init.selection.invalid:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid init arguments before writing files
+    init.reinit.unchanged:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > leaves identical agent integrations unchanged on reinitialization
+    init.reinit.conflict:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > preserves custom integrations and aborts all writes on conflict
+    init.reinit.replace:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > replaces only explicitly selected integration files
+    init.preview.no-writes:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > previews installation and replacement without filesystem writes
+    init.boundary.unsafe-destination:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > rejects unsafe integration destinations without modifying either tree
+    init.boundary.invalid-root:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects unavailable init roots without creating a project
+    init.assets.unavailable:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > rejects incomplete bundled init assets before writing integrations
+    init.output.json:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > reports actual init actions and conflicts as one JSON document
+    init.targets.catalog:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > installs every OpenSpec 1.14.1 agent target from the packed package
+    init.targets.native-formats:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > installs host-readable wrappers with native argument handling
+    init.targets.alias:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > normalizes Windsurf selection to Devin without legacy writes
+    init.global.minimax:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > installs MiniMax integration only into the explicitly selected home root
+    init.global.preview:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > previews mixed project and home integration without writes
+    init.global.conflict:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > aborts project and home writes together on any integration conflict
+    init.global.replace:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > replaces only selected MiniMax integration and preserves neighboring files
+    init.global.unsafe:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > rejects unsafe home destinations without modifying either tree
+    init.global.reporting:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > reports canonical home destinations and completed global writes

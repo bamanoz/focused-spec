@@ -668,6 +668,22 @@ describe('agent eval harness', () => {
     expect(await scenarioGate(root, change, 'current')).toMatchObject({ passed: false })
   })
 
+  it('allows public package documentation while rejecting implementation inspection', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-eval-public-docs-'))
+    roots.push(root)
+    const transcript = (toolName: string, args: object) => JSON.stringify({ type: 'tool_execution_start', toolName, args })
+    for (const [toolName, args] of [
+      ['grep', { path: 'node_modules/focused-spec/README.md', pattern: 'results|run\\(|RunnerPlugin|resolve\\(' }],
+      ['read', { path: 'node_modules/focused-spec/docs/reference/runner-api.md' }],
+      ['read', { path: 'node_modules/focused-spec/dist/runner-api.d.ts:raw' }],
+    ] as const) {
+      expect(await integrityGate(root, new Map(), [transcript(toolName, args)])).toMatchObject({ passed: true })
+    }
+    for (const path of ['node_modules/focused-spec/dist/cli.js', 'node_modules/focused-spec/src/registry.ts', 'node_modules/focused-spec/examples/openspec/.focused-spec/runners/go-test.ts']) {
+      expect(await integrityGate(root, new Map(), [transcript('read', { path })])).toMatchObject({ passed: false })
+    }
+  })
+
   it('rejects protected test and package changes in an evaluated workspace', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-eval-integrity-'))
     roots.push(root)
