@@ -54,7 +54,7 @@ npm install --save-dev focused-spec@latest
 For agent-led specification authoring, explicitly initialize the agent integration from the project's installed package. The CLI works without it; the bundled [loader skill](skills/focused-spec/SKILL.md) obtains workflow guidance from that same local CLI.
 
 ```sh
-./node_modules/.bin/focused-spec init --tools oh-my-pi,claude
+npx focused-spec init --tools oh-my-pi,claude
 ```
 
 Choose only the agents you use; for Codex, use `--tools codex`. Init supports [50 targets](docs/reference/cli.md#agent-initialization), installs native wrappers where supported, and preserves customized files unless `--replace` is explicit. Use `--dry-run` to preview. It does not create evidence configuration, registries, or runners. See the [installation guide](docs/guides/install.md#bundled-agent-integration) for destinations, the explicit global-only MiniMax target, and the alternative external skills installer.
@@ -64,8 +64,8 @@ Choose only the agents you use; for Codex, use `--tools codex`. Init supports [5
 3. Validate and run the completed selection:
 
    ```sh
-   ./node_modules/.bin/focused-spec validate --strict
-   ./node_modules/.bin/focused-spec run
+   npx focused-spec validate --strict
+   npx focused-spec run
    ```
 
 While a test is not yet available, prefix its registry reference with `planned:` and use non-strict validation. Strict validation and `run` reject planned evidence.
