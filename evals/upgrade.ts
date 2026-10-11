@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { lstat, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import fg from 'fast-glob'
+import { glob } from 'glob'
 import { parse } from 'yaml'
 import { discoverDocuments, loadConfig } from '../dist/index.js'
 import { runProcess } from './process.ts'
@@ -36,7 +36,7 @@ export function isUpgradeArtifact(path: string): boolean {
 
 export async function captureUpgradeBaseline(workspace: string, candidateRoot: string): Promise<UpgradeBaseline> {
   const artifacts = new Map<string, string>()
-  for (const path of await fg('**/*', { cwd: candidateRoot, onlyFiles: true, dot: true })) {
+  for (const path of await glob('**/*', { cwd: candidateRoot, nodir: true, dot: true, follow: true, nocase: false })) {
     artifacts.set(PACKAGE + path, hash(await readFile(join(candidateRoot, path))))
   }
   artifacts.set(INTEGRATION + 'SKILL.md', hash(await readFile(join(candidateRoot, 'skills/focused-spec/SKILL.md'))))
@@ -102,7 +102,7 @@ function nativeText(source: string): string {
 }
 
 export async function upgradeArtifactsGate(workspace: string, baseline: UpgradeBaseline): Promise<EvalGate> {
-  const paths = await fg(['node_modules/focused-spec/**/*', '.omp/skills/focused-spec/**/*', COMMAND], { cwd: workspace, onlyFiles: true, dot: true })
+  const paths = await glob(['node_modules/focused-spec/**/*', '.omp/skills/focused-spec/**/*', COMMAND], { cwd: workspace, nodir: true, dot: true, follow: true, nocase: false })
   const changed: string[] = paths.filter(path => !baseline.artifacts.has(path))
   for (const [path, expected] of baseline.artifacts) {
     try {

@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import fg from 'fast-glob'
+import { glob } from 'glob'
 import type { AgentDriver, AgentRequest, EvalGate, EvalResult, EvalRunOptions } from './types.ts'
 import { evalCase } from './cases.ts'
 import { guidanceActivationGate, judgeCompletedWorkspace, judgeProposalCheckpoint, judgeWorkingCheckpoint, skillActivationGate, snapshotProtectedFiles } from './judge.ts'
@@ -29,7 +29,7 @@ export async function runEval(
     const snapshots = new Map(await snapshotProtectedFiles(workspace.path, selected.editablePaths))
     if (workspace.upgrade !== undefined) {
       for (const path of snapshots.keys()) if (isUpgradeArtifact(path)) snapshots.delete(path)
-      const unrelated = await fg('node_modules/yaml/**/*', { cwd: workspace.path, onlyFiles: true, dot: true })
+      const unrelated = await glob('node_modules/yaml/**/*', { cwd: workspace.path, nodir: true, dot: true, follow: true, nocase: false })
       for (const path of ['.npmrc', 'README.md', 'go.mod', ...unrelated]) {
         snapshots.set(path, await readFile(join(workspace.path, path), 'utf8'))
       }

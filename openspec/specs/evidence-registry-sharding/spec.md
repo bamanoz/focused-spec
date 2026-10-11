@@ -9,7 +9,6 @@ Explicit domain-owned YAML files compose one evidence registry without changing 
 ### Requirement: Explicit logical registry composition
 The CLI SHALL compose one logical evidence registry from optional version-3 evidence.files, a nonempty list of safe project-relative YAML paths or glob patterns.
 
-
 <!-- focused-spec:id=registry.sharding.compose -->
 #### Scenario: Domain shards contribute to one logical registry
 - **WHEN** explicitly configured domain shards register distinct native items with multiple evidence references
@@ -29,7 +28,6 @@ The CLI SHALL compose one logical evidence registry from optional version-3 evid
 ### Requirement: Scope-local uniqueness and diagnostic provenance
 Each selected (scope, ID) SHALL occur at most once across all configured files, with no merge or last-wins resolution.
 
-
 <!-- focused-spec:id=registry.sharding.duplicates -->
 #### Scenario: Cross-file duplicate registrations fail
 - **WHEN** two configured files register the same selected scope and ID
@@ -45,3 +43,21 @@ Each selected (scope, ID) SHALL occur at most once across all configured files, 
 #### Scenario: Binding failure points to its domain shard
 - **WHEN** a registration in a configured shard has no unique matching native item
 - **THEN** the violation reports that shard's actual path and entry line
+
+### Requirement: Bounded registry source discovery
+
+Registry source patterns SHALL use the same limits as document patterns: 4096 characters, 32 nested group levels with parentheses limited to 2 levels, 256 brace delimiter characters and 256 expanded alternatives per pattern. Excess SHALL produce an actionable violation without partially loading sources. Bounded alternatives SHALL preserve padded and stepped numeric ranges.
+
+<!-- focused-spec:id=registry.glob.bounds -->
+#### Scenario: Excessive registry pattern complexity
+- **WHEN** an evidence source exceeds a documented pattern bound
+- **THEN** registry loading reports the invalid source without returning a partial registry
+
+### Requirement: Unreadable registry source discovery
+
+A matched dangling symlink SHALL be reported as an unreadable source, not silently removed from the registry selection.
+
+<!-- focused-spec:id=registry.source.broken -->
+#### Scenario: Dangling registry source link
+- **WHEN** a registry source pattern matches a dangling symlink beside a readable shard
+- **THEN** loading reports the unreadable source instead of silently accepting incomplete evidence

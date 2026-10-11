@@ -37,6 +37,8 @@ execution:
 
 There are no implicit archive exclusions, source-framework defaults, privileged scopes, or fallback locations. Multiple layouts may contribute documents to one scope, but each document must match exactly one layout and scope; overlapping claims are errors.
 
+Document matches, exclusions and evidence source patterns share security limits: at most 4096 characters, 32 nested brace/group levels (parentheses separately limited to 2 levels), 256 unescaped brace delimiter characters and 256 brace-expanded alternatives per pattern. Excess fails with a `glob pattern exceeds ...` violation before matching or runner loading; selected files are never silently truncated. Hidden files are included, matching is case-sensitive, and padded (`{01..03}`) and stepped (`{1..5..2}`) ranges retain their numeric meaning. Split oversized alternatives into explicit source patterns instead of increasing the limits.
+
 Runner configuration and the public runner API are unchanged. A runner ID names one execution environment. Modules are project-relative `.ts`, `.mts`, `.js`, or `.mjs` files. `timeoutMs` is an optional positive integer no greater than `2147482647`. `execution.maxConcurrentGroups` is optional, defaults to 1, and only permits overlap for compatible groups explicitly returned by runners. See the [runner guide](runners.md) and [runner API reference](../reference/runner-api.md).
 
 ## Required evidence registry
@@ -44,6 +46,8 @@ Runner configuration and the public runner API are unchanged. A runner ID names 
 Every configured project needs one logical evidence registry. Optional `evidence.files` explicitly names a nonempty list of project-relative `.yaml`/`.yml` paths or glob patterns. Without `evidence`, the same loader reads `.focused-spec/evidence.yaml`; an explicit list never falls back to that file. All sources resolve from the selected project root, including with `--config`.
 
 Each configured source must match at least one file. Absolute paths, parent traversal, negated patterns, backslashes, symlink escapes, non-YAML matches, and overlapping lexical or canonical file claims fail. Files are loaded deterministically; no nested `include` or implicit repository search exists.
+
+A matched dangling source symlink is an unreadable-source error, including when other shards are readable. The pattern limits above apply to every evidence source; an invalid pattern prevents loading a partial registry.
 
 For example, `evidence.files: ['.focused-spec/evidence/**/*.{yaml,yml}']` automatically includes new YAML shards anywhere under that directory. Files already covered by a glob need no separate configuration entry; add a source only for a shard outside the configured patterns. This repository uses that recursive pattern.
 

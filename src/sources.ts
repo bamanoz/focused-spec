@@ -1,6 +1,6 @@
 import { readFile, realpath } from 'node:fs/promises'
 import { isAbsolute, relative, sep } from 'node:path'
-import fg from 'fast-glob'
+import { expandGlobPattern, globFiles } from './glob.js'
 import type { DocumentLayout, FocusedSpecConfig, NativeDocument, NativeItem, Scenario, SpecDocument, Violation } from './model.js'
 import { parseNativeDocument } from './parser.js'
 import { loadEvidenceRegistry } from './registry.js'
@@ -61,19 +61,14 @@ async function claimsForLayout(
     return []
   }
   const pattern = layout.scope === undefined
-    ? layout.match.replace(SCOPE_TOKEN, capturedScopeSelection === undefined ? '*' : fg.escapePath(capturedScopeSelection))
+    ? layout.match.replace(SCOPE_TOKEN, capturedScopeSelection ?? '*')
     : layout.match
   let paths: string[]
   try {
-    paths = await fg(pattern, {
+    paths = await globFiles(expandGlobPattern(pattern), {
       absolute: true,
       cwd: projectRoot,
-      dot: true,
-      followSymbolicLinks: true,
-      ignore: [...(layout.exclude ?? [])],
-      onlyFiles: true,
-      throwErrorOnBrokenSymbolicLink: true,
-      unique: true,
+      ignore: (layout.exclude ?? []).flatMap(expandGlobPattern),
     })
   } catch (error) {
     violations.push({

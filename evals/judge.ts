@@ -1,6 +1,6 @@
 import { access, readFile, rename, writeFile } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
-import fg from 'fast-glob'
+import { glob } from 'glob'
 import { discoverDocuments, loadConfig, loadEvidenceRegistry, parseNativeDocument } from '../dist/index.js'
 import type { EvalCase, EvalGate } from './types.ts'
 import { runProcess } from './process.ts'
@@ -244,14 +244,14 @@ export async function guidanceActivationGate(workspace: string, workflowSteps: r
 
 export async function snapshotProtectedFiles(workspace: string, editablePaths: readonly string[] = []): Promise<ReadonlyMap<string, string>> {
   const snapshots = new Map<string, string>()
-  const paths = new Set([...PROTECTED_PATHS, ...await fg(['app/**/*', 'auth/**/*', 'tests/**/*', 'specs/**/*', '.focused-spec/**/*'], { cwd: workspace, onlyFiles: true, dot: true })])
+  const paths = new Set([...PROTECTED_PATHS, ...await glob(['app/**/*', 'auth/**/*', 'tests/**/*', 'specs/**/*', '.focused-spec/**/*'], { cwd: workspace, nodir: true, dot: true, follow: true, nocase: false })])
   for (const path of paths) {
     if (!editablePaths.includes(path)) snapshots.set(path, await readFile(join(workspace, path), 'utf8'))
   }
-  for (const path of await fg('openspec/changes/archive/2026-09-26-reject-blocked-accounts/**/*', { cwd: workspace, onlyFiles: true, dot: true })) {
+  for (const path of await glob('openspec/changes/archive/2026-09-26-reject-blocked-accounts/**/*', { cwd: workspace, nodir: true, dot: true, follow: true, nocase: false })) {
     snapshots.set(path, await readFile(join(workspace, path), 'utf8'))
   }
-  for (const path of await fg(['node_modules/focused-spec/**/*', '.omp/skills/**/*'], { cwd: workspace, onlyFiles: true })) {
+  for (const path of await glob(['node_modules/focused-spec/**/*', '.omp/skills/**/*'], { cwd: workspace, nodir: true, follow: true, nocase: false })) {
     snapshots.set(path, await readFile(join(workspace, path), 'utf8'))
   }
   return snapshots
@@ -292,7 +292,7 @@ export async function judgeProposalCheckpoint(workspace: string, evalCase: EvalC
   const required = ['proposal.md', 'design.md', 'tasks.md', '.openspec.yaml']
   const missing = []
   for (const path of required) if (!await exists(join(root, path))) missing.push(path)
-  const specs = await fg(['specs/**/spec.md'], { cwd: root, onlyFiles: true })
+  const specs = await glob(['specs/**/spec.md'], { cwd: root, nodir: true, follow: true, nocase: false })
   const implementationPaths = [join(workspace, '.focused-spec')]
   const implementationStarted = (await Promise.all(implementationPaths.map(exists))).some(Boolean)
   const nativeDocuments = await Promise.all(specs.map(async relativePath => {
@@ -456,7 +456,7 @@ export async function integrityGate(workspace: string, snapshots: ReadonlyMap<st
   const targets = inspectionTargets(workspace, transcripts)
   const inspectedImplementation = targets.some(target => /node_modules[\\/]focused-spec[\\/](?:dist|src|examples)[\\/][^\s"'`]+(?<!\.d)\.(?:[cm]?js|[cm]?ts|tsx|jsx)|src[\\/](?:runner-client|runner-host|planner|executor)\.ts/u.test(target))
   const inspectedPackageReferences = targets.some(target => /(?:node_modules[\\/]focused-spec|[\\/]focused-spec)[\\/](?:README\.md|docs[\\/])/u.test(target))
-  const runnerSources = await fg(['.focused-spec/**/*.{ts,mts,js,mjs}'], { cwd: workspace, onlyFiles: true })
+  const runnerSources = await glob(['.focused-spec/**/*.{ts,mts,js,mjs}'], { cwd: workspace, nodir: true, follow: true, nocase: false })
   const shellTrue = (await Promise.all(runnerSources.map(path => readFile(join(workspace, path), 'utf8')))).some(source => /shell\s*:\s*true/u.test(source))
   const passed = changed.length === 0 && !inspectedImplementation && !shellTrue
   const details = [
@@ -824,10 +824,10 @@ export async function judgeCompletedWorkspace(
     : run.code === 0 ? run.stdout.trim() : (run.stderr || run.stdout).trim()))
 
   if (evalCase.changeName !== undefined) {
-    const paths = await fg([
+    const paths = await glob([
       `openspec/changes/${evalCase.changeName}/tasks.md`,
       `openspec/changes/archive/*-${evalCase.changeName}/tasks.md`,
-    ], { cwd: workspace, onlyFiles: true })
+    ], { cwd: workspace, nodir: true, follow: true, nocase: false })
     const taskPath = paths.length === 1 ? paths[0] : undefined
     const archived = taskPath?.startsWith('openspec/changes/archive/') === true
     const openSpec = await openspecCommand(workspace, archived

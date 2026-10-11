@@ -18,3 +18,9 @@ scopes:
     registry.sharding.provenance:
       evidence:
         - vitest::test/registry-sharding.spec.ts::sharded evidence registry > reports binding failures at their shard and line
+    registry.glob.bounds:
+      evidence:
+        - vitest::test/registry-sharding.spec.ts::sharded evidence registry > rejects excessive registry glob complexity without partial sources
+    registry.source.broken:
+      evidence:
+        - vitest::test/registry-sharding.spec.ts::sharded evidence registry > reports dangling registry links beside readable shards

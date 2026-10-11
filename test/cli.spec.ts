@@ -924,6 +924,53 @@ sys.exit(code if code >= 0 else 128 - code)
     expect(result.status).toBe(0)
     expect(json(result.stdout)).toMatchObject({ valid: true, scenarios: 3, targets: 3 })
   })
+  it('rejects excessive document and exclusion glob complexity', async () => {
+    const root = await emptyFixture()
+    const deep = '{'.repeat(40) + 'a,b' + '}'.repeat(40)
+    for (const layout of [
+      { match: `specs/${deep}.md`, scope: 'current' },
+      { match: 'specs/@(@(@(a))).md', scope: 'current' },
+      { match: `specs/[${deep}].md`, scope: 'current' },
+      { match: `specs/${'a'.repeat(4096)}.md`, scope: 'current' },
+      { match: `specs/${'{a}'.repeat(129)}.md`, scope: 'current' },
+      { match: 'specs/{1..257}.md', scope: 'current' },
+      { match: 'specs/**/*.md', scope: 'current', exclude: [`specs/${deep}.md`] },
+      { match: 'specs/**/*.md', scope: 'current', exclude: ['specs/{1..257}.md'] },
+    ]) {
+      await configure(root, [layout], ['runners: {}'])
+      const result = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json'], { encoding: 'utf8', timeout: 10000 })
+      expect(result.status).toBe(1)
+      expect(json(result.stdout)).toMatchObject({ valid: false, executionStarted: false,
+        violations: expect.arrayContaining([expect.objectContaining({ message: expect.stringMatching(/glob pattern exceeds/u) })]) })
+      expect(result.stderr).not.toContain('Maximum call stack')
+    }
+  })
+
+  it('preserves padded stepped and hidden document discovery', async () => {
+    const root = await emptyFixture()
+    await configure(root, [
+      { match: 'specs/record-{01..03}.md', scope: 'padded' },
+      { match: 'changes/{scope}/case-{1..5..2}.md', exclude: ['changes/*/case-3.md'] },
+      { match: 'specs/.hidden/*.md', scope: 'hidden' },
+    ])
+    const entries: RegistryEntry[] = []
+    for (const [path, scope, id] of [
+      ['specs/record-01.md', 'padded', 'range.one'], ['specs/record-02.md', 'padded', 'range.two'],
+      ['specs/record-03.md', 'padded', 'range.three'], ['changes/alpha.one/case-1.md', 'alpha.one', 'step.one'],
+      ['changes/alpha.one/case-5.md', 'alpha.one', 'step.five'], ['specs/.hidden/item.md', 'hidden', 'hidden.item'],
+    ] as const) {
+      await put(root, path, nativeScenario(id))
+      entries.push({ scope, id, evidence: ['planned:fixture::future'] })
+    }
+    for (const path of ['specs/record-04.md', 'changes/alpha.one/case-2.md', 'changes/alpha.one/case-3.md']) {
+      await put(root, path, nativeScenario('unselected.item'))
+    }
+    await writeRegistry(root, entries)
+    const result = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(result.status, result.stderr || result.stdout).toBe(0)
+    expect(json(result.stdout)).toMatchObject({ valid: true, scenarios: 6 })
+  })
+
   it('rejects inherited Gherkin tags for the selected ID without blocking unrelated IDs', async () => {
     const root = await fixture()
     await configure(root, [{ match: 'features/**/*.feature', scope: 'current' }])

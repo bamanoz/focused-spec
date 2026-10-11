@@ -1,6 +1,6 @@
 import { readFile, realpath } from 'node:fs/promises'
 import { isAbsolute, posix, relative, resolve, sep } from 'node:path'
-import fg from 'fast-glob'
+import { expandGlobPattern, globFiles } from './glob.js'
 import { LineCounter, parseDocument } from 'yaml'
 import type { EvidenceEntry, Violation } from './model.js'
 import { STABLE_ID } from './parser.js'
@@ -85,6 +85,12 @@ export async function loadEvidenceRegistry(
   const registryFiles: string[] = []
   parseEvidenceConfig({ files }, '.focused-spec/config.yaml', violations)
   if (violations.length > 0) return { entries, files: registryFiles, violations }
+  const sources: { pattern: string; expanded: string[] }[] = []
+  for (const pattern of files) {
+    try { sources.push({ pattern, expanded: expandGlobPattern(pattern) }) }
+    catch (error) { violations.push({ path: pattern, message: `cannot discover evidence registry: ${error instanceof Error ? error.message : String(error)}` }) }
+  }
+  if (violations.length > 0) return { entries, files: registryFiles, violations }
   let root: string
   try { root = await realpath(projectRoot) }
   catch (error) { return { entries, files: registryFiles, violations: [{ path: projectRoot, message: `cannot resolve registry project root: ${error instanceof Error ? error.message : String(error)}` }] } }
@@ -92,10 +98,10 @@ export async function loadEvidenceRegistry(
   const canonicalClaims = new Map<string, string>()
   const identities = new Map<string, EvidenceEntry>()
   const duplicates = new Set<string>()
-  for (const pattern of files) {
+  for (const { pattern, expanded } of sources) {
     let paths: string[]
     try {
-      paths = await fg(pattern, { cwd: projectRoot, dot: true, onlyFiles: true, followSymbolicLinks: true, throwErrorOnBrokenSymbolicLink: true, unique: true })
+      paths = await globFiles(expanded, { cwd: projectRoot })
     } catch (error) {
       violations.push({ path: pattern, message: `cannot discover evidence registry: ${error instanceof Error ? error.message : String(error)}` })
       continue

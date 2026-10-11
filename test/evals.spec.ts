@@ -43,7 +43,7 @@ async function installFocusedPackage(root: string): Promise<void> {
     cp(join(repository, 'skills'), join(destination, 'skills'), { recursive: true }),
     cp(join(repository, 'package.json'), join(destination, 'package.json')),
   ])
-  for (const dependency of ['@cucumber/gherkin', '@cucumber/messages', 'fast-glob', 'mdast-util-from-markdown', 'yaml']) {
+  for (const dependency of ['@cucumber/gherkin', '@cucumber/messages', 'glob', 'minimatch', 'mdast-util-from-markdown', 'yaml']) {
     const link = join(root, 'node_modules', dependency)
     await mkdir(dirname(link), { recursive: true })
     await symlink(join(repository, 'node_modules', dependency), link, 'junction')

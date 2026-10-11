@@ -4,7 +4,7 @@ import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import fg from 'fast-glob'
+import { glob } from 'glob'
 import { loadConfig, loadEvidenceRegistry, parseNativeDocument } from '../dist/index.js'
 import type { NativeItem } from '../dist/index.js'
 import { OmpAgentDriver } from './omp-agent.ts'
@@ -422,15 +422,13 @@ export function hostPrerequisiteGate(name: NativeCase, planning?: PlanningResult
 }
 
 export async function authoringSnapshot(workspace: string, name: NativeCase): Promise<Map<string, string>> {
-  const paths = await fg([`${name === 'openspec' ? 'openspec' : 'agent-os'}/**`, '.focused-spec/**'], { cwd: workspace, onlyFiles: true, dot: true })
+  const paths = await glob([`${name === 'openspec' ? 'openspec' : 'agent-os'}/**`, '.focused-spec/**'], { cwd: workspace, nodir: true, dot: true, follow: true, nocase: false })
   const files = new Map<string, string>()
   for (const path of paths) files.set(path, await readFile(join(workspace, path), 'utf8'))
   return files
 }
 export async function infrastructureSnapshot(workspace: string): Promise<Map<string, string>> {
-  const paths = await fg(['.focused-spec/runners/**', 'node_modules/focused-spec/**', '.omp/skills/**', '.omp/extensions/**', '.agents/**', '.pi/gsd-core/**'], {
-    cwd: workspace, onlyFiles: true, dot: true,
-  })
+  const paths = await glob(['.focused-spec/runners/**', 'node_modules/focused-spec/**', '.omp/skills/**', '.omp/extensions/**', '.agents/**', '.pi/gsd-core/**'], { cwd: workspace, nodir: true, dot: true, follow: true, nocase: false })
   const files = new Map<string, string>()
   for (const path of paths) files.set(path, await readFile(join(workspace, path), 'utf8'))
   return files
@@ -533,11 +531,10 @@ async function regenerateBmad(workspace: string, model: string): Promise<{ gates
 }
 
 export async function companionGate(workspace: string, name: NativeCase): Promise<Gate> {
-  const paths = await fg([
-    '**/*.md', '**/*.feature',
-    '!node_modules/**', '!.omp/**', '!.omp-*-sessions/**', '!.agents/**', '!.specify/**',
-    '!.pi/gsd-core/**', '!.home/.npm/**',
-  ], { cwd: workspace, onlyFiles: true, dot: true })
+  const paths = await glob(['**/*.md', '**/*.feature'], {
+    cwd: workspace, nodir: true, dot: true, follow: true, nocase: false,
+    ignore: ['node_modules/**', '.omp/**', '.omp-*-sessions/**', '.agents/**', '.specify/**', '.pi/gsd-core/**', '.home/.npm/**'],
+  })
   const companions = paths.filter(path => /(?:^|\/)scenarios\.(?:md|feature)$/u.test(path)).sort()
   const matches: { path: string; count: number }[] = []
   const violations: string[] = []

@@ -77,6 +77,32 @@ describe('sharded evidence registry', () => {
     expect(failed.result.scenarios.find(item => item.id === 'billing.good')?.status).toBe('PASS')
   })
 
+  it('rejects excessive registry glob complexity without partial sources', async () => {
+    const { root } = await fixture()
+    await put(root, 'registry/auth.yaml', registry({ current: { 'auth.good': { evidence: ['local::first'] } } }))
+    const deep = '{'.repeat(40) + 'a,b' + '}'.repeat(40)
+    for (const pattern of [`registry/${deep}.yaml`, `registry/${'a'.repeat(4096)}.yaml`, 'registry/{1..257}.yaml']) {
+      const loaded = await loadEvidenceRegistry(root, ['registry/auth.yaml', pattern])
+      expect(loaded.entries).toEqual([])
+      expect(loaded.files).toEqual([])
+      expect(loaded.violations).toEqual([expect.objectContaining({ path: pattern, message: expect.stringMatching(/glob pattern exceeds/u) })])
+    }
+    await put(root, 'registry/001.yaml', 'scopes: {}')
+    await put(root, 'registry/256.yaml', 'scopes: {}')
+    const bounded = await loadEvidenceRegistry(root, ['registry/{001..256}.yaml'])
+    expect(bounded.violations).toEqual([])
+    expect(bounded.files).toEqual(['registry/001.yaml', 'registry/256.yaml'])
+  })
+
+  it('reports dangling registry links beside readable shards', async () => {
+    const { root } = await fixture()
+    await put(root, 'registry/auth.yaml', 'scopes: {}')
+    await symlink(join(root, 'missing.yaml'), join(root, 'registry/broken.yaml'))
+    const loaded = await loadEvidenceRegistry(root, ['registry/*.yaml'])
+    expect(loaded.files).toEqual(['registry/auth.yaml'])
+    expect(loaded.violations).toEqual([expect.objectContaining({ path: 'registry/broken.yaml', message: expect.stringMatching(/cannot read evidence registry/u) })])
+  })
+
   it('rejects duplicate identities across shards with both locations', async () => {
     const { root } = await fixture()
     await put(root, 'registry/auth.yaml', 'scopes:\n  current:\n    auth.good:\n      evidence: [local::first]\n')

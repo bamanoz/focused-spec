@@ -42,3 +42,9 @@ scopes:
     config.source.legacy-only-selection:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects selections containing only unmarked native content
+    config.glob.bounds:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects excessive document and exclusion glob complexity
+    config.glob.compatible:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > preserves padded stepped and hidden document discovery

@@ -37,8 +37,9 @@
   "dependencies": {
     "@cucumber/gherkin": "^42.0.1",
     "@cucumber/messages": "^34.2.1",
-    "fast-glob": "^3.3.3",
+    "glob": "^13.0.6",
     "mdast-util-from-markdown": "^2.1.0",
+    "minimatch": "^10.2.6",
     "yaml": "^2.8.1"
   },
   "devDependencies": {
