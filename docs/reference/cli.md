@@ -103,10 +103,10 @@ Human output distinguishes installation from evidence readiness, skill activatio
 `root` is the canonical project root, or null if its resolution fails; `tools` contains normalized distinct canonical IDs. Project file/error paths are project-relative; MiniMax file/error paths are canonical absolute home paths (an unavailable home is reported using its requested absolute destination). Actions are `install`, `unchanged`, `replace`, or `conflict`. `applied` is true only for completed writes, never unchanged/previewed files, and remains truthful after later I/O failures. Errors are `{ "path"?: "<destination>", "message": "<diagnostic>" }`; unsafe destinations may lack a file action. Help stays human-readable with `--json` and does not probe project/home integrations.
 
 ```sh
-./node_modules/.bin/focused-spec init --tools oh-my-pi,claude
-./node_modules/.bin/focused-spec init ../project --tools codex --dry-run --json
-./node_modules/.bin/focused-spec init --tools claude --replace
-./node_modules/.bin/focused-spec init --tools minimax-code --dry-run --json
+focused-spec init --tools oh-my-pi,claude
+focused-spec init ../project --tools codex --dry-run --json
+focused-spec init --tools claude --replace
+focused-spec init --tools minimax-code --dry-run --json
 ```
 
 ## Package-owned agent guidance
@@ -129,8 +129,8 @@ Loader protocol defaults to 1; it is independent of package versions, configurat
 Text output identifies the installed package version, protocol, and topic before the Markdown. An unsupported protocol, invalid option/topic, missing value, or incomplete package exits nonzero with stderr diagnostics and no usable guidance on stdout. An explicit unsupported protocol is never silently replaced with the default. No legacy full-text skill or alternate installation is used as a fallback.
 
 ```sh
-./node_modules/.bin/focused-spec instructions --protocol 1 --json
-./node_modules/.bin/focused-spec instructions --protocol 1 --topic runners --json
+focused-spec instructions --protocol 1 --json
+focused-spec instructions --protocol 1 --topic runners --json
 ```
 
 ## Validation

@@ -16,8 +16,8 @@ Unsupported protocols fail without returning instructions. Use the project's ins
 Guidance is not validation or executable evidence.
 
 Examples:
-  ./node_modules/.bin/focused-spec instructions --protocol 1 --json
-  ./node_modules/.bin/focused-spec instructions --protocol 1 --topic runners --json
+  focused-spec instructions --protocol 1 --json
+  focused-spec instructions --protocol 1 --topic runners --json
 `
 
 function argumentError(message: string): Error {

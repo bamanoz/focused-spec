@@ -35,9 +35,9 @@ No config, registry, runner, dependency, global settings or AGENTS.md is generat
 Success means installation only, not evidence readiness, activation or execution.
 
 Examples:
-  ./node_modules/.bin/focused-spec init --tools oh-my-pi,claude
-  ./node_modules/.bin/focused-spec init ../project --tools codex --dry-run --json
-  ./node_modules/.bin/focused-spec init --tools minimax-code --dry-run --json
+  focused-spec init --tools oh-my-pi,claude
+  focused-spec init ../project --tools codex --dry-run --json
+  focused-spec init --tools minimax-code --dry-run --json
 `
 
 type Action = 'install' | 'unchanged' | 'replace' | 'conflict'
