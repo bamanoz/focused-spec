@@ -208,7 +208,7 @@ export async function loadConfig(projectRoot: string, explicitPath?: string): Pr
     return { path, violations: [{ path, message: 'configuration must be an object' }] }
   }
   rejectUnknownKeys(root, CONFIG_KEYS, 'configuration', path, violations)
-  if (root.version !== 3) violations.push({ path, message: 'configuration version must be 3; migrate inline ID/EVIDENCE rows to native markers and .focused-spec/evidence.yaml' })
+  if (root.version !== 3) violations.push({ path, message: 'configuration version must be 3; migrate inline ID/EVIDENCE rows to native bindings and the evidence registry; obtain upgrade guidance from the installed CLI: `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json`' })
 
   const specifications = object(root.specifications)
   let specificationConfig: FocusedSpecConfig['specifications'] | undefined

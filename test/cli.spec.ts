@@ -656,14 +656,23 @@ sys.exit(code if code >= 0 else 128 - code)
     expect(unique.status).toBe(0)
   })
 
-  it('rejects obsolete version 2 configuration with migration guidance', async () => {
+  it('advertises executable workflow guidance for obsolete configuration and inline metadata', async () => {
     const root = await emptyFixture()
-    await put(root, '.focused-spec/config.yaml', configYaml([{ match: 'specs/**/*.md', scope: 'current' }], ['runners: {}']).replace('version: 3', 'version: 2'))
-
-    const result = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
-
-    expect(result.status).toBe(1)
-    expect(json(result.stdout)).toMatchObject({ valid: false, violations: expect.arrayContaining([expect.objectContaining({ message: expect.stringMatching(/(?:version 3|migrat)/iu) })]) })
+    const config = configYaml([{ match: 'specs/**/*.md', scope: 'current' }], ['runners: {}'])
+    const metadata = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
+    const workflow = await readFile(new URL('../guidance/workflow.md', import.meta.url), 'utf8')
+    for (const version of [2, 3]) {
+      await put(root, '.focused-spec/config.yaml', config.replace('version: 3', `version: ${version}`))
+      await put(root, 'specs/auth.md', '#### Scenario: Blocked account\n- **ID**: `auth.blocked`\n- **EVIDENCE**: `unit::blocked`\n- **REVISES**: previous\n- **WHEN** a blocked account authenticates\n- **THEN** it is rejected\n')
+      const result = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--syntax-only', '--json'], { encoding: 'utf8' })
+      expect(result.status).toBe(1)
+      const messages = (json(result.stdout).violations as { message: string }[]).map(item => item.message)
+      const command = messages.map(message => message.match(/`\.\/node_modules\/\.bin\/focused-spec (instructions [^`]+)`/u)?.[1]).find(value => value !== undefined)
+      expect(command).toBeDefined()
+      const guidance = spawnSync(process.execPath, [cli, ...command!.split(' ')], { cwd: root, encoding: 'utf8' })
+      expect(guidance.status, guidance.stderr).toBe(0)
+      expect(json(guidance.stdout)).toEqual({ protocolVersion: 1, package: { name: 'focused-spec', version: metadata.version }, topic: 'workflow', content: workflow })
+    }
   })
 
   it('reports missing and malformed configuration', async () => {

@@ -10,6 +10,7 @@ import { judgeEvidenceRepair } from '../evals/evidence-repair.ts'
 import { evalCase } from '../evals/cases.ts'
 import { provisionWorkspace } from '../evals/provision.ts'
 import { runProcess } from '../evals/process.ts'
+import { captureUpgradeBaseline, upgradeArtifactsGate, upgradePreservationGate } from '../evals/upgrade.ts'
 
 const roots: string[] = []
 const repository = fileURLToPath(new URL('..', import.meta.url))
@@ -228,6 +229,60 @@ class FakeDriver implements AgentDriver {
 }
 
 describe('agent eval harness', () => {
+  it('rejects lost scope-local evidence and tampered upgrade artifacts', async () => {
+    const selected = evalCase('project-upgrade')!
+    const root = await mkdtemp(join(tmpdir(), 'focused-eval-upgrade-'))
+    roots.push(root)
+    await cp(join(repository, 'evals/fixtures/polyglot'), root, { recursive: true })
+    await cp(join(repository, 'evals', selected.overlay!), root, { recursive: true })
+    await installFocusedPackage(root)
+    const candidate = join(root, 'node_modules/focused-spec')
+    const baseline = await captureUpgradeBaseline(root, candidate)
+    await cp(join(candidate, 'skills/focused-spec'), join(root, '.omp/skills/focused-spec'), { recursive: true })
+    await put(root, '.omp/commands/focused-spec.md', await readFile(join(candidate, 'skills/commands/oh-my-pi/focused-spec.md'), 'utf8'))
+    for (const [path, source] of baseline.documents) {
+      const migrated = source.replace(/(#### Scenario:[^\n]+)\n- \*\*ID\*\*: `([^`]+)`/gu, '<!-- focused-spec:id=$2 -->\n$1')
+        .replace(/^- \*\*(?:EVIDENCE|REVISES)\*\*:.*\n/gmu, '')
+      await put(root, path, migrated)
+    }
+    const originalConfig = await readFile(join(root, '.focused-spec/config.yaml'), 'utf8')
+    await put(root, '.focused-spec/config.yaml', originalConfig.replace('version: 2', 'version: 3'))
+    const blocked = '    auth.login.blocked-account:\n      evidence:\n        - go-unit::./auth::TestBlockedAccount\n        - pytest-functional::tests/functional/test_auth.py::test_blocked_account\n'
+    const active = '    auth.login.active-account:\n      evidence:\n        - go-unit::./auth::TestValidActiveAccount\n        - pytest-functional::tests/functional/test_auth.py::test_valid_active_account\n'
+    const registry = `scopes:\n  current:\n${blocked}${active}  refresh:\n${blocked}`
+    await put(root, '.focused-spec/evidence.yaml', registry)
+    expect(await upgradePreservationGate(root, baseline)).toMatchObject({ passed: true })
+    expect(await upgradeArtifactsGate(root, baseline)).toMatchObject({ passed: true })
+
+    const refresh = await readFile(join(root, 'changes/refresh/spec.md'), 'utf8')
+    await rm(join(root, 'changes/refresh/spec.md'))
+    await put(root, '.focused-spec/evidence.yaml', `scopes:\n  current:\n${blocked}${active}`)
+    const validButLost = await runProcess(process.execPath, [join(candidate, 'dist/cli.js'), 'validate', '--syntax-only', '--json'], { cwd: root, timeoutMs: 30_000 })
+    expect(validButLost.code, validButLost.stderr || validButLost.stdout).toBe(0)
+    expect(await upgradePreservationGate(root, baseline)).toMatchObject({ passed: false })
+    await put(root, 'changes/refresh/spec.md', refresh)
+    await put(root, '.focused-spec/evidence.yaml', registry.replace('  refresh:\n' + blocked, '  refresh:\n' + active.replace('auth.login.active-account:', 'auth.login.blocked-account:')))
+    expect(await upgradePreservationGate(root, baseline)).toMatchObject({ passed: false })
+    await put(root, '.focused-spec/evidence.yaml', registry.replace('        - pytest-functional::tests/functional/test_auth.py::test_blocked_account\n', ''))
+    expect(await upgradePreservationGate(root, baseline)).toMatchObject({ passed: false })
+    await put(root, '.focused-spec/evidence.yaml', registry)
+    const native = await readFile(join(root, 'specs/account-authentication.md'), 'utf8')
+    await put(root, 'specs/account-authentication.md', native.replace('authentication is rejected', 'authentication succeeds'))
+    expect(await upgradePreservationGate(root, baseline)).toMatchObject({ passed: false })
+    await put(root, 'specs/account-authentication.md', native)
+    await put(root, '.focused-spec/config.yaml', originalConfig.replace('version: 2', 'version: 3').replace('maxConcurrentGroups: 1', 'maxConcurrentGroups: 2'))
+    expect(await upgradePreservationGate(root, baseline)).toMatchObject({ passed: false })
+    await put(root, '.focused-spec/config.yaml', originalConfig.replace('version: 2', 'version: 3'))
+    const cliSource = await readFile(join(candidate, 'dist/cli.js'), 'utf8')
+    await put(root, 'node_modules/focused-spec/dist/cli.js', cliSource + '\n// tampered\n')
+    expect(await upgradeArtifactsGate(root, baseline)).toMatchObject({ passed: false })
+    await put(root, 'node_modules/focused-spec/dist/cli.js', cliSource)
+    await put(root, '.omp/skills/focused-spec/references/runners.md', 'stale legacy procedure')
+    expect(await upgradeArtifactsGate(root, baseline)).toMatchObject({ passed: false })
+    await rm(join(root, '.omp/skills/focused-spec/references'), { recursive: true })
+    expect(await upgradeArtifactsGate(root, baseline)).toMatchObject({ passed: true })
+    expect(await upgradePreservationGate(root, baseline)).toMatchObject({ passed: true })
+  })
   it('rejects domain reorganization and loss of existing registrations despite valid new evidence', async () => {
     const selected = evalCase('registry-shards-reuse')!
     const root = await mkdtemp(join(tmpdir(), 'focused-eval-shards-'))

@@ -1,0 +1,17 @@
+version: 2
+specifications:
+  documents:
+    - match: specs/**/*.md
+      scope: current
+      exclude: [specs/archive/**]
+    - match: changes/{scope}/spec.md
+      exclude: [changes/archive/**]
+runners:
+  go-unit:
+    module: ./.focused-spec/runners/go-test.ts
+    timeoutMs: 120000
+  pytest-functional:
+    module: ./.focused-spec/runners/pytest.ts
+    timeoutMs: 120000
+execution:
+  maxConcurrentGroups: 1

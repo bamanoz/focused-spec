@@ -7,6 +7,17 @@ const EXPECTED_SELECTORS = ['TestBlockedAccount', 'test_blocked_account'] as con
 
 export const EVAL_CASES: readonly EvalCase[] = [
   {
+    id: 'project-upgrade',
+    description: 'Updates genuine version 0.5.0 and its legacy full-text skill through a blind request while preserving every scope-local native outcome and exact evidence.',
+    source: 'files',
+    overlay: 'cases/project-upgrade/overlay',
+    turns: [{ promptPath: 'cases/project-upgrade/prompt.md', skills: FOCUSED }],
+    editablePaths: ['.focused-spec/config.yaml', 'specs/account-authentication.md', 'changes/refresh/spec.md'],
+    prescribedScenarioId: 'auth.login.blocked-account',
+    expectedEvidenceCount: 2,
+    expectedSelectorFragments: EXPECTED_SELECTORS,
+  },
+  {
     id: 'files-source-bootstrap',
     description: 'Creates a marked native specification with scope-local registry evidence and two project runners in a clean polyglot repository.',
     source: 'files',

@@ -9,7 +9,6 @@ Offline package-owned agent guidance with explicit loader compatibility and inst
 ### Requirement: Offline package-owned guidance
 The CLI SHALL provide `instructions [--protocol <version>] [--topic workflow|runners] [--json]` independently of project configuration, evidence registries, native documents, runners, and network access.
 
-
 <!-- focused-spec:id=guidance.delivery.offline -->
 #### Scenario: Workflow is available before project setup
 - **WHEN** the installed CLI's workflow guidance is requested offline in an unconfigured consumer project
@@ -28,7 +27,6 @@ The CLI SHALL provide `instructions [--protocol <version>] [--topic workflow|run
 
 ### Requirement: Versioned guidance response
 For protocol 1, JSON output SHALL be one object with `protocolVersion: 1`, `package: { name: "focused-spec", version: <installed package version> }`, `topic: "workflow" | "runners"`, and nonempty Markdown `content`.
-
 
 <!-- focused-spec:id=guidance.delivery.compatible-update -->
 #### Scenario: An unchanged loader receives an updated package's guidance
@@ -56,3 +54,11 @@ If the requested authoritative guidance cannot be read or is empty, the command 
 #### Scenario: An incomplete installation cannot fall back to stale instructions
 - **WHEN** a consumer requests a guidance topic whose asset is absent from the installed package
 - **THEN** the CLI reports the incomplete installation and returns no replacement workflow from another source
+
+### Requirement: Actionable obsolete-format guidance
+The CLI SHALL reject obsolete configuration and inline focused metadata with a concrete project-local protocol-1 workflow instruction command. Guidance SHALL remain available without loading the obsolete configuration or executing evidence.
+
+<!-- focused-spec:id=guidance.upgrade.obsolete-format -->
+#### Scenario: Obsolete formats lead to usable instructions
+- **WHEN** a consumer validates version-2 configuration or inline ID/EVIDENCE/REVISES rows with the current CLI
+- **THEN** the diagnostic advertises a local instruction command which returns the serving package's complete workflow despite the obsolete project format

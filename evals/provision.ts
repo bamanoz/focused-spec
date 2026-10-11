@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { EvalCase } from './types.ts'
 import { runProcess } from './process.ts'
+import { captureUpgradeBaseline, LEGACY_VERSION, serveUpgradeCandidate } from './upgrade.ts'
+import type { UpgradeBaseline } from './upgrade.ts'
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url))
 const evalRoot = fileURLToPath(new URL('.', import.meta.url))
@@ -54,8 +56,38 @@ async function installPackages(workspace: string, includeOpenSpec: boolean, cach
   if (install.code !== 0) throw new Error(`fixture npm install failed: ${install.stderr || install.stdout}`)
 }
 
+async function prepareUpgrade(workspace: string, cache: string): Promise<{ baseline: UpgradeBaseline; close(): Promise<void> }> {
+  const packages = await packDependencies(false, cache)
+  const reference = join(cache, 'reference')
+  await mkdir(reference)
+  await writeFile(join(reference, 'package.json'), '{"private":true}')
+  const candidate = await runNpm(['install', '--ignore-scripts', '--no-audit', '--no-fund', '--prefix', reference, packages.focused], repositoryRoot, 180_000)
+  if (candidate.code !== 0) throw new Error(`candidate reference install failed: ${candidate.stderr || candidate.stdout}`)
+  const legacy = await runNpm(['install', '--save-dev', '--ignore-scripts', '--no-audit', '--no-fund', `focused-spec@${LEGACY_VERSION}`, 'yaml@2.8.1'], workspace, 180_000)
+  if (legacy.code !== 0) throw new Error(`legacy install failed: ${legacy.stderr || legacy.stdout}`)
+  const cli = join(workspace, 'node_modules/focused-spec/dist/cli.js')
+  for (const args of [['validate', '--strict', '--json'], ['run', '--json']]) {
+    const result = await runProcess(process.execPath, [cli, ...args], { cwd: workspace, timeoutMs: 240_000 })
+    if (result.code !== 0) throw new Error(`legacy baseline ${args[0]} failed: ${result.stderr || result.stdout}`)
+    const payload = JSON.parse(result.stdout) as { scenarios: number | { status: string }[] }
+    if (typeof payload.scenarios === 'number' ? payload.scenarios !== 3 : payload.scenarios.length !== 3 || payload.scenarios.some(item => item.status !== 'PASS')) {
+      throw new Error(`legacy baseline lost expected occurrences: ${result.stdout}`)
+    }
+  }
+  const candidateRoot = join(reference, 'node_modules/focused-spec')
+  const baseline = await captureUpgradeBaseline(workspace, candidateRoot)
+  const metadata = JSON.parse(await readFile(join(candidateRoot, 'package.json'), 'utf8')) as Record<string, unknown>
+  await rm(reference, { recursive: true, force: true })
+  const registry = await serveUpgradeCandidate(packages.focused, metadata)
+  try { await writeFile(join(workspace, '.npmrc'), `registry=${registry.url}/\n`) }
+  catch (error) { await registry.close(); throw error }
+  return { baseline, close: registry.close }
+}
+
 export interface ProvisionedWorkspace {
   readonly path: string
+  readonly upgrade?: UpgradeBaseline
+  finish(): Promise<void>
   cleanup(): Promise<void>
 }
 
@@ -69,16 +101,19 @@ export async function provisionWorkspace(
   const directory = await mkdtemp(join(tmpdir(), `focused-spec-eval-${evalCase.id}-`))
   const workspace = join(directory, 'workspace')
   const cache = join(directory, 'packages')
-  const cleanup = async () => rm(directory, { recursive: true, force: true })
+  let upgrade: Awaited<ReturnType<typeof prepareUpgrade>> | undefined
+  const finish = async () => { await upgrade?.close(); upgrade = undefined }
+  const cleanup = async () => { await finish(); await rm(directory, { recursive: true, force: true }) }
   try {
     await mkdir(cache)
     await cp(join(evalRoot, 'fixtures', 'polyglot'), workspace, { recursive: true })
     if (evalCase.source === 'openspec') await cp(join(evalRoot, 'fixtures', 'openspec'), workspace, { recursive: true })
     if (evalCase.overlay !== undefined) await cp(join(evalRoot, evalCase.overlay), workspace, { recursive: true, force: true })
     const skills = evalCase.turns.flatMap(turn => [...turn.skills])
-    await installPackages(workspace, evalCase.source === 'openspec', cache)
+    if (evalCase.id === 'project-upgrade') upgrade = await prepareUpgrade(workspace, cache)
+    else await installPackages(workspace, evalCase.source === 'openspec', cache)
     await installSkills(workspace, skills, openspecSkillsDir ?? '')
-    return { path: workspace, cleanup }
+    return { path: workspace, cleanup, finish, ...(upgrade === undefined ? {} : { upgrade: upgrade.baseline }) }
   } catch (error) {
     await cleanup()
     throw error

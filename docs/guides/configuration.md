@@ -178,9 +178,12 @@ The examples preserve their project-local runners and real tests. OpenSpec and t
 
 Version 3 is a clean cutover. Version-2 configuration and bold `ID`/`EVIDENCE` scenario rows are rejected; there are no aliases or compatibility parser.
 
+For an agent-led update, ask it to update focused-spec. The local package and installed loader must be refreshed before migration. The replacement CLI serves the complete portable [upgrade procedure](../../guidance/workflow.md#update-an-existing-project) through `instructions --protocol 1 --topic workflow --json`, even before the obsolete configuration is fixed; obsolete-format diagnostics advertise this command. No automatic converter or legacy runtime is provided.
+
 1. Change `version: 2` to `version: 3`. Keep the existing `specifications.documents`, `runners`, and `execution` layouts, adjusting document matches only when the canonical native document differs from an old companion.
 2. Create `.focused-spec/evidence.yaml`. Move every scenario's ID and evidence into the corresponding scope entry.
 3. Bind the canonical native item. For editable Markdown, attach an adjacent marker; for Gherkin, attach a scenario tag. Remove the old bold metadata rows.
 4. If an old focused block duplicated an existing native item, delete the duplicate and mark the native item. If the block was itself the sole native item, preserve its behavioral text and attach the marker to its structural item.
 5. For generated documents, remove obsolete focused companions and use `source.path` plus an explicit `source.nativeId`. Do not mark generated output.
-6. Validate bindings, replace every obsolete `planned:` reference whose test exists, then execute the selected evidence. Runner plugins require no API migration.
+6. Preserve every still-relevant `(scope, ID)` and every exact evidence reference, including all AND members. Remove `REVISES` rows and relationship fields; each same-ID scope occurrence needs explicit evidence, never inheritance. Preserve runner/execution settings and unrelated content.
+7. Compare the migrated occurrences with the original inventory, validate bindings, resolve obsolete `planned:` references only when their exact tests exist, and execute every completed scope's selected evidence. Runner plugins require no API migration. Do not claim a complete-project pass while planned evidence remains.

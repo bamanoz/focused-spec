@@ -7,6 +7,10 @@ description: "MUST-LOAD before any SDD/spec-driven development workflow step tha
 
 This skill is a loader for workflow guidance owned by the consuming project's installed `focused-spec` package. It intentionally contains no embedded workflow or runner procedure.
 
+## Explicitly requested upgrades
+
+A request to update focused-spec authorizes updating its project-local installation, not a global/downloaded fallback for ordinary specification work. If that is the task, first update only focused-spec using the project's existing package manager and dependency ownership (for npm, typically `npm install --save-dev focused-spec@latest`). Preserve unrelated dependencies and custom integration. Resolve the replacement local CLI, inspect its `init --help`, and refresh the already installed focused-spec loader and package-owned wrappers for the relevant explicit targets. Then load this skill from the replacement installation and obtain the complete workflow response below before migrating project evidence. Do not carry out migration from this bootstrap or a legacy full-text skill. Host approval and installer safety rules still apply.
+
 ## Load the project-local workflow before every step
 
 Before **every** focused-spec workflow step, including a later step in the same agent session:

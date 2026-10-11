@@ -6,6 +6,7 @@ import type { EvalCase, EvalGate } from './types.ts'
 import { runProcess } from './process.ts'
 import { judgeEvidenceRepair } from './evidence-repair.ts'
 import { evalRepositoryRoot } from './provision.ts'
+import { upgradeSensitivityGate } from './upgrade.ts'
 
 const PROTECTED_PATHS = [
   'auth/auth.go',
@@ -838,13 +839,14 @@ export async function judgeCompletedWorkspace(
     gates.push(gate('openspec-tasks', tasks !== undefined && incomplete === 0, tasks === undefined ? 'completed change tasks missing or ambiguous' : `${incomplete} incomplete tasks`))
   }
 
-  const scenario = await judgeScenarioCheckpoint(workspace, evalCase, scope, selectedScenarioId)
-  gates.push(scenario.gate)
+  const scenario = evalCase.id === 'project-upgrade' ? undefined : await judgeScenarioCheckpoint(workspace, evalCase, scope, selectedScenarioId)
+  if (scenario !== undefined) gates.push(scenario.gate)
   gates.push(await behaviorGate(workspace))
   gates.push(await integrityGate(workspace, snapshots, transcripts))
-  const effectiveScenarioId = scenario.selectedScenarioId ?? selectedScenarioId
+  const effectiveScenarioId = scenario?.selectedScenarioId ?? selectedScenarioId
   if (evalCase.registryPlacement !== undefined) gates.push(await registryPlacementGate(workspace, evalCase, effectiveScenarioId))
   if (evalCase.id === 'vacuous-evidence') gates.push(...await judgeEvidenceRepair(workspace, transcripts))
+  else if (evalCase.id === 'project-upgrade' && strict?.code === 0 && run?.code === 0) gates.push(await upgradeSensitivityGate(workspace))
   else if (strict?.code === 0 && run?.code === 0) gates.push(await mutationGate(workspace, evalCase, scope, effectiveScenarioId))
   else gates.push(gate('mutation-sensitivity', false, 'focused validation or execution failed'))
   if (evalCase.id === 'openspec-brownfield') {

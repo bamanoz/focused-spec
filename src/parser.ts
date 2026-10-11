@@ -80,7 +80,7 @@ function markdownDocument(path: string, source: string, scope: string): NativeDo
         const first = node.children[0]
         if (first?.type === 'paragraph') {
           const firstChild = first.children[0]
-          if (firstChild?.type === 'strong' && /^(?:ID|EVIDENCE|REVISES)$/u.test(text(firstChild))) report(node, 'obsolete inline focused rows; use a native marker and .focused-spec/evidence.yaml')
+          if (firstChild?.type === 'strong' && /^(?:ID|EVIDENCE|REVISES)$/u.test(text(firstChild))) report(node, 'obsolete inline focused rows; migrate to a native binding and the evidence registry; obtain upgrade guidance from the installed CLI: `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json`')
         }
         visit(node, pending, node)
       } else {

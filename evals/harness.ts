@@ -1,5 +1,6 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import fg from 'fast-glob'
 import type { AgentDriver, AgentRequest, EvalGate, EvalResult, EvalRunOptions } from './types.ts'
 import { evalCase } from './cases.ts'
 import { guidanceActivationGate, judgeCompletedWorkspace, judgeProposalCheckpoint, judgeWorkingCheckpoint, skillActivationGate, snapshotProtectedFiles } from './judge.ts'
@@ -7,6 +8,7 @@ import type { WorkingEvidenceCheckpoint } from './judge.ts'
 import { OmpAgentDriver } from './omp-agent.ts'
 import { evalRepositoryRoot, provisionWorkspace, readEvalPrompt } from './provision.ts'
 import { interviewFailedAgent } from './diagnostic.ts'
+import { isUpgradeArtifact, upgradeArtifactsGate, upgradePreservationGate } from './upgrade.ts'
 
 export async function runEval(
   options: EvalRunOptions,
@@ -15,7 +17,6 @@ export async function runEval(
   const selected = evalCase(options.caseId)
   if (selected === undefined) throw new Error(`unknown eval case ${options.caseId}`)
   const workspace = await provisionWorkspace(selected, options.openspecSkillsDir)
-  const snapshots = await snapshotProtectedFiles(workspace.path, selected.editablePaths)
   const turns = []
   const gates: EvalGate[] = []
   const transcripts: string[] = []
@@ -25,6 +26,14 @@ export async function runEval(
   let lastRequest: AgentRequest | undefined
 
   try {
+    const snapshots = new Map(await snapshotProtectedFiles(workspace.path, selected.editablePaths))
+    if (workspace.upgrade !== undefined) {
+      for (const path of snapshots.keys()) if (isUpgradeArtifact(path)) snapshots.delete(path)
+      const unrelated = await fg('node_modules/yaml/**/*', { cwd: workspace.path, onlyFiles: true, dot: true })
+      for (const path of ['.npmrc', 'README.md', 'go.mod', ...unrelated]) {
+        snapshots.set(path, await readFile(join(workspace.path, path), 'utf8'))
+      }
+    }
     for (const turn of selected.turns) {
       const prompt = await readEvalPrompt(turn.promptPath)
       const request: AgentRequest = {
@@ -63,7 +72,8 @@ export async function runEval(
 
     if (turns.length === selected.turns.length && gates.every(item => item.passed)) {
       try {
-        gates.push(...await judgeCompletedWorkspace(workspace.path, selected, snapshots, transcripts, workingCheckpoint, selectedScenarioId))
+        if (workspace.upgrade !== undefined) gates.push(await upgradeArtifactsGate(workspace.path, workspace.upgrade), await upgradePreservationGate(workspace.path, workspace.upgrade))
+        if (gates.every(item => item.passed)) gates.push(...await judgeCompletedWorkspace(workspace.path, selected, snapshots, transcripts, workingCheckpoint, selectedScenarioId))
       } catch (error) {
         gates.push({ name: 'evaluation-error', passed: false, detail: error instanceof Error ? error.message : String(error) })
       }
@@ -84,6 +94,7 @@ export async function runEval(
     await writeFile(join(resultsDirectory, `${selected.id}-${Date.now()}.json`), `${JSON.stringify(result, null, 2)}\n`)
     return result
   } finally {
+    await workspace.finish()
     if (options.keepWorkspace !== true) await workspace.cleanup()
   }
 }

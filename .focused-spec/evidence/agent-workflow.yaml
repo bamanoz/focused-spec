@@ -94,3 +94,9 @@ scopes:
     agent.eval.guidance-activation:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > requires completed local workflow guidance after loader activation
+    agent.upgrade.preserve-project:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects lost scope-local evidence and tampered upgrade artifacts
+    agent.upgrade.reject-loss:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects lost scope-local evidence and tampered upgrade artifacts

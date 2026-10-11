@@ -9,7 +9,6 @@ Proposal/apply boundaries and black-box evaluation of executable evidence.
 ### Requirement: Proposal and apply boundaries
 The agent workflow SHALL keep an OpenSpec proposal planning-only and SHALL require concrete executable evidence before treating an applied change as complete.
 
-
 <!-- focused-spec:id=agent.proposal.planning-only -->
 #### Scenario: Proposal does not start implementation
 - **WHEN** an agent proposal creates a runner, product implementation, configuration, or executable evidence registry before the apply turn
@@ -24,7 +23,6 @@ The agent workflow SHALL keep an OpenSpec proposal planning-only and SHALL requi
 ### Requirement: New and changed evidence detects the claimed outcome
 The agent workflow SHALL prove behavioral sensitivity for each new or changed evidence reference, selected assertion, or claimed product outcome.
 
-
 <!-- focused-spec:id=agent.evidence.vacuous-repair -->
 #### Scenario: Falsely green evidence is rejected
 - **WHEN** an existing selected test checks only the type of an authentication result and remains green after blocked-account protection is removed
@@ -33,7 +31,6 @@ The agent workflow SHALL prove behavioral sensitivity for each new or changed ev
 
 ### Requirement: Black-box agent evaluation
 Agent evaluations SHALL install the packed CLI into disposable workspaces, protect unrelated product tests and installed package files, and report each gate independently.
-
 
 <!-- focused-spec:id=agent.eval.failed-turn -->
 #### Scenario: Failed agent turn stops downstream judges
@@ -64,7 +61,6 @@ Agent evaluations SHALL install the packed CLI into disposable workspaces, prote
 ### Requirement: Evidence-preserving incremental adoption
 The agent workflow SHALL bind new or changed native outcomes without bulk-converting unrelated native scenarios.
 
-
 <!-- focused-spec:id=agent.adoption.preserve-native -->
 #### Scenario: Untouched native outcomes remain untouched
 - **WHEN** an agent enrolls one changed outcome in a project with native historical scenarios
@@ -81,7 +77,6 @@ The agent workflow SHALL bind new or changed native outcomes without bulk-conver
 - **WHEN** an independently observed host lifecycle drops or redirects evidence for an enrolled changed outcome
 - **THEN** the evaluator rejects completion instead of accepting transient passing evidence as proof of the surviving outcome
 
-
 ### Requirement: Scoped evaluation judgment
 Evaluation gates SHALL inspect the expected scenario within its configured selected scope and SHALL honor document discovery and exclusions. Same-ID occurrences in other scopes SHALL NOT be counted as duplicate selected items. Missing or duplicate expected occurrences within the selected scope SHALL fail the scenario contract.
 
@@ -89,7 +84,6 @@ Evaluation gates SHALL inspect the expected scenario within its configured selec
 #### Scenario: Same identity in a different scope is not a duplicate
 - **WHEN** valid same-ID occurrences exist in the selected scope and another configured scope
 - **THEN** the scenario gate judges the selected occurrence and its evidence without counting the other occurrence as a competing owner
-
 
 ### Requirement: Isolated evaluation provisioning
 
@@ -102,7 +96,6 @@ Provisioning SHALL install independently owned package artifacts without rebuild
 
 ### Requirement: Phase-correct lifecycle evaluation
 Lifecycle evaluation SHALL independently execute working evidence before a host transition can remove its discovery, and SHALL independently execute the surviving occurrence after that transition.
-
 
 <!-- focused-spec:id=agent.eval.lifecycle-checkpoint -->
 #### Scenario: Working evidence is verified before its discovery ends
@@ -118,7 +111,6 @@ Lifecycle evaluation SHALL independently execute working evidence before a host 
 ### Requirement: Task-grounded evaluation identities
 Black-box evaluation SHALL require an exact focused ID only when the task or pre-existing source prescribes it.
 
-
 <!-- focused-spec:id=agent.eval.authored-identity -->
 #### Scenario: Unspecified authored identity is retained through apply
 - **WHEN** a blind proposal task prescribes no ID and the agent creates one valid native marker with a different valid name from historical examples
@@ -133,7 +125,6 @@ Black-box evaluation SHALL require an exact focused ID only when the task or pre
 ### Requirement: Discoverable genuine host authoring guidance
 Native authoring fixtures SHALL expose applicable official host authoring guidance through the evaluated runtime's discovery mechanism, with source provenance and unchanged official workflow content.
 
-
 <!-- focused-spec:id=agent.eval.host-guidance -->
 #### Scenario: Installed authoring guidance is discoverable and actually read
 - **WHEN** Spec Kit authoring guidance is installed for the evaluated runtime
@@ -147,7 +138,6 @@ Native authoring fixtures SHALL expose applicable official host authoring guidan
 
 ### Requirement: Genuine planning and user confirmation
 An Agent OS authoring fixture SHALL enter the runtime's actual read-only plan mode before shaping, serve host user-question requests through a separate tool-free and skill-free test-user receiving only the task and conversation, and require explicit plan approval before execution.
-
 
 <!-- focused-spec:id=agent.eval.plan-confirmation -->
 #### Scenario: Approval controls transition from real planning to authoring
@@ -167,7 +157,6 @@ Native outcome judgment SHALL recognize equivalent rejection wording, including 
 ### Requirement: Configured working-scope judgment
 When a task names an OpenSpec change but does not prescribe a focused scope label, evaluation SHALL select the one configured scope containing that change's native documents rather than assume the scope equals the change name.
 
-
 <!-- focused-spec:id=agent.eval.configured-working-scope -->
 #### Scenario: Named change uses an explicit configured scope
 - **WHEN** an agent configures the named change's native documents under a single explicit scope different from the change name and binds the selected identity there
@@ -176,7 +165,6 @@ When a task names an OpenSpec change but does not prescribe a focused scope labe
 
 ### Requirement: Project-local guidance bootstrap
 The focused-spec loader SHALL obtain protocol-1 JSON workflow guidance from the consuming project's installed CLI before each focused-spec workflow step.
-
 
 <!-- focused-spec:id=agent.guidance.project-local -->
 #### Scenario: A global installation does not override the project's workflow
@@ -198,3 +186,20 @@ The focused-spec loader SHALL obtain protocol-1 JSON workflow guidance from the 
 #### Scenario: A subsequent step reloads an updated local package
 - **WHEN** the local CLI is updated between two focused-spec workflow steps in the same agent session
 - **THEN** the second step reloads the authoritative workflow from that installation rather than relying solely on instructions retained from the first step
+
+### Requirement: Self-guided authorized project upgrades
+An explicitly requested focused-spec update SHALL include the project-local package, its installed agent integration, fresh authoritative guidance, and any required project-format migration. It SHALL preserve still-relevant native behavior, scope-local identities, exact evidence references, AND contracts, and runner/execution configuration, without automatic conversion or legacy runtime support.
+
+<!-- focused-spec:id=agent.upgrade.preserve-project -->
+#### Scenario: A bare update request completes a legacy project upgrade
+- **WHEN** an agent receives only a request to update focused-spec in a runnable version-2 project with a legacy full-text skill
+- **THEN** it upgrades the local package and installed loader, acquires fresh package-owned instructions, migrates each still-relevant occurrence to an explicit native binding and registry entry, and successfully validates and executes all migrated evidence
+- **AND** repeated IDs retain independent scope-local evidence rather than inherited REVISES relationships; unrelated product, tests, runners, and integrations remain unchanged
+
+### Requirement: Independently bounded upgrade evaluation
+A blind upgrade evaluation SHALL start with a genuine published legacy package and skill and obtain the candidate through ordinary package-manager installation. Legitimate package/integration replacement SHALL be judged against an independently owned candidate artifact rather than exempted from integrity checks. Ordinary non-upgrade evaluations SHALL retain their existing protections.
+
+<!-- focused-spec:id=agent.upgrade.reject-loss -->
+#### Scenario: A green project cannot conceal migration loss or package tampering
+- **WHEN** a migrated workspace loses or redirects an original scope-local evidence occurrence or modifies the candidate package after installation
+- **THEN** independent upgrade gates reject completion even if its remaining focused evidence passes

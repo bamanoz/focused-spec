@@ -21,3 +21,6 @@ scopes:
     guidance.delivery.command-name:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid invocations without treating them as successful help
+    guidance.upgrade.obsolete-format:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > advertises executable workflow guidance for obsolete configuration and inline metadata

@@ -14,7 +14,7 @@ scopes:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects unsafe document layouts and escaped specification symlinks
     config.format.version-three:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > rejects obsolete version 2 configuration with migration guidance
+        - vitest::test/cli.spec.ts::focused-spec CLI > advertises executable workflow guidance for obsolete configuration and inline metadata
     config.registry.required:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects a missing evidence registry
