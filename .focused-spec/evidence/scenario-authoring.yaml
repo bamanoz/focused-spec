@@ -51,3 +51,12 @@ scopes:
     native.binding.obsolete.inline:
       evidence:
         - vitest::test/core.spec.ts::native specification parsing > rejects obsolete focused rows instead of interpreting the legacy format
+    format.contract.normalized:
+      evidence:
+        - vitest::test/plugins.spec.ts::plugin architecture > binds a project-native format without extension inference
+    format.contract.malformed:
+      evidence:
+        - vitest::test/plugins.spec.ts::plugin architecture > rejects malformed format responses
+    format.lifecycle.timeout:
+      evidence:
+        - vitest::test/plugins.spec.ts::plugin architecture > terminates a blocking format host

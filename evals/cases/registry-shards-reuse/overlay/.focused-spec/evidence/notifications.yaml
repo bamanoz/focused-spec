@@ -2,4 +2,4 @@ scopes:
   notifications:
     notifications.delivery.disabled:
       evidence:
-        - pytest-functional::tests/functional/test_notifications.py::test_disabled_delivery
+        - pytest::tests/functional/test_notifications.py::test_disabled_delivery

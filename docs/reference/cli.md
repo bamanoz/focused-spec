@@ -15,7 +15,7 @@ Scope names are path-safe single fragments. The CLI preserves the selected name 
 
 ## Help and argument errors
 
-Use `focused-spec --help`, `<command> --help`, and `focused-spec help <command>` for the installed command's options, defaults, selection rules, and examples. Explicit help exits zero without reading project configuration, the evidence registry, runner modules, or guidance assets. For a known command, help takes precedence over other options, including `--json`. The retired `transition` command and its help forms are unknown commands, not aliases.
+Use `focused-spec --help`, `<command> --help`, and `focused-spec help <command>` for the installed command's options, defaults, selection rules, and examples. Explicit help exits zero without reading project configuration, the evidence registry, plugins, or guidance assets. For a known command, help takes precedence over other options, including `--json`. The retired `transition` command and its help forms are unknown commands, not aliases.
 
 No command, an unknown command or option, an extra positional argument, a duplicate option, a missing value, or an unknown `help` target exits nonzero with a diagnostic and the relevant help pointer.
 
@@ -115,7 +115,7 @@ focused-spec init --tools minimax-code --dry-run --json
 
 The previous `agent-guide` command is not an alias. Refresh the installed loader when moving to `instructions`; protocol 1, topic names and response fields are unchanged.
 
-Loader protocol defaults to 1; it is independent of package versions, configuration version 3, and runner API version 1. The loader requests it explicitly. Protocol-1 JSON is:
+Loader protocol defaults to 1; it is independent of package versions, configuration version 4, and format/runner API version 1. The loader requests it explicitly. Protocol-1 JSON is:
 
 ```json
 {
@@ -126,6 +126,8 @@ Loader protocol defaults to 1; it is independent of package versions, configurat
 }
 ```
 
+Acquire each response with a standalone tool command. Do not chain it with `init --json`, installation, help or another guidance request: combined stdout is not the single protocol object. If this happens, request guidance again by itself; extracting one object from concatenated output is not accepted acquisition.
+
 Text output identifies the installed package version, protocol, and topic before the Markdown. An unsupported protocol, invalid option/topic, missing value, or incomplete package exits nonzero with stderr diagnostics and no usable guidance on stdout. An explicit unsupported protocol is never silently replaced with the default. No legacy full-text skill or alternate installation is used as a fallback.
 
 ```sh
@@ -135,9 +137,9 @@ focused-spec instructions --protocol 1 --topic runners --json
 
 ## Validation
 
-Validation reads version-3 configuration, its configured evidence-registry files (default `.focused-spec/evidence.yaml`), and selected native `.md` or `.feature` documents. It binds every selected registry entry to exactly one native item and rejects marked items without entries. Missing, detached, duplicate, conflicting, unbound, or ambiguous identities are violations.
+Validation reads version-4 configuration, its configured evidence-registry files (default `.focused-spec/evidence.yaml`), and documents selected by explicit layouts. Every layout names a registered format adapter; core does not infer one from the path or extension. Validation binds every selected registry entry to exactly one normalized native item and rejects marked items without entries. Missing, detached, duplicate, conflicting, unbound, ambiguous, malformed-adapter, or adapter-lifecycle results are violations.
 
-`validate --syntax-only` checks configuration, registry syntax, native document syntax, scope-local identity, and binding without loading runner modules. Full `validate` additionally loads runners and resolves concrete evidence, but never executes tests. A successful full-validation JSON result retains:
+`validate --syntax-only` checks configuration, registry syntax, adapter parsing, scope-local identity, and binding without loading runner plugins. Full `validate` additionally loads runners and resolves concrete evidence, but never executes tests. A successful full-validation JSON result retains:
 
 ```json
 {
@@ -201,8 +203,8 @@ If configuration, registry parsing, native binding, selected evidence resolution
 
 `execution.maxConcurrentGroups` is a positive integer and defaults to 1. Above 1, core overlaps only resource-compatible groups returned by a runner's optional `partition` method. Runners without partition support and explicitly exclusive groups remain exclusive. This setting does not configure framework worker counts or coordinate other CLI processes. See the [runner API](runner-api.md).
 
-## Configuration and version-2 migration
+## Configuration and migration
 
-The default config is `.focused-spec/config.yaml` under `--root`; a relative `--config` path resolves from that root. Configuration requires `version: 3`, a nonempty `specifications.documents` list, and a `runners` object. Optional `evidence.files` selects explicit project-relative YAML paths or patterns. Omission uses `.focused-spec/evidence.yaml`; explicit sources never fall back to it. Registry paths resolve from `--root`, not the configuration file's directory. Missing matches, overlapping file claims, unsafe paths, and selected cross-file identity duplicates fail. See the [registry contract](../guides/configuration.md#required-evidence-registry).
+The default config is `.focused-spec/config.yaml` under `--root`; a relative `--config` path resolves from that root. Configuration requires `version: 4`, a nonempty `specifications.formats` ID map, a nonempty `specifications.documents` list, and a `runners` map. Every document layout names one configured format. Formats and runners each declare exactly one installed `package` or project-contained `module`, plus JSON-compatible options and bounded timeouts; runners may additionally declare `cwd`. Package/subpath resolution uses ESM import conditions from the consuming project and never a global or downloaded fallback. Optional `evidence.files` selects explicit project-relative YAML paths or patterns. Omission uses `.focused-spec/evidence.yaml`; explicit sources never fall back to it. Registry paths resolve from `--root`, not the configuration file's directory. Missing matches, overlapping file claims, unsafe paths, and selected cross-file identity duplicates fail. See the [configuration and registry contract](../guides/configuration.md).
 
-Version 2 has no compatibility alias. Obsolete configuration and inline ID/EVIDENCE/REVISES diagnostics advertise `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json` from the installation root; use the platform-appropriate local executable or explicit installed Node CLI in a hoisted workspace. This command serves the package-owned upgrade workflow without loading obsolete configuration. The [configuration guide](../guides/configuration.md#migrate-from-version-2) owns the migration reference; the [installation guide](../guides/install.md) distinguishes an explicitly authorized update from ordinary fail-closed guidance acquisition. Runner plugins remain on `apiVersion: 1`.
+Versions 2 and 3 have no compatibility alias. Obsolete configuration and inline ID/EVIDENCE/REVISES diagnostics advertise `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json` from the installation root; use the platform-appropriate local executable or explicit installed Node CLI in a hoisted workspace. That command serves the package-owned upgrade workflow without loading obsolete configuration. Version 3 migration explicitly installs/registers selected formats and assigns one to every existing layout while preserving scopes, exclusions, registry sources and evidence. Version 2 additionally migrates inline native identity/evidence before the same version-4 format cutover. The [configuration guide](../guides/configuration.md#migrate-older-configurations) owns both migration references; the [installation guide](../guides/install.md) distinguishes an explicitly authorized update from ordinary fail-closed guidance acquisition. Runner plugins remain on `apiVersion: 1`.

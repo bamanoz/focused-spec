@@ -4,13 +4,13 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { loadConfig } from '../src/config.js'
-import type { ExecutionResult, FocusedSpecConfig } from '../src/model.js'
-import { loadEvidenceRegistry } from '../src/registry.js'
-import { discoverDocuments } from '../src/sources.js'
+import { loadConfig } from '../packages/core/dist/config.js'
+import type { ExecutionResult, FocusedSpecConfig } from '../packages/core/dist/model.js'
+import { loadEvidenceRegistry } from '../packages/core/dist/registry.js'
+import { discoverDocuments } from '../packages/core/dist/sources.js'
 
 const roots: string[] = []
-const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url))
+const cli = fileURLToPath(new URL('../packages/core/dist/cli.js', import.meta.url))
 
 async function put(root: string, path: string, source: string): Promise<void> {
   await mkdir(dirname(join(root, path)), { recursive: true })
@@ -20,9 +20,10 @@ async function put(root: string, path: string, source: string): Promise<void> {
 async function fixture(files: readonly string[] = ['registry/*.yaml']): Promise<{ root: string; config: FocusedSpecConfig }> {
   const root = await mkdtemp(join(tmpdir(), 'focused-spec-shards-'))
   roots.push(root)
+  await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir')
   const config: FocusedSpecConfig = {
-    version: 3,
-    specifications: { documents: [{ match: 'specs/{scope}.md' }] },
+    version: 4,
+    specifications: { formats: { markdown: { package: '@focused-spec/format-markdown' } }, documents: [{ match: 'specs/{scope}.md', format: 'markdown' }] },
     evidence: { files },
     runners: { local: { module: './runner.mjs' } },
   }

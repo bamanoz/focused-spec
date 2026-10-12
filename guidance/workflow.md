@@ -8,16 +8,20 @@ The loader resolved an explicit consuming-project or declared-workspace installa
 
 Before a later focused-spec workflow step, resolve the local installation again and request fresh protocol-1 workflow guidance. If the installation is upgraded during a step, reload the workflow before continuing. Guidance retrieval is instruction loading, not validation or executable evidence, and it does not authorize writes that the host workflow forbids.
 
+Acquire each protocol response in a standalone tool command. Never chain `instructions --protocol 1 --topic workflow --json` or the runners-topic request with installation, `init`, help or another command. Combined stdout containing multiple JSON values is not an accepted response; run the guidance request alone again before acting.
+
 ## Update an existing project
 
 An explicit request to update focused-spec includes its local CLI, installed focused-spec loader/wrappers, and necessary project-format migration—not only a package-version bump. This is agent work, not automatic installation-time conversion. Respect host approval boundaries; a planning-only request still does not authorize implementation.
 
-1. Inspect the project package-manager manifest/lockfile, installed focused-spec version, existing focused integrations, configuration, configured documents and registries, and runner modules. Preserve user work and unrelated dependencies/integrations. Update only focused-spec at its established dependency/workspace location using the existing package manager; for an npm development dependency, `npm install --save-dev focused-spec@latest`. An explicitly requested update authorizes that download; ordinary guidance acquisition does not.
-2. Resolve the replacement local CLI and read its `init --help`. Refresh existing focused integration with explicit relevant `--tools` targets, using `--dry-run --json` first. Replace an identified package-owned legacy loader/wrapper with `--replace` only within authorized scope; preserve custom instructions and unrelated targets. Symlinked skills are not safe replacement destinations: use their owning installer or an approved safe cutover, not forced traversal. Remove identified obsolete package-owned runner references/full-text copies once replaced; never delete custom neighbors. Verify the installed loader/wrappers match the replacement package, and reread the new loader even in the same session.
-3. Obtain and validate a fresh complete protocol-1 `workflow` response from that exact installation with `<project-local-focused-spec> instructions --protocol 1 --topic workflow --json`. Discard earlier/legacy procedure as authority. A missing or incompatible response blocks migration; neither package source inspection nor a repository checkout is a fallback. Use the new workflow and help to finish the task without asking the user for migration steps available here.
-4. Inventory every still-relevant legacy occurrence before editing: configured scope, ID, canonical native item and behavioral text, and every exact evidence reference. Preserve opaque selectors byte-for-byte and all members of each AND contract. Same-ID occurrences in different scopes remain independently bound and explicitly registered; old `REVISES` rows do not transfer or inherit evidence. Retain existing runner IDs/modules/options/timeouts, execution settings, document scope assignments and exclusions unless the canonical native source requires a justified path change.
-5. For version 2, change configuration to version 3 and move inline evidence into the configured evidence-only registry (default `.focused-spec/evidence.yaml`). Bind each original ID on its canonical native item using the native-ID protocol below; preserve the item's behavioral text. Remove inline `ID`, `EVIDENCE`, and `REVISES` metadata and obsolete relationship fields. If an old focused companion duplicates a native item, bind the native item and remove only the redundant companion through its host workflow; if it is the sole native source, keep its behavior. Generated/metadata-hostile sources require an explicit stable native ID and external registry binding, not hand-edited output or guessed equivalence. Reuse existing registry ownership; do not reorganize unrelated evidence.
-6. Compare the final occurrences with the inventory: no lost outcome, renamed ID/scope, redirected selector, omitted AND member, inherited evidence, or orphaned metadata. Run native host validation where available, then strict focused validation and actual execution for every completed migrated scope (or the full project when all evidence is concrete). Resolve existing `planned:` references only when their exact tests exist; disclose remaining planning work rather than fabricating tests or a full-project pass. Prove new/changed evidence sensitivity as described below; restore every controlled product regression. Report the updated package/integration, migration performed, commands and observed results, and any unresolved checks. Package install, init and instructions alone are not completion.
+1. Inspect the project package-manager manifest/lockfile, installed focused-spec version, existing focused integrations, configuration, configured format and runner registrations, documents and registries. Preserve user work and unrelated dependencies/integrations. Update only focused-spec and selected official adapters at their established dependency/workspace locations using the existing package manager; for an npm development dependency, `npm install --save-dev focused-spec@latest`. An explicitly requested update authorizes those selected package downloads; ordinary guidance acquisition does not.
+2. Resolve the replacement local CLI and read its `init --help`. Refresh existing focused integration with explicit relevant `--tools` targets, using `--dry-run --json` first. Replace an identified package-owned legacy loader/wrapper with `--replace` only within authorized scope; preserve custom instructions and unrelated targets. Symlinked skills are not safe replacement destinations: use their owning installer or an approved safe cutover, not forced traversal. Remove identified obsolete package-owned full-text copies once replaced; never delete custom neighbors. Verify the installed loader/wrappers match the replacement package, and reread the new loader even in the same session.
+3. Obtain and validate a fresh complete protocol-1 `workflow` response from that exact installation with `<project-local-focused-spec> instructions --protocol 1 --topic workflow --json`, in a separate tool call after integration refresh has completed. Do not join it to `init --json` with `&&`, a semicolon or a pipeline. Discard earlier/legacy procedure as authority. A missing or incompatible response blocks migration; neither package source inspection nor a repository checkout is a fallback. Use the new workflow and help to finish the task without asking the user for migration steps available here.
+4. Inventory every still-relevant occurrence before editing: configured scope, ID, canonical native item and behavioral text, every exact evidence reference, document layouts and exclusions, registry sources, format registrations, runner IDs/modules/packages/options/timeouts/cwd, and execution settings. Preserve opaque selectors byte-for-byte and all members of each AND contract. Same-ID occurrences in different scopes remain independently bound and explicitly registered; old `REVISES` rows do not transfer or inherit evidence.
+5. Install each selected format adapter before configuring it. Version 4 core has no Markdown/Gherkin parser or extension fallback; the official packages are `@focused-spec/format-markdown` and `@focused-spec/format-gherkin`. Add `specifications.formats`, then give every document layout an explicit `format` ID while preserving its match, assigned/captured scope and exclusions. Each format declares exactly one installed `package` or project-relative `module`, plus optional options/timeout. Never substitute a global, downloaded-on-demand or loader-relative package.
+6. Inspect existing runner registrations and installed runner packages before writing custom plugin code. Read their public `README.md` for selectors/options, not installed `dist/`, `src/` or executable example implementation. Official runner packages provide the public contract at `node_modules/@focused-spec/runner-<framework>/README.md`; manifests and type declarations are also public. If documentation is unavailable or unclear, obtain the same CLI's `runners` topic in a standalone protocol call before deciding a selector; do not search plugin implementation as a substitute. During this upgrade, replace legacy project-local framework runner registrations with applicable official packages when their documented contracts support the existing opaque selectors and execution requirements. Install and register `@focused-spec/runner-vitest`, `@focused-spec/runner-pytest` or `@focused-spec/runner-go` under the framework-only IDs `vitest`, `pytest` or `go`. Retain a custom registration with its established ID only when an official runner cannot preserve its required contract; explain that incompatibility rather than retaining a legacy registration merely because it still runs. For every replaced registration, change only the runner-ID prefix of every affected evidence reference; preserve each opaque selector and every AND member, and do not leave mixed old/new registrations. Remove obsolete registrations, but preserve existing project-owned runner files: installing a replacement does not authorize deleting user code. Each runner declares exactly one package or module and retains applicable cwd/options/timeout. Framework dependencies remain owned by the consuming project.
+7. For version 2, first move inline evidence into the configured evidence-only registry (default `.focused-spec/evidence.yaml`). Bind each original ID on its canonical native item using the native-ID protocol below; preserve the item's behavioral text. Remove inline `ID`, `EVIDENCE`, and `REVISES` metadata and obsolete relationship fields. If an old focused companion duplicates a native item, bind the native item and remove only the redundant companion through its host workflow; if it is the sole native source, keep its behavior. Generated/metadata-hostile sources require an explicit stable native ID and external registry binding, not hand-edited output or guessed equivalence. Reuse existing registry ownership; do not reorganize shards as a side effect. Then complete the same explicit version-4 format registration required for version 3.
+8. Compare the final occurrences and plugin registrations with the inventory: no lost outcome, renamed ID/scope, unexplained runner-ID change, redirected opaque selector, omitted AND member, inherited evidence, changed registry ownership, or orphaned metadata. Run native host validation where available, then strict focused validation and actual execution for every completed migrated scope (or the full project when all evidence is concrete). Resolve existing `planned:` references only when their exact tests exist; disclose remaining planning work rather than fabricating tests or a full-project pass. Prove new/changed evidence sensitivity as described below; restore every controlled product regression. Report the updated packages/integration, migration performed, commands and observed results, and unresolved checks. Package installation, init and instruction loading are not evidence.
 
 ## Respect the current phase
 
@@ -27,11 +31,11 @@ A request to complete a native specification for already-implemented behavior is
 
 ## Native-ID authoring protocol
 
-1. Read the host workflow before editing. Locate the one native checkable item, its canonical authoring source, and any stable host-owned ID. Determine whether the document is editable or generated. A generated file is not editable merely because it can contain comments.
-2. Choose exactly one identity binding:
-   - Editable Markdown: attach `<!-- focused-spec:id=<lowercase.dotted.id> -->` immediately before one heading, paragraph, or list item, or inline after a paragraph or list item.
-   - Gherkin: attach `@focused.<lowercase.dotted.id>` to one `Scenario` or `Scenario Outline`, never to `Feature`, `Rule`, `Background`, or `Examples`.
-   - Generated or metadata-hostile source: leave it unmarked and use registry `source.path` plus an explicit stable `source.nativeId`. If no stable native ID exists, report binding as unsupported; never guess from a heading, line number, or wording.
+1. Read the host workflow before editing. Locate the one native checkable item, its canonical authoring source, configured document layout/format adapter, and any stable host-owned ID. Determine whether the document is editable or generated. A generated file is not editable merely because it can contain comments. If the layout or installed adapter is missing, do not guess from the extension; configure/install the selected format only in an authorized implementation phase.
+2. Choose exactly one identity binding supported by that adapter:
+   - With `@focused-spec/format-markdown`, attach `<!-- focused-spec:id=<lowercase.dotted.id> -->` immediately before one editable heading, paragraph, or list item, or inline after a paragraph or list item.
+   - With `@focused-spec/format-gherkin`, attach `@focused.<lowercase.dotted.id>` to one `Scenario` or `Scenario Outline`, never to `Feature`, `Rule`, `Background`, or `Examples`.
+   - For a generated or metadata-hostile source, leave it unmarked and use registry `source.path` plus an explicit stable `source.nativeId` that the selected adapter returns. If no stable native ID exists, report binding as unsupported; never guess from a heading, line number, or wording.
 3. Once integration implementation is authorized, record the same `(scope, ID)` in a configured registry file with one or more exact evidence references. Read `evidence.files` first; if omitted, the registry is `.focused-spec/evidence.yaml`. Do not put evidence or another copy of the behavior in the native document or registry.
 4. Ensure the source item still expresses the same single independently failing outcome after authoring, regeneration, or movement. A marker or tag must resolve to exactly one adjacent item; an external native ID must resolve explicitly and uniquely in its declared path. Missing, detached, duplicate, conflicting, or ambiguous bindings fail.
 
@@ -54,7 +58,7 @@ Propose the final registry contents, not just a file name. Approval covers the p
 
 ## Evidence registry
 
-Every configured project requires one logical evidence registry. Optional version-3 `evidence.files` explicitly names project-relative YAML paths or glob patterns; omission uses `.focused-spec/evidence.yaml` through the same loader. Explicit sources never trigger fallback or implicit repository-wide discovery. Each pattern must match at least one `.yaml`/`.yml` file; overlapping lexical/canonical claims, unsafe paths, missing sources, and symlink escapes fail. Nested `include` is unsupported.
+Every configured project requires one logical evidence registry. Optional version-4 `evidence.files` explicitly names project-relative YAML paths or glob patterns; omission uses `.focused-spec/evidence.yaml` through the same loader. Explicit sources never trigger fallback or implicit repository-wide discovery. Each pattern must match at least one `.yaml`/`.yml` file; overlapping lexical/canonical claims, unsafe paths, missing sources, and symlink escapes fail. Nested `include` is unsupported.
 
 Inspect configured sources and existing ownership before editing. Reuse the shard for the affected domain/module, following the project's existing boundaries. Create a new shard only for a genuine new ownership boundary. Ensure its path is covered by an existing `evidence.files` path or glob: a matching glob automatically includes new files, so do not add redundant per-file entries or change configuration for an already-covered shard. Change configuration only when the new shard lies outside the configured sources; without `evidence.files`, only `.focused-spec/evidence.yaml` is loaded. Do not reorganize the whole registry for one task. A small project may keep one file. Include every touched shard and any necessary configuration change in required host approval; propose complete final entries, not only shard names.
 
@@ -65,7 +69,7 @@ scopes:
   current:
     account.access.blocked:
       evidence:
-        - project-tests::tests/access.test.ts::blocked-account
+        - vitest::tests/access.test.ts::blocked account
 ```
 
 For an external binding:
@@ -78,7 +82,7 @@ scopes:
         path: specs/generated.md
         nativeId: RULE-7
       evidence:
-        - project-tests::tests/access.test.ts::blocked-account
+        - pytest::tests/access_test.py::test_blocked_account
 ```
 
 Each entry has exactly `evidence` and optional `source`; `source` has exactly `path` and `nativeId`. Unknown or duplicate YAML fields fail. Evidence is `[planned:]<runner-id>::<opaque selector>`; only the first `::` separates the runner ID. Multiple references form an AND contract.
@@ -89,28 +93,33 @@ Use `planned:` only while the exact test is absent. Planned evidence is allowed 
 
 ## Configure focused-spec
 
-Create `.focused-spec/config.yaml` when first binding evidence. Version 3 keeps explicit fixed and captured document layouts and the existing runner configuration:
+Create `.focused-spec/config.yaml` when first binding evidence. Version 4 requires explicit format selection and loads each format or runner from exactly one installed package or contained project module:
 
 ```yaml
-version: 3
+version: 4
 specifications:
+  formats:
+    markdown:
+      package: '@focused-spec/format-markdown'
   documents:
-    - match: specs/**/*.{md,feature}
+    - match: specs/**/*.md
       scope: current
+      format: markdown
       exclude: [specs/archive/**]
     - match: changes/{scope}/spec.md
+      format: markdown
 evidence:
   files:
     - .focused-spec/evidence/auth.yaml
 runners:
-  project-tests:
-    module: ./.focused-spec/runners/project-tests.ts
+  vitest:
+    package: '@focused-spec/runner-vitest'
     timeoutMs: 120000
 ```
 
-Every layout either has `scope: <name>` and no `{scope}` token, or exactly one `{scope}` token and no `scope` property. Documents must be `.md` or `.feature`. Scope names are path-safe and uniform; no name is privileged. Patterns, exclusions, registry paths, and external source paths are project-relative. The CLI does not infer framework folders, archive exclusions, behavior, or native IDs.
+Every layout selects one registered format and either has `scope: <name>` with no `{scope}` token, or exactly one `{scope}` token with no `scope` property. Scope names are path-safe and uniform; no name is privileged. Patterns, exclusions, registry paths and external source paths are project-relative. Core does not infer a format from an extension, a framework folder, archive exclusions, behavior or native IDs.
 
-Register a functional runner for every concrete evidence type, not a placeholder. A runner module stays inside the project and uses `.ts`, `.mts`, `.js`, or `.mjs`. The public runner API remains `apiVersion: 1`.
+Install and register a functional runner for every concrete evidence type, not a placeholder. An installed package resolves from the consuming project with ESM import conditions; a project module stays inside the project and uses `.ts`, `.mts`, `.js`, or `.mjs`. No package may resolve from a global install, download or CLI location. The public runner API remains `apiVersion: 1`.
 
 ## Preserve surviving evidence through host operations
 
@@ -126,18 +135,18 @@ No transition command, plan, snapshot, or replacement checkpoint is required. Va
 
 Consult `<project-local-focused-spec> --help`, `<project-local-focused-spec> validate --help`, and `<project-local-focused-spec> run --help` before choosing flags. Keep using the exact local CLI that served this workflow. Help is guidance, not evidence; execute the selected tests before completion.
 
-## Implement a runner only when evidence needs one
+## Select or implement a runner only when evidence needs one
 
-When creating or changing a runner, obtain the complete runner workflow from the same installed package by invoking `<project-local-focused-spec> instructions --protocol 1 --topic runners --json`. Wait for successful completion and accept it only when the response identifies protocol 1, package `focused-spec` at the resolved installation's version, topic `runners`, and nonempty Markdown content. Follow that content together with this workflow. Do not use a skill-local reference, repository documentation, a global binary, or stale runner instructions.
+Inspect existing configuration, installed runner packages and project modules before authoring plugin code. Install and reuse an applicable official runner and its selector contract when it fits; a compatible runner already installed but not registered may need only an approved configuration entry. Do not create a parallel custom runner merely because package registration is new.
 
-Inspect existing configuration and project-local runner modules first. Reuse an applicable runner and its selector contract rather than creating another or overwriting it. A runner already present but not yet registered may need only an approved configuration entry.
+When creating or changing a custom runner is necessary, obtain the complete runner workflow from the same installed package by invoking `<project-local-focused-spec> instructions --protocol 1 --topic runners --json`. Wait for successful completion and accept it only when the response identifies protocol 1, package `focused-spec` at the resolved installation's version, topic `runners`, and nonempty Markdown content. Follow that content together with this workflow. Do not use a skill-local reference, repository documentation, a global binary, downloaded package, or stale runner instructions.
 
 ## Prove new or changed evidence detects failure
 
 For every new or changed evidence reference, selected assertion, or claimed product behavior—including a repaired assertion whose registry reference stays unchanged:
 
 1. Run that exact focused evidence and observe `PASS`.
-2. In a disposable workspace or with a reversible change that preserves user work, introduce one controlled regression in the product behavior protected by the native item's outcome—not in the test, selector, runner, or assertion.
+2. Introduce one controlled regression in the product behavior protected by the native item's outcome—not in the test, selector, runner, or assertion. Prefer a disposable workspace when execution can change generated artifacts or caches. An in-place probe must preserve and restore the complete prior state, including existing generated files and bytecode; restoring source text alone is insufficient.
 3. Run the same evidence. The selected test must execute and fail on its behavioral assertion. Missing targets, runner errors, skips, and unrelated failures do not prove sensitivity.
 4. Restore the product behavior even if the probe failed, rerun the evidence, and observe `PASS`.
 
@@ -145,7 +154,7 @@ If a safe controlled regression is unavailable, explain what was not checked and
 
 ## Verify
 
-Run the same explicitly resolved project-local CLI against the intended project root. The selected root supplies version-3 configuration, its configured registry files, native documents, and project-local runners; installing the CLI alone supplies neither test dependencies nor runners.
+Run the same explicitly resolved project-local CLI against the intended project root. The selected root supplies version-4 configuration, installed or contained format/runner plugins, configured registry files and native documents; installing core alone supplies neither adapters nor test-framework dependencies.
 
 While selected evidence remains planned:
 
@@ -154,7 +163,7 @@ While selected evidence remains planned:
 <project-local-focused-spec> validate --scope <name>
 ```
 
-Syntax-only validation checks native parsing, registry shape, and binding without loading runners. After every selected reference is concrete:
+Syntax-only validation checks adapter parsing, registry shape and binding without loading runners. After every selected reference is concrete:
 
 ```text
 <project-local-focused-spec> validate --scope <name> --strict

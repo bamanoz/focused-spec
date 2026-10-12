@@ -1,10 +1,14 @@
-version: 3
+version: 4
 specifications:
+  formats:
+    markdown:
+      package: "@focused-spec/format-markdown"
   documents:
     - match: specs/{scope}/spec.md
+      format: markdown
 runners:
-  pytest-functional:
-    module: ./.focused-spec/runners/pytest.ts
+  pytest:
+    package: "@focused-spec/runner-pytest"
     timeoutMs: 120000
     options:
       command: uv

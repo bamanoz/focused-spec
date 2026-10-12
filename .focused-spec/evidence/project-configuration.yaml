@@ -48,3 +48,9 @@ scopes:
     config.glob.compatible:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > preserves padded stepped and hidden document discovery
+    format.selection.explicit:
+      evidence:
+        - vitest::test/plugins.spec.ts::plugin architecture > selects explicit Markdown and Gherkin formats
+    format.selection.missing:
+      evidence:
+        - vitest::test/plugins.spec.ts::plugin architecture > rejects missing and conflicting format registrations

@@ -24,7 +24,7 @@ export async function judgeEvidenceRepair(workspace: string, transcripts: readon
     testFailure = test.code === 1 && test.stdout.includes('AssertionError') && test.stdout.includes('FAILED ' + selector)
     const focused = await runProcess(process.execPath, [join(workspace, 'node_modules/focused-spec/dist/cli.js'), 'run', '--scenario', scenarioId, '--json'], { cwd: workspace, timeoutMs: 240_000 })
     const result = JSON.parse(focused.stdout) as { executionStarted?: boolean; scenarios?: { id: string; status: string; evidence: { reference: string; status: string }[] }[] }
-    focusedFailure = focused.code === 1 && result.executionStarted === true && result.scenarios?.some(item => item.id === scenarioId && item.status === 'FAIL' && item.evidence.some(evidence => evidence.reference === 'pytest-functional::' + selector && evidence.status === 'FAIL')) === true
+    focusedFailure = focused.code === 1 && result.executionStarted === true && result.scenarios?.some(item => item.id === scenarioId && item.status === 'FAIL' && item.evidence.some(evidence => evidence.reference === 'pytest::' + selector && evidence.status === 'FAIL')) === true
   } catch (error) {
     gates.push({ name: 'evidence-repair-probe', passed: false, detail: String(error) })
   } finally {

@@ -4,6 +4,8 @@ The main OpenSpec spec contains historical native scenarios without focused-spec
 
 ## Decisions
 
-- Use project-local Go and Python runners based only on the public `focused-spec/runner` API.
+- Use version-4 configuration and register the installed Markdown adapter explicitly.
+- Register the installed official runner packages under IDs `go` and `pytest`.
+- Configure pytest to execute through `uv run --with pytest python`.
 - Require both evidence targets to execute for the blocked-account valid-credential outcome.
 - Preserve untouched native scenarios when syncing the delta into the existing main spec.

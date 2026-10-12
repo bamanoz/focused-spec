@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const roots: string[] = []
-const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url))
+const cli = fileURLToPath(new URL('../packages/core/dist/cli.js', import.meta.url))
 const initTargets: { id: string; skill: string; command: string | null; home: boolean }[] = JSON.parse(await readFile(new URL('./fixtures/agent-targets.json', import.meta.url), 'utf8'))
 
 interface Layout {
@@ -48,6 +48,7 @@ function configYaml(
 ): string {
   const documents = layouts.flatMap(layout => [
     `    - match: ${JSON.stringify(layout.match)}`,
+    `      format: ${layout.match.endsWith('.feature') ? 'gherkin' : 'markdown'}`,
     ...(layout.scope === undefined ? [] : [`      scope: ${layout.scope}`]),
     ...(layout.exclude === undefined ? [] : [
       '      exclude:',
@@ -55,8 +56,11 @@ function configYaml(
     ]),
   ])
   return [
-    'version: 3',
+    'version: 4',
     'specifications:',
+    '  formats:',
+    '    markdown: { package: "@focused-spec/format-markdown" }',
+    '    gherkin: { package: "@focused-spec/format-gherkin" }',
     '  documents:',
     ...documents,
     ...runners,
@@ -93,6 +97,8 @@ function registryYaml(entries: readonly RegistryEntry[]): string {
 }
 
 async function configure(root: string, layouts: readonly Layout[] = openSpecLayouts, runners?: readonly string[]): Promise<void> {
+  try { await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir') }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
   await put(root, '.focused-spec/config.yaml', configYaml(layouts, runners))
 }
 
@@ -214,7 +220,7 @@ describe('focused-spec CLI', () => {
   it('explains initialization without reading or modifying project state', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-init-help-'))
     roots.push(root)
-    await cp(new URL('../dist/', import.meta.url), join(root, 'dist'), { recursive: true })
+    await cp(new URL('../packages/core/dist/', import.meta.url), join(root, 'dist'), { recursive: true })
     await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir')
     await put(root, 'package.json', '{"type":"module"}')
     await put(root, '.focused-spec/config.yaml', 'invalid: [')
@@ -318,7 +324,7 @@ sys.exit(code if code >= 0 else 128 - code)
     expect(result.status, result.stderr).toBe(0)
     expect(result.stderr).toBe('')
     const response = json(result.stdout)
-    const metadata = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+    const metadata = JSON.parse(await readFile(new URL('../packages/core/package.json', import.meta.url), 'utf8'))
     expect(response).toMatchObject({ protocolVersion: 1, package: { name: 'focused-spec', version: metadata.version }, topic: 'workflow' })
     expect(response.content).toBe(await readFile(new URL('../guidance/workflow.md', import.meta.url), 'utf8'))
     expect(await readdir(root, { recursive: true })).toEqual(before)
@@ -349,7 +355,7 @@ sys.exit(code if code >= 0 else 128 - code)
   it('explains guide compatibility without loading package guidance', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-guide-help-'))
     roots.push(root)
-    await cp(new URL('../dist/', import.meta.url), join(root, 'dist'), { recursive: true })
+    await cp(new URL('../packages/core/dist/', import.meta.url), join(root, 'dist'), { recursive: true })
     await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir')
     await put(root, 'package.json', '{"type":"module"}')
     await put(root, '.focused-spec/config.yaml', 'invalid: [')
@@ -659,10 +665,10 @@ sys.exit(code if code >= 0 else 128 - code)
   it('advertises executable workflow guidance for obsolete configuration and inline metadata', async () => {
     const root = await emptyFixture()
     const config = configYaml([{ match: 'specs/**/*.md', scope: 'current' }], ['runners: {}'])
-    const metadata = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
+    const metadata = JSON.parse(await readFile(new URL('../packages/core/package.json', import.meta.url), 'utf8')) as { version: string }
     const workflow = await readFile(new URL('../guidance/workflow.md', import.meta.url), 'utf8')
-    for (const version of [2, 3]) {
-      await put(root, '.focused-spec/config.yaml', config.replace('version: 3', `version: ${version}`))
+    for (const version of [2, 3, 4]) {
+      await put(root, '.focused-spec/config.yaml', config.replace('version: 4', `version: ${version}`))
       await put(root, 'specs/auth.md', '#### Scenario: Blocked account\n- **ID**: `auth.blocked`\n- **EVIDENCE**: `unit::blocked`\n- **REVISES**: previous\n- **WHEN** a blocked account authenticates\n- **THEN** it is rejected\n')
       const result = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--syntax-only', '--json'], { encoding: 'utf8' })
       expect(result.status).toBe(1)
@@ -778,10 +784,6 @@ sys.exit(code if code >= 0 else 128 - code)
     await configure(root, [{ match: '../outside/**/*.md', scope: 'current' }], ['runners: {}'])
     const unsafe = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
     expect(unsafe.status).toBe(1)
-
-    await configure(root, [{ match: 'specs/**/*.json', scope: 'current' }], ['runners: {}'])
-    const unsupported = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
-    expect(unsupported.status).toBe(1)
 
     await configure(root, [{ match: 'specs/**/*.md', scope: 'current' }], ['runners: {}'])
     const outside = await mkdtemp(join(tmpdir(), 'focused-spec-outside-'))

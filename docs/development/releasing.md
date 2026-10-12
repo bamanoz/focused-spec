@@ -1,12 +1,18 @@
-# Releasing focused-spec
+# Releasing the npm package suite
 
-This repository publishes the `focused-spec` npm package manually. There is no release workflow: publishing to npm does not create a Git tag or a GitHub Release. A release is complete only when the published package was built from the commit identified by its `v<version>` tag. GitHub Releases are optional and are not created by the steps below.
+This repository prepares six independently published packages from one private npm workspace:
 
-Only bump the version for consumer-facing changes to the published package (the CLI/API in `src/`, packaged `skills/`, the root README, or metadata such as exports and runtime dependencies). Changes confined to tests, `docs/`, `openspec/`, examples, dev-only dependencies, or the repository-local `.focused-spec/` runner do not need an npm release. Choose `patch`, `minor`, or `major` according to the consumer-visible change; for pre-1.0 releases, explain compatibility changes explicitly.
+- `focused-spec` from `packages/core`;
+- `@focused-spec/format-markdown` and `@focused-spec/format-gherkin`;
+- `@focused-spec/runner-vitest`, `@focused-spec/runner-pytest`, and `@focused-spec/runner-go`.
 
-## Prepare
+The workspace root is never published. All package manifests currently use version `0.9.0` to prepare this suite; that version in source is not evidence that any package has been published or released. Publishing requires separate authorization and every registry verification below.
 
-Use Node.js 22.16.0+ and an npm account authorized to publish `focused-spec`. Start on `main` with a clean working tree. Confirm the registry and current published version:
+There is no automated release workflow. A suite release is complete only when every intended package was built from the commit identified by its `v<version>` tag and the registry confirms all six exact versions. GitHub Releases are optional and are not created by npm publication.
+
+## Prepare one coordinated version
+
+Use Node.js 22.16.0+ and an npm account authorized for both `focused-spec` and the `@focused-spec` scope. Start on `main` with a clean working tree. Confirm the registry and inspect every currently published version:
 
 ```sh
 git pull --ff-only origin main
@@ -14,42 +20,74 @@ git status --short --branch
 npm whoami
 npm config get registry
 npm view focused-spec version
+npm view @focused-spec/format-markdown version
+npm view @focused-spec/format-gherkin version
+npm view @focused-spec/runner-vitest version
+npm view @focused-spec/runner-pytest version
+npm view @focused-spec/runner-go version
 ```
 
-Do not publish from a dirty tree or an unpublished feature branch. After merging the change and updating its documentation, bump the version in both `package.json` and `package-lock.json` without letting npm create a commit and tag prematurely:
+Choose one `X.Y.Z` for the coordinated suite. Core-facing changes include the CLI/API under `packages/core/src`, packaged root `skills/` or `guidance/`, the staged root `README.md`/`LICENSE`, and core package metadata. Each adapter is independently consumer-facing. Keep every official adapter at the coordinated version and its `focused-spec` peer range compatible with that version; framework packages remain peer/consumer dependencies rather than core runtime dependencies.
+
+Update the six workspace manifests and root lockfile without creating a tag. Confirm every `X.Y.Z` is unused before continuing; npm versions are immutable. The committed `0.9.0` manifests in this change are preparation only—do not publish them as part of implementation or validation.
+
+## Build and inspect separate tarballs
+
+Install and build centrally from the private root:
 
 ```sh
-npm version patch --no-git-tag-version
-```
-
-Replace `patch` with `minor` or `major` when appropriate. Record the version printed by npm; substitute it for `X.Y.Z` below. Confirm `focused-spec@X.Y.Z` is not already published: npm versions are immutable and cannot be reused.
-
-## Verify and publish
-
-```sh
+npm ci
 npm test
 npm run smoke
 openspec validate --all --strict --no-interactive
-node dist/cli.js validate --strict
-node dist/cli.js run
-npm pack --dry-run
+npx focused-spec validate --strict
+npx focused-spec run
+npm pack --dry-run --workspace focused-spec
+npm pack --dry-run --workspace @focused-spec/format-markdown
+npm pack --dry-run --workspace @focused-spec/format-gherkin
+npm pack --dry-run --workspace @focused-spec/runner-vitest
+npm pack --dry-run --workspace @focused-spec/runner-pytest
+npm pack --dry-run --workspace @focused-spec/runner-go
 ```
 
-Inspect the dry-run file list: the tarball must contain `dist/cli.js`, `dist/index.js`, `dist/runner-api.js`, their declarations, `skills/`, the root README, and `LICENSE`; it must not contain tests or `.focused-spec/`. `prepare` builds `dist/` when packing/publishing; `dist/` is intentionally ignored by Git. Stop if any check fails or the tarball is incomplete.
+Inspect each dry-run independently. Core must contain `dist/cli.js`, `dist/index.js`, `dist/format-api.js`, `dist/runner-api.js`, declarations, staged `skills/`, `guidance/`, root `README.md`, and `LICENSE`; it must not contain tests or `.focused-spec/`. Each adapter must contain its own compiled ESM and declarations, package metadata and any runtime helper assets it owns, without repository tests or another package's source. Root `src`/`dist` are obsolete; core output is `packages/core/dist`. Build stages the root-owned assets into core so they are authored only once.
 
-Commit the version and push the exact source revision before publishing:
+Every official runner tarball must also include its public `README.md`, generated by asset staging from `docs/guides/runners.md`. Its selectors, supported frameworks and command options must remain usable without inspecting compiled plugin JavaScript. The packed-consumer distribution evidence reads those installed examples and executes Vitest, pytest and Go, including a real product assertion regression.
+
+For install-level certification, create tarballs separately and install core alone in a clean consumer first: it must expose the CLI and APIs but have no Markdown/Gherkin parser or test-framework fallback. In another clean consumer, install the required core, format and runner tarballs together, configure their package names explicitly, and validate/run real evidence. Do not rely on workspace symlinks for this check.
+
+## Publish in dependency order
+
+Commit and push the exact versioned source revision before publishing:
 
 ```sh
-git add package.json package-lock.json
+git add package.json package-lock.json packages/*/package.json
 git commit -m "Release focused-spec X.Y.Z"
 git push origin main
-npm publish
-npm view focused-spec@X.Y.Z version
 ```
 
-If publishing fails, do not claim a release or create a tag. Resolve the npm error and retry publishing the same committed version if it has not reached the registry. If that version exists, inspect what was published before proceeding; never overwrite a published version.
+Publish core first because every official adapter peers on it. Confirm the exact core version before publishing adapters, then publish each adapter as its own immutable registry operation:
 
-After the registry confirms the published version, tag **the release commit**, not a later commit, and push that tag explicitly:
+```sh
+npm publish --workspace focused-spec
+npm view focused-spec@X.Y.Z version
+
+npm publish --workspace @focused-spec/format-markdown
+npm publish --workspace @focused-spec/format-gherkin
+npm publish --workspace @focused-spec/runner-vitest
+npm publish --workspace @focused-spec/runner-pytest
+npm publish --workspace @focused-spec/runner-go
+
+npm view @focused-spec/format-markdown@X.Y.Z version
+npm view @focused-spec/format-gherkin@X.Y.Z version
+npm view @focused-spec/runner-vitest@X.Y.Z version
+npm view @focused-spec/runner-pytest@X.Y.Z version
+npm view @focused-spec/runner-go@X.Y.Z version
+```
+
+If one publication fails, do not claim a suite release or create the tag. Already published versions cannot be rolled back or overwritten; diagnose the failure, publish only the still-missing packages from the same committed revision, and recheck the complete version set. Never bump or move successful packages merely to hide a partial publication.
+
+After all six registry checks succeed, tag the release commit and push that tag explicitly:
 
 ```sh
 git tag vX.Y.Z
@@ -57,4 +95,5 @@ git push origin vX.Y.Z
 git ls-remote --tags origin refs/tags/vX.Y.Z
 ```
 
-Confirm the remote tag resolves to the release commit and `npm view focused-spec version` reports the intended `latest` version. If the npm publication succeeds but the tag push fails, retry pushing the same tag; do not bump the package again just to repair the tag. Existing tags must never be silently moved. A GitHub Release can be created separately from the tag if release notes or downloadable assets are needed; it is not required for npm installation.
+Confirm the remote tag resolves to the release commit and every package reports `X.Y.Z`. If tag push fails, retry the same tag; do not bump the suite just to repair it. Existing tags must never be silently moved. A GitHub Release may be created separately when release notes or downloadable assets are wanted; it is not required for npm installation.
+

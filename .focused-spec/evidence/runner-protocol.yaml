@@ -33,3 +33,15 @@ scopes:
     runner.partition.uncovered-exclusive:
       evidence:
         - vitest::test/integration.spec.ts::project-local TypeScript runners > keeps targets with unknown resource compatibility exclusive
+    plugin.package.consumer-local:
+      evidence:
+        - vitest::test/plugins.spec.ts::plugin architecture > resolves an import-only consumer package subpath
+    runner.official.vitest:
+      evidence:
+        - vitest::test/official-runners.spec.ts::official framework runners > reports exact Vitest outcomes
+    runner.official.pytest:
+      evidence:
+        - vitest::test/official-runners.spec.ts::official framework runners > reports exact pytest outcomes
+    runner.official.go:
+      evidence:
+        - vitest::test/official-runners.spec.ts::official framework runners > reports exact Go outcomes

@@ -1,52 +1,32 @@
 {
-  "name": "focused-spec",
-  "version": "0.8.3",
-  "description": "Executable evidence for focused behavioral specifications",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/bamanoz/focused-spec.git"
-  },
+  "name": "focused-spec-workspace",
+  "private": true,
+  "version": "0.9.0",
   "type": "module",
-  "bin": {
-    "focused-spec": "dist/cli.js"
-  },
-  "exports": {
-    ".": "./dist/index.js",
-    "./runner": "./dist/runner-api.js"
-  },
-  "files": [
-    "dist",
-    "skills",
-    "guidance",
-    "README.md",
-    "LICENSE"
-  ],
+  "workspaces": ["packages/*"],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "npm run build --workspace focused-spec && npm run build --workspace @focused-spec/format-markdown --workspace @focused-spec/format-gherkin --workspace @focused-spec/runner-vitest --workspace @focused-spec/runner-pytest --workspace @focused-spec/runner-go && node scripts/stage-assets.mjs",
     "prepare": "npm run build",
-    "typecheck:tests": "tsc -p test/tsconfig.json && tsc -p examples/openspec/tsconfig.json && tsc -p evals/tsconfig.json",
+    "typecheck:tests": "tsc -p test/tsconfig.json && tsc -p evals/tsconfig.json",
     "test": "npm run build && npm run typecheck:tests && vitest run",
     "check": "npm test",
-    "smoke": "node dist/cli.js run --root examples/openspec",
+    "smoke": "node packages/core/dist/cli.js run --root examples/openspec",
     "preeval:agent": "npm run build",
     "eval:agent": "node --experimental-strip-types evals/run.ts"
   },
-  "engines": {
-    "node": ">=22.16.0"
-  },
-  "dependencies": {
-    "@cucumber/gherkin": "^42.0.1",
-    "@cucumber/messages": "^34.2.1",
-    "glob": "^13.0.6",
-    "mdast-util-from-markdown": "^2.1.0",
-    "minimatch": "^10.2.6",
-    "yaml": "^2.8.1"
-  },
+  "engines": {"node": ">=22.16.0"},
   "devDependencies": {
+    "@focused-spec/format-markdown": "0.9.0",
+    "@focused-spec/format-gherkin": "0.9.0",
+    "@focused-spec/runner-vitest": "0.9.0",
+    "@focused-spec/runner-pytest": "0.9.0",
+    "@focused-spec/runner-go": "0.9.0",
     "@types/node": "^24.10.1",
-    "focused-spec": "^0.8.3",
+    "focused-spec": "0.9.0",
+    "glob": "^13.0.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.8"
+    "vitest": "^4.0.8",
+    "yaml": "^2.8.1"
   },
   "license": "MIT"
 }

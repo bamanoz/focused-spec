@@ -1,13 +1,18 @@
-version: 3
+version: 4
 specifications:
+  formats:
+    markdown:
+      package: "@focused-spec/format-markdown"
   documents:
     - match: openspec/specs/**/spec.md
+      format: markdown
       scope: current
     - match: openspec/changes/{scope}/specs/**/spec.md
+      format: markdown
 evidence:
   files:
     - .focused-spec/evidence/**/*.{yaml,yml}
 runners:
   vitest:
-    module: ./.focused-spec/runners/vitest.ts
+    package: "@focused-spec/runner-vitest"
     timeoutMs: 120000

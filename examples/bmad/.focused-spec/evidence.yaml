@@ -5,4 +5,4 @@ scopes:
         path: _bmad-output/specs/spec-order-limit/SPEC.md
         nativeId: CAP-1
       evidence:
-        - pytest-functional::tests/test_order_limit.py::test_order_at_limit_rejects_another_item
+        - pytest::tests/test_order_limit.py::test_order_at_limit_rejects_another_item

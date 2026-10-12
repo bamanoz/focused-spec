@@ -7,11 +7,11 @@ Versioned runner configuration and specification source discovery.
 ## Requirements
 
 ### Requirement: Project configuration
-The CLI SHALL load a version-3 `.focused-spec/config.yaml` from the selected project root unless an explicit configuration path is supplied. It SHALL reject invalid document layout settings and runner definitions at the configuration boundary, including obsolete version-1 and version-2 formats.
+The CLI SHALL load a version-4 `.focused-spec/config.yaml` from the selected project root unless an explicit configuration path is supplied. It SHALL reject invalid document layout settings and runner definitions at the configuration boundary, including obsolete version-1, version-2 and version-3 formats.
 
 <!-- focused-spec:id=config.document.invalid -->
 #### Scenario: Missing or invalid configuration
-- **WHEN** a project has no readable version-3 configuration with document layouts and runners map
+- **WHEN** a project has no readable version-4 configuration with document layouts and runners map
 - **THEN** validation exits nonzero with an actionable configuration violation
 
 <!-- focused-spec:id=config.runner.timeout-bound -->
@@ -31,7 +31,7 @@ The CLI SHALL load a version-3 `.focused-spec/config.yaml` from the selected pro
 
 <!-- focused-spec:id=config.format.version-three -->
 #### Scenario: Obsolete configuration requires explicit migration
-- **WHEN** a project uses config version 2
+- **WHEN** a project uses config version 2 or 3
 - **THEN** the CLI rejects it with native-format migration guidance
 
 <!-- focused-spec:id=config.registry.required -->
@@ -40,7 +40,7 @@ The CLI SHALL load a version-3 `.focused-spec/config.yaml` from the selected pro
 - **THEN** validation fails rather than falling back to inline evidence
 
 ### Requirement: Specification sources
-The CLI SHALL discover focused scenarios from configured project-relative Markdown and Gherkin document patterns without requiring a named SDD framework.
+The CLI SHALL discover focused scenarios from configured project-relative document patterns with explicitly registered format adapters without requiring a named SDD framework.
 
 <!-- focused-spec:id=config.source.empty-files -->
 #### Scenario: File globs match no specifications
@@ -96,3 +96,16 @@ Document and exclusion patterns SHALL be limited to 4096 characters, 32 nested g
 #### Scenario: Bounded numeric and hidden-file discovery
 - **WHEN** bounded patterns combine padded and stepped ranges with hidden files and explicit exclusions
 - **THEN** validation discovers exactly the selected native items and preserves their scopes
+
+### Requirement: Explicit format selection
+Each document layout SHALL select one registered format by ID. Formats SHALL declare exactly one installed package or project-relative module. No filename extension, installation side effect, global package or downloaded fallback SHALL select a parser. Overlapping layouts SHALL remain errors.
+
+<!-- focused-spec:id=format.selection.explicit -->
+#### Scenario: Explicit adapters process different native formats
+- **WHEN** different document layouts select installed Markdown and Gherkin adapters
+- **THEN** each item is parsed by its declared adapter and binds its own evidence
+
+<!-- focused-spec:id=format.selection.missing -->
+#### Scenario: Missing or conflicting format configuration
+- **WHEN** a layout omits its format or selects an unknown ID, or a plugin declares both package and module
+- **THEN** configuration fails before loading plugins or executing evidence

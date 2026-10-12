@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { glob } from 'glob'
-import { loadConfig, loadEvidenceRegistry, parseNativeDocument } from '../dist/index.js'
-import type { NativeItem } from '../dist/index.js'
+import { loadConfig, loadEvidenceRegistry } from '../packages/core/dist/index.js'
+import type { NativeItem } from '../packages/core/dist/index.js'
 import { OmpAgentDriver } from './omp-agent.ts'
 import { runProcess } from './process.ts'
 import { guidanceActivationGate, skillActivationGate } from './judge.ts'
@@ -15,12 +15,13 @@ import type { DialogueResult } from './dialogue.ts'
 import { runPlanningDialogue } from './acp-agent.ts'
 import type { PlanningResult } from './acp-agent.ts'
 import { interviewFailedAgent } from './diagnostic.ts'
+import { parseTrustedNativeDocument } from './native-parse.ts'
 
 export const nativePilotRoot = fileURLToPath(new URL('..', import.meta.url))
 const root = nativePilotRoot
 export function selectedKind(reference: string): 'go' | 'python' | undefined {
-  if (/^[a-z0-9]+(?:[.-][a-z0-9]+)*::(?:\.\/auth|auth\/auth_test\.go)::TestBlockedAccount$/u.test(reference)) return 'go'
-  if (/^[a-z0-9]+(?:[.-][a-z0-9]+)*::tests\/functional\/test_auth\.py::test_blocked_account$/u.test(reference)) return 'python'
+  if (/^go::(?:\.\/auth|auth\/auth_test\.go)::TestBlockedAccount$/u.test(reference)) return 'go'
+  if (/^pytest::tests\/functional\/test_auth\.py::test_blocked_account$/u.test(reference)) return 'python'
   return undefined
 }
 function markers(source: string, name: NativeCase): { text: string; id: string }[] {
@@ -98,89 +99,54 @@ async function requireCommand(command: string, args: string[], cwd: string, time
   const result = await runProcess(command, args, { cwd, timeoutMs })
   if (result.code !== 0) throw new Error(`${command} ${args.join(' ')}: ${result.stderr || result.stdout}`)
 }
+async function packWorkspacePackage(cache: string, packageRoot: string): Promise<string> {
+  const packed = await runProcess('npm', ['pack', '--ignore-scripts', '--pack-destination', cache], { cwd: packageRoot, timeoutMs: 120_000 })
+  if (packed.code !== 0) throw new Error(`npm pack ${packageRoot}: ${packed.stderr || packed.stdout}`)
+  const archive = packed.stdout.trim().split(/\r?\n/u).at(-1)
+  if (archive === undefined || archive === '') throw new Error(`npm pack ${packageRoot} did not report an archive`)
+  return join(cache, archive)
+}
+
 async function installPackedFocusedSpec(workspace: string, includeGherkin: boolean): Promise<void> {
   const cache = await mkdtemp(join(tmpdir(), 'focused-native-package-'))
+  const packageNames = [
+    'core',
+    'format-markdown',
+    ...(includeGherkin ? ['format-gherkin'] : []),
+    'runner-go',
+    'runner-pytest',
+  ]
   try {
-    const packed = await runProcess('npm', ['pack', '--ignore-scripts', '--pack-destination', cache], { cwd: root, timeoutMs: 120_000 })
-    if (packed.code !== 0) throw new Error(`focused-spec pack: ${packed.stderr || packed.stdout}`)
-    const archive = packed.stdout.trim().split(/\r?\n/u).at(-1)
-    if (archive === undefined || archive === '') throw new Error('focused-spec pack did not report an archive')
-    const packages = [join(cache, archive), ...(includeGherkin ? ['@cucumber/gherkin', '@cucumber/messages'] : [])]
+    const packages = await Promise.all(packageNames.map(name => packWorkspacePackage(cache, join(root, 'packages', name))))
     await requireCommand('npm', ['install', '--ignore-scripts', '--no-save', ...packages], workspace, 180_000)
   } finally {
     await rm(cache, { recursive: true, force: true })
   }
 }
-
-async function provisionRunners(workspace: string): Promise<void> {
-  await put(workspace, '.focused-spec/runners/go-test.mjs', `import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
-const execute = promisify(execFile)
-export default {
-  apiVersion: 1,
-  async resolve({ selectors }) {
-    const targets = selectors.filter(selector => selector === './auth::TestBlockedAccount' || selector === 'auth/auth_test.go::TestBlockedAccount').map(selector => ({ selector, targetId: selector, displayName: selector }))
-    const errors = selectors.filter(selector => !targets.some(target => target.selector === selector)).map(selector => ({ selector, message: 'unknown Go selector' }))
-    return { targets, errors }
-  },
-  async run({ cwd, targets }) {
-    const results = []
-    for (const target of targets) {
-      try {
-        const output = await execute('go', ['test', './auth', '-run', '^TestBlockedAccount$', '-count=1', '-v'], { cwd })
-        results.push({ targetId: target.targetId, status: output.stdout.includes('--- PASS: TestBlockedAccount') ? 'pass' : 'fail', diagnostic: output.stdout + output.stderr })
-      } catch (error) {
-        results.push({ targetId: target.targetId, status: 'fail', diagnostic: String(error) })
-      }
-    }
-    return { results }
-  },
-}
-`)
-  await put(workspace, '.focused-spec/runners/pytest.mjs', `import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
-const execute = promisify(execFile)
-const selector = 'tests/functional/test_auth.py::test_blocked_account'
-export default {
-  apiVersion: 1,
-  async resolve({ selectors }) {
-    const targets = selectors.filter(value => value === selector).map(value => ({ selector: value, targetId: value, displayName: value }))
-    const errors = selectors.filter(value => value !== selector).map(value => ({ selector: value, message: 'unknown pytest selector' }))
-    return { targets, errors }
-  },
-  async run({ cwd, targets }) {
-    const results = []
-    for (const target of targets) {
-      try {
-        const output = await execute('uv', ['run', '--with', 'pytest', 'python', '-m', 'pytest', '-q', selector], { cwd })
-        results.push({ targetId: target.targetId, status: output.stdout.includes('1 passed') ? 'pass' : 'fail', diagnostic: output.stdout + output.stderr })
-      } catch (error) {
-        results.push({ targetId: target.targetId, status: 'fail', diagnostic: String(error) })
-      }
-    }
-    return { results }
-  },
-}
-`)
-}
 export async function prepareNativeWorkspace(workspace: string, name: NativeCase, create: boolean): Promise<void> {
   await cp(join(root, 'evals/fixtures/polyglot'), workspace, { recursive: true })
   await installPackedFocusedSpec(workspace, name === 'gherkin')
-  await provisionRunners(workspace)
   await put(workspace, '.focused-spec/config.yaml', [
-    'version: 3',
+    'version: 4',
     'specifications:',
+    '  formats:',
+    `    ${name === 'gherkin' ? 'gherkin' : 'markdown'}:`,
+    `      package: '@focused-spec/format-${name === 'gherkin' ? 'gherkin' : 'markdown'}'`,
     '  documents:',
     name === 'openspec' ? '    - match: openspec/changes/{scope}/specs/**/*.md'
       : `    - match: ${cases[name].path}`,
+    `      format: ${name === 'gherkin' ? 'gherkin' : 'markdown'}`,
     ...(name === 'openspec' ? ['      exclude: [openspec/changes/archive/**]'] : ['      scope: current']),
     'runners:',
-    '  go-test:',
-    '    module: ./.focused-spec/runners/go-test.mjs',
+    '  go:',
+    "    package: '@focused-spec/runner-go'",
     '    timeoutMs: 120000',
     '  pytest:',
-    '    module: ./.focused-spec/runners/pytest.mjs',
+    "    package: '@focused-spec/runner-pytest'",
     '    timeoutMs: 120000',
+    '    options:',
+    '      command: uv',
+    '      commandArgs: [run, --with, pytest, python]',
     '',
   ].join('\n'))
   if (name === 'spec-kit') {
@@ -307,7 +273,7 @@ function atomicBlockedOutcome(source: string): boolean {
     && !/\b(active|unblocked|accepted)\b/iu.test(success)
 }
 export function nativeSingleSourceGate(name: NativeCase, source: string): Gate {
-  const parsed = parseNativeDocument(cases[name].path, source, 'pilot')
+  const parsed = parseTrustedNativeDocument(name === 'gherkin' ? 'gherkin' : 'markdown', cases[name].path, source, 'pilot')
   if (name === 'bmad') {
     const preserved = atomicBlockedOutcome(source)
     const nativeClaims = parsed.items.filter(item => item.nativeIds.includes('CAP-1'))
@@ -348,7 +314,7 @@ function boundNativeText(name: NativeCase, source: string, item: NativeItem): st
 }
 
 export function creationGate(name: NativeCase, source: string): Gate {
-  const parsed = parseNativeDocument(cases[name].path, source, 'pilot')
+  const parsed = parseTrustedNativeDocument(name === 'gherkin' ? 'gherkin' : 'markdown', cases[name].path, source, 'pilot')
   const found = markers(source, name)
   const forms: Record<NativeCase, boolean> = {
     openspec: /^## ADDED Requirements$/mu.test(source) && /^### Requirement:/mu.test(source)
@@ -428,7 +394,7 @@ export async function authoringSnapshot(workspace: string, name: NativeCase): Pr
   return files
 }
 export async function infrastructureSnapshot(workspace: string): Promise<Map<string, string>> {
-  const paths = await glob(['.focused-spec/runners/**', 'node_modules/focused-spec/**', '.omp/skills/**', '.omp/extensions/**', '.agents/**', '.pi/gsd-core/**'], { cwd: workspace, nodir: true, dot: true, follow: true, nocase: false })
+  const paths = await glob(['node_modules/focused-spec/**', 'node_modules/@focused-spec/**', '.omp/skills/**', '.omp/extensions/**', '.agents/**', '.pi/gsd-core/**'], { cwd: workspace, nodir: true, dot: true, follow: true, nocase: false })
   const files = new Map<string, string>()
   for (const path of paths) files.set(path, await readFile(join(workspace, path), 'utf8'))
   return files
@@ -439,7 +405,7 @@ export async function infrastructureIntegrityGate(workspace: string, before: Rea
   const paths = new Set([...before.keys(), ...after.keys()])
   const changed = [...paths].filter(path => before.get(path) !== after.get(path))
   return gate('pilot-infrastructure-integrity', changed.length === 0,
-    changed.length === 0 ? 'packed CLI, project runners, installed host skills, and generated .agents copies unchanged' : `modified protected pilot infrastructure: ${changed.join(', ')}`)
+    changed.length === 0 ? 'packed CLI, installed format/runner packages, host skills, and generated .agents copies unchanged' : `modified protected pilot infrastructure: ${changed.join(', ')}`)
 }
 
 export async function hostWriteConstraintGate(workspace: string, name: NativeCase, before: ReadonlyMap<string, string>): Promise<Gate> {
@@ -541,7 +507,7 @@ export async function companionGate(workspace: string, name: NativeCase): Promis
   let occurrences = 0
   for (const path of paths) {
     const content = await readFile(join(workspace, path), 'utf8')
-    const document = parseNativeDocument(path, content, 'current')
+    const document = parseTrustedNativeDocument(path.endsWith('.feature') ? 'gherkin' : 'markdown', path, content, 'current')
     let count = 0
     for (const item of document.items) {
       if (name === 'bmad' ? item.nativeIds.includes('CAP-1') : item.markerId !== undefined) count += 1
@@ -637,7 +603,7 @@ export async function evidenceGate(workspace: string, name: NativeCase, sourceTe
       throw new Error(`expected one${expectedScope === undefined ? '' : ` ${expectedScope}`} registry entry; found ${candidates.length}`)
     }
     const entry = candidates[0]!
-    const parsed = parseNativeDocument(cases[name].path, sourceText, entry.scope)
+    const parsed = parseTrustedNativeDocument(name === 'gherkin' ? 'gherkin' : 'markdown', cases[name].path, sourceText, entry.scope)
     if (/^\s*- \*\*(?:ID|EVIDENCE)\*\*:/mu.test(sourceText)) throw new Error('native source contains legacy ID or EVIDENCE rows')
     if (parsed.violations.length > 0) throw new Error(parsed.violations.map(item => item.message).join('; '))
     if (name === 'bmad') {

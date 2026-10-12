@@ -2,4 +2,4 @@ scopes:
   001-blocked-account:
     auth.login.blocked-account:
       evidence:
-        - pytest-functional::tests/test_auth.py::test_blocked_account
+        - pytest::tests/test_auth.py::test_blocked_account

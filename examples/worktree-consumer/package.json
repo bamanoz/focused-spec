@@ -6,6 +6,8 @@
     "evidence": "focused-spec run --scope current"
   },
   "devDependencies": {
-    "focused-spec": "0.6.0"
+    "focused-spec": "file:../../packages/core",
+    "@focused-spec/format-markdown": "file:../../packages/format-markdown",
+    "@focused-spec/runner-go": "file:../../packages/runner-go"
   }
 }

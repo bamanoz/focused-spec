@@ -1,7 +1,7 @@
 ## 1. Focused evidence
 
-- [ ] 1.1 Install focused-spec configuration, evidence registry, and project-local runners for the existing Go and Python tests
-- [ ] 1.2 Bind the marked native item to exact evidence and execute the selected delta scenario
+- [ ] 1.1 Install version-4 focused-spec configuration, an explicit Markdown format, an evidence registry, and official Go/pytest runner registrations
+- [ ] 1.2 Bind the marked native item to exact `go` and `pytest` evidence and execute the selected delta scenario
 
 ## 2. OpenSpec sync
 

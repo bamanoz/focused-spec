@@ -2,10 +2,29 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseEvidenceReference, parseNativeDocument } from '../src/parser.js'
-import { loadEvidenceRegistry, parseEvidenceRegistry } from '../src/registry.js'
+import gherkinFormat from '../packages/format-gherkin/src/index.js'
+import markdownFormat from '../packages/format-markdown/src/index.js'
+import type { NativeDocument } from '../packages/core/src/model.js'
+import { parseEvidenceReference } from '../packages/core/src/parser.js'
+import { loadEvidenceRegistry, parseEvidenceRegistry } from '../packages/core/src/registry.js'
 
 const roots: string[] = []
+
+function parseNativeDocument(path: string, source: string, scope: string): NativeDocument {
+  const format = path.endsWith('.feature') ? gherkinFormat : markdownFormat
+  const parsed = format.parse({ path, source, options: null, signal: new AbortController().signal })
+  return {
+    path,
+    scope,
+    items: parsed.items.map(item => ({ path, scope, ...item })),
+    violations: parsed.diagnostics.map(diagnostic => ({
+      path,
+      ...(diagnostic.line === undefined ? {} : { line: diagnostic.line }),
+      ...(diagnostic.focusedId === undefined ? {} : { scenarioId: diagnostic.focusedId }),
+      message: diagnostic.message,
+    })),
+  }
+}
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))

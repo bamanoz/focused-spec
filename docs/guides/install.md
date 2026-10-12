@@ -2,25 +2,38 @@
 
 ## CLI
 
-In a consuming Node.js 22.16.0+ project, install the CLI as a development dependency:
+In a consuming Node.js 22.16.0+ project, install the format-neutral CLI as a development dependency, then install only the adapters the project selects:
 
 ```sh
 npm install --save-dev focused-spec
+npm install --save-dev @focused-spec/format-markdown @focused-spec/format-gherkin
+npm install --save-dev @focused-spec/runner-vitest @focused-spec/runner-pytest @focused-spec/runner-go
 ```
 
-The executable is `node_modules/.bin/focused-spec`; use it from npm scripts or run `./node_modules/.bin/focused-spec validate` in the project root after [configuring native documents and evidence](configuration.md). The runner types are available from `focused-spec/runner`. Package installation does not install an agent skill or create a runner for the project's test framework.
+These are independent installations: core alone has no Markdown/Gherkin parser and no test-framework runner. Omit packages the project does not configure. Test frameworks remain consumer-owned prerequisites: install Vitest in the consuming Node project, provide pytest in the selected Python command environment, and provide the Go toolchain for the Go runner. Adapter installation never selects a format implicitly; [version-4 configuration](configuration.md) must register each package and name a format on every document layout.
 
-For development against a local source checkout, install it from the consuming project:
+The executable is `node_modules/.bin/focused-spec`; use it from npm scripts or run `./node_modules/.bin/focused-spec validate` in the project root after configuring native documents and evidence. Public types are exported from `focused-spec/format` and `focused-spec/runner`. Package installation does not install an agent skill, configure formats, or create evidence integration.
+
+For development against a source checkout, bootstrap and build the private workspace first, then install the desired workspace package directories from the consuming project:
 
 ```sh
-npm install --save-dev /path/to/focused-spec
+# /path/to/focused-spec
+npm ci
+npm run build
+
+# consuming project
+npm install --save-dev /path/to/focused-spec/packages/core \
+  /path/to/focused-spec/packages/format-markdown \
+  /path/to/focused-spec/packages/runner-vitest
 ```
 
-Installing from a Git checkout or packing for npm builds `dist/` automatically via the package's `prepare` script; the published tarball includes the built CLI and type declarations.
+The workspace root is not a published package. Core source and output live at `packages/core/src` and `packages/core/dist`; root `src`/`dist` paths are obsolete. Packing a package runs its build/asset preparation. The core tarball contains its compiled CLI/types plus staged root `README.md`, `LICENSE`, `skills/`, and `guidance/`; each adapter is packed and published separately.
 
-Node.js 22.16 and 22.17 need the experimental type-stripping flag to load project-local `.ts`/`.mts` runners; the CLI supplies that flag to its isolated runner process automatically. Write runner plugins using erasable TypeScript syntax and `import type`; JavaScript plugins need no flag.
+Official runner tarballs also include a public `README.md`, generated from the [runner guide](runners.md). It documents selector syntax, framework support and command options without requiring plugin implementation inspection.
 
-Repository verification additionally uses Python 3.11+ (`tomllib`) to parse installed native TOML wrappers, and Python's standard-library PTY for POSIX terminal checks. These are development-check prerequisites, not CLI/installer runtime dependencies; Windows terminal interaction remains uncertified.
+Node.js 22.16 and 22.17 need the experimental type-stripping flag to load project-relative `.ts`/`.mts` plugins; the CLI supplies that flag to isolated plugin processes automatically. Keep TypeScript plugins erasable and use `import type`; JavaScript plugins need no flag.
+
+Repository verification additionally uses Python 3.11+ (`tomllib`) to parse installed native TOML wrappers and Python's standard-library PTY for POSIX terminal checks. These are development-check prerequisites, not CLI/installer runtime dependencies; Windows terminal interaction remains uncertified.
 
 ## Agent skill
 
@@ -49,7 +62,7 @@ Amp, Antigravity, Codex, GSD, Zed and `agents` share one `.agents/skills` loader
 
 Repeat initialization leaves identical files untouched. A divergent selected file in either project or home blocks all planned writes in both unless `--replace` explicitly authorizes replacing selected regular integration files. Neighbors/unselected targets are preserved. Unsafe roots, symlinked components, non-directory ancestors and non-regular destinations remain errors with replacement. `--dry-run` performs the same checks without writes; conflicts still fail. Later I/O errors can leave partial writes, reported honestly without promised rollback. See the [JSON and safety contract](../reference/cli.md#agent-initialization).
 
-Success means installation only: init does not create native specifications, configuration, evidence registry, runners, dependencies, global settings, or `AGENTS.md`. It neither certifies agent activation nor executes evidence. npm installation remains side-effect-free; use init explicitly. The wrappers only request skill loading, not a second workflow. Host routing may choose the same-name skill directly, and host tool permissions still govern guidance commands.
+Success means installation only: init does not create native specifications, configuration, evidence registries, format/runner registrations, adapter dependencies, global settings, or `AGENTS.md`. It neither certifies agent activation nor executes evidence. npm installation remains side-effect-free; use init explicitly. The wrappers only request skill loading, not a second workflow. Host routing may choose the same-name skill directly, and host tool permissions still govern guidance commands.
 
 Use `/focused-spec <task>` on native command hosts, `@focused-spec` in Amazon Q, `$focused-spec` in Codex, `/skill:focused-spec` in Kimi, or Continue’s prompt selector. Skills-only hosts use native skill invocation or a natural-language request. Hermes requires the project’s `.hermes/skills` in `skills.external_dirs`; init provides the hint, not a config edit. Copilot prompt files are IDE integrations, not CLI/cloud setup. Devin Desktop uses the workflow; Devin Local uses the skill.
 
@@ -68,6 +81,8 @@ The skills installer detects supported agents and lets you choose a target; pass
 Install for the **agent that authors the behavioral specifications**, not just whichever agents the installer detects. For example, add `--agent claude-code` when that is the working agent; install in the consuming project or use `--global` if it should apply across projects. In that project's directory, `npx --yes skills list --agent claude-code` should show `focused-spec`. Listing a skill in the GitHub source with `--list` checks its metadata, not whether it is installed for your agent.
 
 The installed `SKILL.md` is a thin loader, not a frozen copy of the workflow. Before each specification-workflow step it obtains current instructions from the consuming project's installed CLI using `instructions --protocol 1 --topic workflow --json`. Runner work requests `--topic runners` from that same installation. Both topics ship with the CLI package and work offline without project configuration; the agent needs no source-checkout access. See the [guidance response contract](../reference/cli.md#package-owned-agent-guidance).
+
+Each guidance acquisition is a separate tool command, never combined with installation, initialization or another request. After an integration refresh, reacquire the complete workflow by itself from the replacement local CLI.
 
 Installing the loader only makes it discoverable; the host agent must select and load it alongside its specification workflow skill. If a project must enforce this regardless of routing, put an explicit instruction in that project's agent instructions: “For any workflow that creates, changes, or publishes behavioral specifications, load the focused-spec skill alongside the host workflow skill; execute focused-spec evidence before completion.” An unread skill cannot enforce its own loading. The authoritative workflow keeps host proposal phases planning-only: intended evidence belongs in planning artifacts, while executable registry/configuration/runner integration waits for authorized implementation. Completion requires real selected evidence execution, not guidance delivery.
 

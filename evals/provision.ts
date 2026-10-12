@@ -18,18 +18,35 @@ function runNpm(args: readonly string[], cwd: string, timeoutMs: number) {
     : runProcess(process.execPath, [npmExecPath, ...args], { cwd, timeoutMs })
 }
 
-async function packDependencies(includeOpenSpec: boolean, cache: string): Promise<{ focused: string; openspec?: string }> {
-  const focusedPack = await runNpm(['pack', '--ignore-scripts', '--pack-destination', cache], repositoryRoot, 120_000)
-  if (focusedPack.code !== 0) throw new Error(`focused-spec pack failed: ${focusedPack.stderr || focusedPack.stdout}`)
-  const focusedName = focusedPack.stdout.trim().split(/\r?\n/u).at(-1)
-  if (focusedName === undefined || focusedName === '') throw new Error('focused-spec pack did not report a tarball')
-  if (!includeOpenSpec) return { focused: join(cache, focusedName) }
+interface PackedDependencies {
+  readonly focused: string
+  readonly markdown: string
+  readonly go: string
+  readonly pytest: string
+  readonly openspec?: string
+}
 
+async function packLocalPackage(packageRoot: string, cache: string): Promise<string> {
+  const packed = await runNpm(['pack', '--ignore-scripts', '--pack-destination', cache], packageRoot, 120_000)
+  if (packed.code !== 0) throw new Error(`npm pack failed for ${packageRoot}: ${packed.stderr || packed.stdout}`)
+  const name = packed.stdout.trim().split(/\r?\n/u).at(-1)
+  if (name === undefined || name === '') throw new Error(`npm pack did not report a tarball for ${packageRoot}`)
+  return join(cache, name)
+}
+
+async function packDependencies(includeOpenSpec: boolean, cache: string): Promise<PackedDependencies> {
+  const [focused, markdown, go, pytest] = await Promise.all([
+    packLocalPackage(join(repositoryRoot, 'packages/core'), cache),
+    packLocalPackage(join(repositoryRoot, 'packages/format-markdown'), cache),
+    packLocalPackage(join(repositoryRoot, 'packages/runner-go'), cache),
+    packLocalPackage(join(repositoryRoot, 'packages/runner-pytest'), cache),
+  ])
+  if (!includeOpenSpec) return { focused, markdown, go, pytest }
   const openspecPack = await runNpm(['pack', `@fission-ai/openspec@${OPEN_SPEC_VERSION}`, '--ignore-scripts', '--prefer-offline', '--pack-destination', cache], repositoryRoot, 120_000)
   if (openspecPack.code !== 0) throw new Error(`OpenSpec pack failed: ${openspecPack.stderr || openspecPack.stdout}`)
   const openspecName = openspecPack.stdout.trim().split(/\r?\n/u).at(-1)
   if (openspecName === undefined || openspecName === '') throw new Error('OpenSpec pack did not report a tarball')
-  return { focused: join(cache, focusedName), openspec: join(cache, openspecName) }
+  return { focused, markdown, go, pytest, openspec: join(cache, openspecName) }
 }
 
 async function installSkills(workspace: string, skills: readonly string[], openspecSkillsDir: string): Promise<void> {
@@ -49,6 +66,9 @@ async function installPackages(workspace: string, includeOpenSpec: boolean, cach
   const manifest = JSON.parse(await readFile(packagePath, 'utf8')) as Record<string, unknown>
   manifest.devDependencies = {
     'focused-spec': `file:${packages.focused}`,
+    '@focused-spec/format-markdown': `file:${packages.markdown}`,
+    '@focused-spec/runner-go': `file:${packages.go}`,
+    '@focused-spec/runner-pytest': `file:${packages.pytest}`,
     ...(includeOpenSpec ? { '@fission-ai/openspec': `file:${packages.openspec!}` } : {}),
   }
   await writeFile(packagePath, `${JSON.stringify(manifest, null, 2)}\n`)
@@ -61,7 +81,8 @@ async function prepareUpgrade(workspace: string, cache: string): Promise<{ basel
   const reference = join(cache, 'reference')
   await mkdir(reference)
   await writeFile(join(reference, 'package.json'), '{"private":true}')
-  const candidate = await runNpm(['install', '--ignore-scripts', '--no-audit', '--no-fund', '--prefix', reference, packages.focused], repositoryRoot, 180_000)
+  const archives = [packages.focused, packages.markdown, packages.go, packages.pytest]
+  const candidate = await runNpm(['install', '--ignore-scripts', '--no-audit', '--no-fund', '--prefix', reference, ...archives], repositoryRoot, 180_000)
   if (candidate.code !== 0) throw new Error(`candidate reference install failed: ${candidate.stderr || candidate.stdout}`)
   const legacy = await runNpm(['install', '--save-dev', '--ignore-scripts', '--no-audit', '--no-fund', `focused-spec@${LEGACY_VERSION}`, 'yaml@2.8.1'], workspace, 180_000)
   if (legacy.code !== 0) throw new Error(`legacy install failed: ${legacy.stderr || legacy.stdout}`)
@@ -76,9 +97,19 @@ async function prepareUpgrade(workspace: string, cache: string): Promise<{ basel
   }
   const candidateRoot = join(reference, 'node_modules/focused-spec')
   const baseline = await captureUpgradeBaseline(workspace, candidateRoot)
-  const metadata = JSON.parse(await readFile(join(candidateRoot, 'package.json'), 'utf8')) as Record<string, unknown>
+  const workspacePackages = [
+    ['focused-spec', 'core', packages.focused],
+    ['@focused-spec/format-markdown', 'format-markdown', packages.markdown],
+    ['@focused-spec/runner-go', 'runner-go', packages.go],
+    ['@focused-spec/runner-pytest', 'runner-pytest', packages.pytest],
+  ] as const
+  const candidates = await Promise.all(workspacePackages.map(async ([name, directory, tarball]) => ({
+    name,
+    tarball,
+    metadata: JSON.parse(await readFile(join(repositoryRoot, 'packages', directory, 'package.json'), 'utf8')) as Record<string, unknown>,
+  })))
   await rm(reference, { recursive: true, force: true })
-  const registry = await serveUpgradeCandidate(packages.focused, metadata)
+  const registry = await serveUpgradeCandidate(candidates)
   try { await writeFile(join(workspace, '.npmrc'), `registry=${registry.url}/\n`) }
   catch (error) { await registry.close(); throw error }
   return { baseline, close: registry.close }

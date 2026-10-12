@@ -57,7 +57,7 @@ export const EVAL_CASES: readonly EvalCase[] = [
     prescribedScenarioId: 'auth.login.blocked-account',
     expectedEvidenceCount: 1,
     expectedSelectorFragments: ['tests/functional/test_auth.py::test_blocked_account'],
-    expectedSelectorAlternatives: ['pytest-functional::tests/functional/test_auth.py::test_blocked_account'],
+    expectedSelectorAlternatives: ['pytest::tests/functional/test_auth.py::test_blocked_account'],
   },
   {
     id: 'openspec-apply',

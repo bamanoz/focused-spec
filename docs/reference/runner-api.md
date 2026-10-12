@@ -1,4 +1,68 @@
-# Runner API reference
+# Plugin API reference
+
+## Format API
+
+Import public types from `focused-spec/format`:
+
+```ts
+export interface ParsedItem {
+  readonly line: number
+  readonly name: string
+  readonly nativeIds: readonly string[]
+  readonly markerId?: string
+}
+
+export interface FormatDiagnostic {
+  readonly line?: number
+  readonly message: string
+  readonly focusedId?: string
+}
+
+export interface ParseResult {
+  readonly items: readonly ParsedItem[]
+  readonly diagnostics: readonly FormatDiagnostic[]
+}
+
+export interface ParseRequest {
+  readonly path: string
+  readonly source: string
+  readonly options: JsonValue
+  readonly signal: AbortSignal
+}
+
+export interface FormatPlugin {
+  readonly apiVersion: 1
+  parse(request: ParseRequest): ParseResult | Promise<ParseResult>
+}
+```
+
+The default export is an object with `apiVersion: 1`. Official adapters use `satisfies FormatPlugin` while retaining a concrete synchronous `parse` return type, so trusted tooling may call them directly without widening the result to a promise; third-party adapters may return synchronously or asynchronously. The adapter reports positive source lines, structural names, zero or more explicit native IDs, an optional direct focused marker ID, and structured diagnostics. Results contain no document path or scope; core owns discovery, scope and evidence binding.
+
+Core validates every normalized result before binding evidence. Invalid lines, names, IDs, result shapes, crashes, timeouts, or generic host failures are violations and never cause extension inference or fallback to another adapter. Format code runs as trusted project code in a bounded child host, not a security sandbox.
+
+The public core function and configuration types are exported from `focused-spec` and are asynchronous at the core boundary:
+
+```ts
+export type FormatConfig = (
+  | { readonly package: string; readonly module?: never }
+  | { readonly module: string; readonly package?: never }
+) & {
+  readonly options?: JsonValue
+  readonly timeoutMs?: number
+}
+
+parseNativeDocument(
+  projectRoot: string,
+  path: string,
+  source: string,
+  scope: string,
+  formatConfig: FormatConfig,
+): Promise<NativeDocument>
+```
+
+Package/subpath resolution uses the consuming project's ESM import conditions; project modules remain inside the selected root. The core has no built-in Markdown/Gherkin parser and does not infer a format from `path`.
+
+## Runner API
 
 Import public types from `focused-spec/runner`.
 

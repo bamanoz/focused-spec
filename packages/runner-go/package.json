@@ -1,0 +1,13 @@
+{
+  "name": "@focused-spec/runner-go",
+  "version": "0.9.0",
+  "description": "Exact Go test evidence runner for focused-spec",
+  "repository": {"type": "git", "url": "git+https://github.com/bamanoz/focused-spec.git", "directory": "packages/runner-go"},
+  "type": "module",
+  "exports": {".": {"types": "./dist/index.d.ts", "import": "./dist/index.js"}},
+  "files": ["dist", "README.md"],
+  "scripts": {"build": "tsc -p tsconfig.json"},
+  "engines": {"node": ">=22.16.0"},
+  "peerDependencies": {"focused-spec": "^0.9.0"},
+  "license": "MIT"
+}

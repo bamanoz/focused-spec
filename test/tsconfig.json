@@ -5,5 +5,5 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["../src/**/*.ts", "../.focused-spec/**/*.ts", "./**/*.ts"]
+  "include": ["../packages/**/*.ts", "./**/*.ts"]
 }

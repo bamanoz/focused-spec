@@ -2,5 +2,5 @@ scopes:
   current:
     auth.login.blocked-account:
       evidence:
-        - go-unit::./go/auth::TestBlockedAccount
-        - pytest-functional::tests/functional/test_auth.py::test_blocked_account
+        - go::./go/auth::TestBlockedAccount
+        - pytest::tests/functional/test_auth.py::test_blocked_account

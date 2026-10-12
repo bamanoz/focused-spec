@@ -4,16 +4,23 @@ import { lstat, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { glob } from 'glob'
 import { parse } from 'yaml'
-import { discoverDocuments, loadConfig } from '../dist/index.js'
+import { discoverDocuments, loadConfig } from '../packages/core/dist/index.js'
 import { runProcess } from './process.ts'
 import type { EvalGate } from './types.ts'
 
 export const LEGACY_VERSION = '0.5.0'
 const PACKAGE = 'node_modules/focused-spec/'
+const ADAPTER_PACKAGE_ROOT = 'node_modules/@focused-spec/'
+const CANDIDATE_PACKAGES = [
+  ['node_modules/focused-spec/', 'focused-spec'],
+  [`${ADAPTER_PACKAGE_ROOT}format-markdown/`, '@focused-spec/format-markdown'],
+  [`${ADAPTER_PACKAGE_ROOT}runner-go/`, '@focused-spec/runner-go'],
+  [`${ADAPTER_PACKAGE_ROOT}runner-pytest/`, '@focused-spec/runner-pytest'],
+] as const
 const INTEGRATION = '.omp/skills/focused-spec/'
 const COMMAND = '.omp/commands/focused-spec.md'
-const BLOCKED = ['go-unit::./auth::TestBlockedAccount', 'pytest-functional::tests/functional/test_auth.py::test_blocked_account']
-const ACTIVE = ['go-unit::./auth::TestValidActiveAccount', 'pytest-functional::tests/functional/test_auth.py::test_valid_active_account']
+const BLOCKED = ['go::./auth::TestBlockedAccount', 'pytest::tests/functional/test_auth.py::test_blocked_account']
+const ACTIVE = ['go::./auth::TestValidActiveAccount', 'pytest::tests/functional/test_auth.py::test_valid_active_account']
 const OCCURRENCES = [
   { scope: 'current', id: 'auth.login.blocked-account', path: 'specs/account-authentication.md', name: 'Scenario: Blocked account submits valid credentials', evidence: BLOCKED },
   { scope: 'current', id: 'auth.login.active-account', path: 'specs/account-authentication.md', name: 'Scenario: Active account submits valid credentials', evidence: ACTIVE },
@@ -31,13 +38,17 @@ const hash = (source: Buffer | string): string => createHash('sha256').update(so
 const gate = (name: string, passed: boolean, detail: string): EvalGate => ({ name, passed, detail })
 
 export function isUpgradeArtifact(path: string): boolean {
-  return path.startsWith(PACKAGE) || path.startsWith(INTEGRATION) || path === COMMAND
+  return path.startsWith(PACKAGE) || path.startsWith(ADAPTER_PACKAGE_ROOT) || path.startsWith(INTEGRATION) || path === COMMAND
 }
 
 export async function captureUpgradeBaseline(workspace: string, candidateRoot: string): Promise<UpgradeBaseline> {
   const artifacts = new Map<string, string>()
-  for (const path of await glob('**/*', { cwd: candidateRoot, nodir: true, dot: true, follow: true, nocase: false })) {
-    artifacts.set(PACKAGE + path, hash(await readFile(join(candidateRoot, path))))
+  const nodeModules = join(candidateRoot, '..')
+  for (const [prefix, packageName] of CANDIDATE_PACKAGES) {
+    const packageRoot = packageName === 'focused-spec' ? candidateRoot : join(nodeModules, ...packageName.split('/'))
+    for (const path of await glob('**/*', { cwd: packageRoot, nodir: true, dot: true, follow: true, nocase: false })) {
+      artifacts.set(prefix + path, hash(await readFile(join(packageRoot, path))))
+    }
   }
   artifacts.set(INTEGRATION + 'SKILL.md', hash(await readFile(join(candidateRoot, 'skills/focused-spec/SKILL.md'))))
   artifacts.set(COMMAND, hash(await readFile(join(candidateRoot, 'skills/commands/oh-my-pi/focused-spec.md'))))
@@ -51,21 +62,32 @@ export async function captureUpgradeBaseline(workspace: string, candidateRoot: s
   }
 }
 
-export async function serveUpgradeCandidate(tarball: string, metadata: Record<string, unknown>): Promise<{ url: string; close(): Promise<void> }> {
-  const bytes = await readFile(tarball)
-  const integrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`
+export interface UpgradeCandidatePackage {
+  readonly name: string
+  readonly tarball: string
+  readonly metadata: Record<string, unknown>
+}
+
+export async function serveUpgradeCandidate(candidates: readonly UpgradeCandidatePackage[]): Promise<{ url: string; close(): Promise<void> }> {
+  const packages = await Promise.all(candidates.map(async (candidate, index) => {
+    const bytes = await readFile(candidate.tarball)
+    return { ...candidate, bytes, index, integrity: `sha512-${createHash('sha512').update(bytes).digest('base64')}` }
+  }))
   let url = ''
   const server = createServer((request, response) => {
+    const pathname = decodeURIComponent(request.url?.split('?')[0] ?? '/')
+    const metadata = packages.find(candidate => pathname === `/${candidate.name}`)
+    const archive = packages.find(candidate => pathname === `/candidate/${candidate.index}.tgz`)
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       response.writeHead(404).end()
-    } else if (request.url?.split('?')[0] === '/focused-spec') {
-      const version = String(metadata.version)
+    } else if (metadata !== undefined) {
+      const version = String(metadata.metadata.version)
       response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify({
-        name: 'focused-spec', 'dist-tags': { latest: version },
-        versions: { [version]: { ...metadata, dist: { integrity, tarball: `${url}/focused-spec/-/candidate.tgz` } } },
+        name: metadata.name, 'dist-tags': { latest: version },
+        versions: { [version]: { ...metadata.metadata, dist: { integrity: metadata.integrity, tarball: `${url}/candidate/${metadata.index}.tgz` } } },
       }))
-    } else if (request.url === '/focused-spec/-/candidate.tgz') {
-      response.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': bytes.length }).end(bytes)
+    } else if (archive !== undefined) {
+      response.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': archive.bytes.length }).end(archive.bytes)
     } else {
       response.writeHead(302, { location: `https://registry.npmjs.org${request.url ?? '/'}` }).end()
     }
@@ -102,7 +124,7 @@ function nativeText(source: string): string {
 }
 
 export async function upgradeArtifactsGate(workspace: string, baseline: UpgradeBaseline): Promise<EvalGate> {
-  const paths = await glob(['node_modules/focused-spec/**/*', '.omp/skills/focused-spec/**/*', COMMAND], { cwd: workspace, nodir: true, dot: true, follow: true, nocase: false })
+  const paths = await glob(['node_modules/focused-spec/**/*', 'node_modules/@focused-spec/**/*', '.omp/skills/focused-spec/**/*', COMMAND], { cwd: workspace, nodir: true, dot: true, follow: true, nocase: false })
   const changed: string[] = paths.filter(path => !baseline.artifacts.has(path))
   for (const [path, expected] of baseline.artifacts) {
     try {
@@ -110,26 +132,53 @@ export async function upgradeArtifactsGate(workspace: string, baseline: UpgradeB
     } catch { changed.push(path) }
   }
   return gate('upgrade-artifacts', changed.length === 0, changed.length === 0
-    ? 'installed package, loader and wrapper match independent candidate; no stale package-owned files'
+    ? 'installed core, format and runner packages plus loader and wrapper match the independent candidate; no stale package-owned files'
     : `missing, altered or extra upgrade artifacts: ${changed.join(', ')}`)
 }
 
 export async function upgradePreservationGate(workspace: string, baseline: UpgradeBaseline): Promise<EvalGate> {
   const problems: string[] = []
   try {
-    const originalConfig = { ...object(baseline.config), version: 3 }
+    const legacyConfig = object(baseline.config)
+    const specifications = object(legacyConfig.specifications)
+    const documents = (specifications.documents as Record<string, unknown>[]).map(layout => ({ ...layout, format: 'markdown' }))
+    const expectedConfig = {
+      ...legacyConfig,
+      version: 4,
+      specifications: {
+        formats: { markdown: { package: '@focused-spec/format-markdown' } },
+        documents,
+      },
+      runners: {
+        go: { package: '@focused-spec/runner-go', timeoutMs: 120000 },
+        pytest: {
+          package: '@focused-spec/runner-pytest',
+          timeoutMs: 120000,
+          options: { command: 'uv', commandArgs: ['run', '--with', 'pytest', 'python'] },
+        },
+      },
+    }
     const finalConfig = object(parse(await readFile(join(workspace, '.focused-spec/config.yaml'), 'utf8')))
     delete finalConfig.evidence
-    if (!same(originalConfig, finalConfig)) problems.push('configuration changed outside version/evidence setup')
+    if (!same(expectedConfig, finalConfig)) problems.push('configuration did not perform the required version-4 format and official-runner migration')
     const manifest = object(JSON.parse(await readFile(join(workspace, 'package.json'), 'utf8')))
+    const focusedPackages = [
+      'focused-spec',
+      '@focused-spec/format-markdown',
+      '@focused-spec/runner-go',
+      '@focused-spec/runner-pytest',
+    ]
+    const dependencies = ['dependencies', 'devDependencies', 'optionalDependencies']
+      .flatMap(key => manifest[key] === undefined ? [] : Object.keys(object(manifest[key])))
+    if (!focusedPackages.every(name => dependencies.includes(name))) problems.push('manifest does not install core plus required format and runner packages')
     const withoutFocused = (value: Record<string, unknown>) => {
       const result = { ...value }
       for (const key of ['dependencies', 'devDependencies', 'optionalDependencies']) {
-        if (result[key] !== undefined) {
-          const dependencies = { ...object(result[key]) }
-          delete dependencies['focused-spec']
-          result[key] = dependencies
-        }
+        if (result[key] === undefined) continue
+        const entries = { ...object(result[key]) }
+        for (const name of focusedPackages) delete entries[name]
+        if (Object.keys(entries).length === 0) delete result[key]
+        else result[key] = entries
       }
       return result
     }
@@ -154,7 +203,7 @@ export async function upgradePreservationGate(workspace: string, baseline: Upgra
     }
   } catch (error) { problems.push(String(error)) }
   return gate('upgrade-preservation', problems.length === 0, problems.length === 0
-    ? 'all original scope-local IDs, native behavior, exact AND selectors and runner/execution settings preserved'
+    ? 'all original scope-local IDs, native behavior, exact selectors and AND contracts preserved through the required format/runner migration'
     : problems.join('; '))
 }
 
@@ -168,7 +217,7 @@ export async function upgradeSensitivityGate(workspace: string): Promise<EvalGat
       return value.executionStarted === true && selected?.status === status && selected.evidence.length === BLOCKED.length
         && (reference === undefined ? selected.evidence.every(item => item.status === 'PASS')
           : selected.evidence.some(item => item.reference === reference && item.status === 'FAIL'
-            && (reference.startsWith('go-unit') ? item.diagnostic?.includes('blocked account authenticated') : item.diagnostic?.includes('assert True is False'))))
+            && (reference.startsWith('go::') ? item.diagnostic?.includes('blocked account authenticated') : item.diagnostic?.includes('assert True is False'))))
     } catch { return false }
   }
   const before = await run()

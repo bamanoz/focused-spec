@@ -312,12 +312,12 @@ describe('native pilot evaluation boundaries', () => {
     const blocked = agentEvidenceGate(transcript, [])
     expect(blocked).toMatchObject({ passed: null, blockedBy: 'evidence-only-registry' })
     expect(judged([blocked], ['agent-executed-selected-evidence']).status).toBe('unverified')
-    expect(agentEvidenceGate(transcript, ['go-test::./auth::TestBlockedAccount']).passed).toBe(true)
+    expect(agentEvidenceGate(transcript, ['go::./auth::TestBlockedAccount']).passed).toBe(true)
     expect(agentEvidenceGate(transcript, ['pytest::tests/functional/test_auth.py::test_blocked_account']).passed).toBe(false)
   })
 
   it('recognizes completed selected CLI evidence without crediting validation or failed commands', () => {
-    const reference = 'go-test::./auth::TestBlockedAccount'
+    const reference = 'go::./auth::TestBlockedAccount'
     const events = (command: string, output: string, failed = false) => [
       JSON.stringify({ type: 'tool_execution_start', toolCallId: 'execution', toolName: 'bash', args: { command } }),
       JSON.stringify({ type: 'tool_execution_end', toolCallId: 'execution', toolName: 'bash', isError: failed,
@@ -369,14 +369,14 @@ describe('native pilot evaluation boundaries', () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-native-registry-'))
     roots.push(root)
     await mkdir(join(root, '.focused-spec'))
-    await writeFile(join(root, '.focused-spec/config.yaml'), 'version: 3\nspecifications:\n  documents: [{ match: specs/*.md, scope: current }]\nrunners: {}\n')
+    await writeFile(join(root, '.focused-spec/config.yaml'), "version: 4\nspecifications:\n  formats:\n    markdown:\n      package: '@focused-spec/format-markdown'\n  documents: [{ match: specs/*.md, scope: current, format: markdown }]\nrunners: {}\n")
     const source = '<!-- focused-spec:id=auth.login.blocked-account -->\n#### Scenario: Blocked login\n'
     const path = join(root, '.focused-spec/evidence.yaml')
-    await writeFile(path, 'scopes:\n  current:\n    auth.login.blocked-account:\n      evidence: [go-test::./auth::TestBlockedAccount]\n')
+    await writeFile(path, 'scopes:\n  current:\n    auth.login.blocked-account:\n      evidence: [go::./auth::TestBlockedAccount]\n')
     expect((await evidenceGate(root, 'openspec', source)).gate.passed).toBe(true)
     expect((await evidenceGate(root, 'openspec', source.replace('auth.login.blocked-account', 'auth.login.other'))).gate.passed).toBe(false)
-    expect((await evidenceGate(root, 'openspec', `${source}- **EVIDENCE**: \`go-test::./auth::TestBlockedAccount\`\n`)).gate.passed).toBe(false)
-    await writeFile(path, 'scopes:\n  current:\n    auth.login.blocked-account:\n      evidence: [go-test::./auth::TestBlockedAccount]\n      unknown: true\n')
+    expect((await evidenceGate(root, 'openspec', `${source}- **EVIDENCE**: \`go::./auth::TestBlockedAccount\`\n`)).gate.passed).toBe(false)
+    await writeFile(path, 'scopes:\n  current:\n    auth.login.blocked-account:\n      evidence: [go::./auth::TestBlockedAccount]\n      unknown: true\n')
     expect((await evidenceGate(root, 'openspec', source)).gate.passed).toBe(false)
     await writeFile(path, 'scopes: []\n')
     const malformed = await evidenceGate(root, 'openspec', source)
@@ -392,7 +392,7 @@ describe('native pilot evaluation boundaries', () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-native-external-source-'))
     roots.push(root)
     await mkdir(join(root, '.focused-spec'))
-    await writeFile(join(root, '.focused-spec/config.yaml'), 'version: 3\nspecifications:\n  documents: [{ match: specs/*.md, scope: current }]\nrunners: {}\n')
+    await writeFile(join(root, '.focused-spec/config.yaml'), "version: 4\nspecifications:\n  formats:\n    markdown:\n      package: '@focused-spec/format-markdown'\n  documents: [{ match: specs/*.md, scope: current, format: markdown }]\nrunners: {}\n")
     await writeFile(join(root, '.focused-spec/evidence.yaml'), [
       'scopes:',
       '  current:',
@@ -400,7 +400,7 @@ describe('native pilot evaluation boundaries', () => {
       '      source:',
       '        path: _bmad-output/specs/spec-blocked-login/spec-blocked-login.md',
       '        nativeId: CAP-1',
-      '      evidence: [go-test::./auth::TestBlockedAccount]',
+      '      evidence: [go::./auth::TestBlockedAccount]',
     ].join('\n'))
     const explicit = '# Blocked Login\n\n- **CAP-1**\n  - **success:** A blocked account with valid credentials is denied login.\n'
     expect((await evidenceGate(root, 'bmad', explicit)).gate.passed).toBe(true)

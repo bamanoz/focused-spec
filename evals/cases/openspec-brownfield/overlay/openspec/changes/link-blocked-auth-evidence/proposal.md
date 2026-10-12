@@ -4,7 +4,7 @@ The project already has OpenSpec specifications and Go/Python tests but no exact
 
 ## What Changes
 
-- Link one previously unverified outcome to the existing Go and Python tests through focused-spec.
+- Link one previously unverified outcome to the existing Go and Python tests through version-4 focused-spec configuration and explicitly installed adapters.
 - Keep historical OpenSpec scenarios intact while using the normal delta sync workflow.
 
 ## Capabilities
@@ -15,4 +15,4 @@ The project already has OpenSpec specifications and Go/Python tests but no exact
 
 ## Impact
 
-Only specification metadata and project-local evidence runners are added; product behavior stays unchanged.
+Only specification metadata and focused-spec adapter registration are added; product behavior stays unchanged.

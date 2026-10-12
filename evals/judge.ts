@@ -1,12 +1,13 @@
 import { access, readFile, rename, writeFile } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { glob } from 'glob'
-import { discoverDocuments, loadConfig, loadEvidenceRegistry, parseNativeDocument } from '../dist/index.js'
+import { discoverDocuments, loadConfig, loadEvidenceRegistry } from '../packages/core/dist/index.js'
 import type { EvalCase, EvalGate } from './types.ts'
 import { runProcess } from './process.ts'
 import { judgeEvidenceRepair } from './evidence-repair.ts'
 import { evalRepositoryRoot } from './provision.ts'
 import { upgradeSensitivityGate } from './upgrade.ts'
+import { parseTrustedNativeDocument } from './native-parse.ts'
 
 const PROTECTED_PATHS = [
   'auth/auth.go',
@@ -251,7 +252,7 @@ export async function snapshotProtectedFiles(workspace: string, editablePaths: r
   for (const path of await glob('openspec/changes/archive/2026-09-26-reject-blocked-accounts/**/*', { cwd: workspace, nodir: true, dot: true, follow: true, nocase: false })) {
     snapshots.set(path, await readFile(join(workspace, path), 'utf8'))
   }
-  for (const path of await glob(['node_modules/focused-spec/**/*', '.omp/skills/**/*'], { cwd: workspace, nodir: true, follow: true, nocase: false })) {
+  for (const path of await glob(['node_modules/focused-spec/**/*', 'node_modules/@focused-spec/**/*', '.omp/skills/**/*'], { cwd: workspace, nodir: true, follow: true, nocase: false })) {
     snapshots.set(path, await readFile(join(workspace, path), 'utf8'))
   }
   return snapshots
@@ -297,7 +298,7 @@ export async function judgeProposalCheckpoint(workspace: string, evalCase: EvalC
   const implementationStarted = (await Promise.all(implementationPaths.map(exists))).some(Boolean)
   const nativeDocuments = await Promise.all(specs.map(async relativePath => {
     const path = `openspec/changes/${evalCase.changeName}/${relativePath}`
-    return parseNativeDocument(path, await readFile(join(root, relativePath), 'utf8'), evalCase.changeName!)
+    return parseTrustedNativeDocument('markdown', path, await readFile(join(root, relativePath), 'utf8'), evalCase.changeName!)
   }))
   const violations = nativeDocuments.flatMap(document => document.violations)
   const marked = nativeDocuments.flatMap(document => document.items.filter(item => item.markerId !== undefined))
@@ -454,7 +455,7 @@ export async function integrityGate(workspace: string, snapshots: ReadonlyMap<st
     }
   }
   const targets = inspectionTargets(workspace, transcripts)
-  const inspectedImplementation = targets.some(target => /node_modules[\\/]focused-spec[\\/](?:dist|src|examples)[\\/][^\s"'`]+(?<!\.d)\.(?:[cm]?js|[cm]?ts|tsx|jsx)|src[\\/](?:runner-client|runner-host|planner|executor)\.ts/u.test(target))
+  const inspectedImplementation = targets.some(target => /node_modules[\/](?:focused-spec|@focused-spec[\/][^\/]+)[\/](?:dist|src|examples)[\/][^\s"'`]+(?<!\.d)\.(?:[cm]?js|[cm]?ts|tsx|jsx)|src[\/](?:runner-client|runner-host|planner|executor)\.ts/u.test(target))
   const inspectedPackageReferences = targets.some(target => /(?:node_modules[\\/]focused-spec|[\\/]focused-spec)[\\/](?:README\.md|docs[\\/])/u.test(target))
   const runnerSources = await glob(['.focused-spec/**/*.{ts,mts,js,mjs}'], { cwd: workspace, nodir: true, follow: true, nocase: false })
   const shellTrue = (await Promise.all(runnerSources.map(path => readFile(join(workspace, path), 'utf8')))).some(source => /shell\s*:\s*true/u.test(source))
@@ -627,7 +628,7 @@ export async function judgeWorkingCheckpoint(
     : await registryCheckpoint(workspace, scope, scenarioId)
   const sourcePath = join(workspace, 'openspec', 'changes', scope, 'specs', 'account-authentication', 'spec.md')
   const source = await exists(sourcePath) ? await readFile(sourcePath, 'utf8') : undefined
-  const parsed = source === undefined ? undefined : parseNativeDocument(`openspec/changes/${scope}/specs/account-authentication/spec.md`, source, scope)
+  const parsed = source === undefined ? undefined : parseTrustedNativeDocument('markdown', `openspec/changes/${scope}/specs/account-authentication/spec.md`, source, scope)
   const marked = parsed?.items.filter(item => item.markerId !== undefined) ?? []
   const registryMatchesRun = selectedRegistry.checkpoint !== undefined && matches.length === 1
     && matches[0]!.evidence.length === selectedRegistry.checkpoint.evidence.length
@@ -691,8 +692,8 @@ export async function brownfieldGate(
     readFile(join(workspace, mainPath), 'utf8'),
     readFile(join(workspace, archivePath), 'utf8'),
   ])
-  const mainNative = parseNativeDocument(mainPath, mainSource, main.scope)
-  const workingNative = parseNativeDocument(workingPath, workingSource, changeName)
+  const mainNative = parseTrustedNativeDocument('markdown', mainPath, mainSource, main.scope)
+  const workingNative = parseTrustedNativeDocument('markdown', workingPath, workingSource, changeName)
   const originalScenarios = [...archiveSource.matchAll(/^#### Scenario: (.+)\n(- \*\*WHEN\*\* [^\n]+\n- \*\*THEN\*\* [^\n]+)/gmu)]
   const originalOutcome = originalScenarios.find(match => match[1] === 'Blocked account with valid credentials')?.[2]
   const historical = originalScenarios.filter(match => match[1] !== 'Blocked account with valid credentials').map(match => match[0])

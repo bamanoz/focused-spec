@@ -1,10 +1,47 @@
-# Project-local runners
+# Runner plugins
 
-Use the public [runner API contract](../reference/runner-api.md), not internal package modules or implementation details. It defines `RunnerPlugin`, selector resolution, target results, request context, and optional partitioning. A runner is project-local and must distinguish an executed selected test from a skipped, missing, or unreported test; a successful framework process exit alone may not establish `pass`.
+Use the public [runner API contract](../reference/runner-api.md), not internal package modules or implementation details. Version 4 loads a runner through exactly one installed `package` or project-relative `module`; both implement unchanged `RunnerPlugin` API version 1. Package resolution starts from the consuming project, honors ESM import exports and never falls back to a global or downloaded package. A runner must distinguish an executed selected test from a skipped, missing, ambiguous, or unreported test; a successful framework exit alone cannot establish `pass`.
 
-For an agent implementing or repairing a runner, the package-owned [runner guidance](../../guidance/runners.md) owns the exact selector, collection, report-interpretation, and verification steps. The project's installed CLI serves it through `instructions --protocol 1 --topic runners --json`; no skill-local reference or source-checkout access is required. Start with serial execution; only add partitioning after auditing shared resources.
+## Official runners
 
-The [Go](../../examples/openspec/.focused-spec/runners/go-test.ts) and [pytest](../../examples/openspec/.focused-spec/runners/pytest.ts) examples illustrate framework-specific collection and invocation, not a production result parser: both classify by process exit code and need adaptation to detect skipped or unexecuted selected tests. Do not copy another project's source parser or resource policy.
+Official runner IDs describe only the framework: `vitest`, `pytest`, and `go`. Install and register the corresponding package independently:
+
+Each installed official runner exposes this public guide as its `README.md`, staged from this single authored owner. Read the installed README, package manifest and declarations to discover its contract; no implementation inspection is needed. The installed core also serves selector/options guidance through a standalone `instructions --protocol 1 --topic runners --json` call.
+
+```yaml
+runners:
+  vitest:
+    package: '@focused-spec/runner-vitest'
+  pytest:
+    package: '@focused-spec/runner-pytest'
+    options:
+      command: uv
+      commandArgs: [run, --with, pytest, python]
+  go:
+    package: '@focused-spec/runner-go'
+```
+
+All three accept the closed options object `{ command?: string, commandArgs?: string[] }`; invalid fields and values fail instead of silently defaulting. Vitest defaults to Node and resolves consumer-installed Vitest `^4.0.0`. Pytest defaults to `python` followed by `-m pytest`; the example retains the existing `uv run --with pytest python` prefix and supports pytest 8/9 on Python 3.10+ without an added reporter dependency. The Python reporter disables bytecode writes so execution does not modify its installed package. Go defaults to `go` followed by `test` arguments, supports Go 1.22+, and consumes real `go test -json` events. `commandArgs` is inserted after the command and before runner-controlled framework arguments. Commands are spawned without shell interpolation. The consumer owns Vitest, Python/pytest, and the Go toolchain.
+
+| ID | Exact selector |
+| --- | --- |
+| `vitest` | `<project-relative-file>::<full test name>`, with nested names joined by ` > `, for example `test/a.spec.ts::outer > inner > works`; collection uses the public Vitest API and includes skipped tests |
+| `pytest` | Exact collector node ID `<project-relative-file>::<class/function>[parameter-id]`; a bare parameterized parent that collects multiple cases is ambiguous |
+| `go` | `<go-package>::<top-level TestName>`, for example `./auth::TestLogin`; a project-relative `.go` test file selects its containing package, preserving the authored selector; selecting a parent conservatively aggregates its subtests |
+
+Runnable selector examples (create the corresponding ordinary framework test):
+
+| ID | Example selector |
+| --- | --- |
+| `vitest` | `test/a.spec.ts::outer > inner > works` |
+| `pytest` | `tests/test_auth.py::test_blocked_account` |
+| `go` | `./auth::TestLogin` |
+
+Duplicate full Vitest names are ambiguous. The official runners omit `partition`, so their invocations are exclusive. They collect exact selectors and read per-test results: missing, ambiguous, skipped, failed, unexecuted, or malformed outcomes cannot become `pass` because a process exited zero.
+
+## Custom runners
+
+Before writing one, inspect the project's existing runner registrations and installed official packages; reuse a compatible selector contract rather than creating a second plugin. Register a custom project module only when no installed runner fits. For an agent implementing or repairing one, the package-owned [runner guidance](../../guidance/runners.md) owns the exact collection, report interpretation, and verification procedure. The project's explicit installed CLI serves it through `instructions --protocol 1 --topic runners --json`; no skill-local reference, global/downloaded CLI, or source-checkout fallback is allowed. Start with serial execution and add partitioning only after auditing shared resources.
 
 ## Optional execution groups
 

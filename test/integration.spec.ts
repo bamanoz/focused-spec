@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { fileURLToPath } from 'node:url'
-import { loadConfig } from '../src/config.js'
-import { executePlan } from '../src/executor.js'
-import { planEvidence } from '../src/planner.js'
-import { resolveRunnerTargets, runRunnerTargets } from '../src/runner-client.js'
-import { validateFocusedSpecs } from '../src/validate.js'
-import type { ExecutionPlan, RunnerConfig } from '../src/model.js'
+import { loadConfig } from '../packages/core/dist/config.js'
+import { executePlan } from '../packages/core/dist/executor.js'
+import { planEvidence } from '../packages/core/dist/planner.js'
+import { resolveRunnerTargets, runRunnerTargets } from '../packages/core/dist/runner-client.js'
+import { validateFocusedSpecs } from '../packages/core/dist/validate.js'
+import type { ExecutionPlan, RunnerConfig } from '../packages/core/dist/model.js'
 
 const roots: string[] = []
 
@@ -22,13 +22,17 @@ async function put(root: string, path: string, content: string): Promise<void> {
 async function fixture(status: 'pass' | 'skip' = 'pass'): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'focused-spec-'))
   roots.push(root)
+  await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir')
   await put(root, '.focused-spec/config.yaml', [
-    'version: 3',
+    'version: 4',
     'specifications:',
+    '  formats: { markdown: { package: "@focused-spec/format-markdown" } }',
     '  documents:',
     '    - match: openspec/specs/**/spec.md',
+    '      format: markdown',
     '      scope: current',
     '    - match: openspec/changes/{scope}/specs/**/spec.md',
+    '      format: markdown',
     'runners:',
     '  fixture:',
     '    module: ./runner.ts',
@@ -145,12 +149,15 @@ function observedRunner(partitionBody?: string, failTarget?: string, lingerAfter
 async function schedulerRoot(runners: Readonly<Record<string, string>>): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'focused-spec-scheduler-'))
   roots.push(root)
+  await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir')
   for (const [path, source] of Object.entries(runners)) await put(root, path, source)
   await put(root, '.focused-spec/config.yaml', [
-    'version: 3',
+    'version: 4',
     'specifications:',
+    '  formats: { markdown: { package: "@focused-spec/format-markdown" } }',
     '  documents:',
     '    - match: specs/**/*.md',
+    '      format: markdown',
     '      scope: current',
     'runners: {}',
   ].join('\n'))
@@ -286,7 +293,7 @@ describe('project-local TypeScript runners', () => {
   it('propagates a failing target to the scenario and process result', async () => {
     const root = await fixture()
     await put(root, 'runner.ts', 'export default { apiVersion: 1, async resolve({ selectors }) { return { targets: selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] } }, async run({ targets }) { return { results: targets.map(target => ({ targetId: target.targetId, status: "fail" })) } } }')
-    const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url))
+    const cli = fileURLToPath(new URL('../packages/core/dist/cli.js', import.meta.url))
     const output = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json'], { encoding: 'utf8' })
     expect(output.status).toBe(1)
     expect(JSON.parse(output.stdout)).toMatchObject({ success: false, scenarios: [{ status: 'FAIL', evidence: [{ status: 'FAIL' }] }] })
@@ -298,13 +305,15 @@ describe('project-local TypeScript runners', () => {
     await put(root, 'package.json', '{"private":true,"type":"module"}\n')
     await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'junction')
     await put(root, '.focused-spec/config.yaml', [
-      'version: 3',
+      'version: 4',
       'specifications:',
+      '  formats: { markdown: { package: "@focused-spec/format-markdown" } }',
       '  documents:',
       '    - match: features/{scope}/spec.md',
+      '      format: markdown',
       'runners:',
       '  vitest:',
-      '    module: ./.focused-spec/runners/vitest.ts',
+      '    package: "@focused-spec/runner-vitest"',
       '    timeoutMs: 120000',
     ].join('\n'))
     await put(root, '.focused-spec/evidence.yaml', [
@@ -313,7 +322,6 @@ describe('project-local TypeScript runners', () => {
       '    fixture.vitest.scope:',
       '      evidence: ["vitest::test/contract.spec.ts::fixture contract > accepts configured value"]',
     ].join('\n'))
-    await put(root, '.focused-spec/runners/vitest.ts', await readFile(fileURLToPath(new URL('../.focused-spec/runners/vitest.ts', import.meta.url)), 'utf8'))
     await put(root, 'features/account-lock/spec.md', [
       '<!-- focused-spec:id=fixture.vitest.scope -->',
       '#### Scenario: Vitest proves the named scope',
@@ -327,7 +335,7 @@ describe('project-local TypeScript runners', () => {
       "  it('accepts configured value', () => { expect(2 + 2).toBe(4) })",
       '})',
     ].join('\n'))
-    const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url))
+    const cli = fileURLToPath(new URL('../packages/core/dist/cli.js', import.meta.url))
     const args = [cli, 'run', '--root', root, '--scope', 'account-lock', '--json']
 
     const passing = spawnSync(process.execPath, args, { encoding: 'utf8' })
@@ -356,7 +364,7 @@ describe('project-local TypeScript runners', () => {
   it('reports runner execution errors without a false pass', async () => {
     const root = await fixture()
     await put(root, 'runner.ts', 'export default { apiVersion: 1, async resolve({ selectors }) { return { targets: selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] } }, async run() { throw new Error("execution failed") } }')
-    const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url))
+    const cli = fileURLToPath(new URL('../packages/core/dist/cli.js', import.meta.url))
     const output = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json'], { encoding: 'utf8' })
     expect(output.status).toBe(1)
     expect(JSON.parse(output.stdout)).toMatchObject({ success: false, scenarios: [{ status: 'ERROR', evidence: [{ status: 'ERROR', diagnostic: expect.stringContaining('execution failed') }] }] })
@@ -375,10 +383,12 @@ describe('project-local TypeScript runners', () => {
       { targetIds: ['not-selected'], resources: [] },
     ] }))
     await put(root, '.focused-spec/config.yaml', [
-      'version: 3',
+      'version: 4',
       'specifications:',
+      '  formats: { markdown: { package: "@focused-spec/format-markdown" } }',
       '  documents:',
       '    - match: specs/**/*.md',
+      '      format: markdown',
       '      scope: current',
       'runners:',
       '  selected:',
@@ -402,10 +412,12 @@ describe('project-local TypeScript runners', () => {
 
     for (const invalid of ['0', '1.5', 'nope']) {
       await put(root, '.focused-spec/config.yaml', [
-        'version: 3',
+        'version: 4',
         'specifications:',
+        '  formats: { markdown: { package: "@focused-spec/format-markdown" } }',
         '  documents:',
         '    - match: specs/**/*.md',
+        '      format: markdown',
         '      scope: current',
         'runners: {}',
         'execution:',

@@ -1,12 +1,13 @@
 # Development
 
 - [Repository workflow](workflow.md)
-- [Release process](releasing.md)
+- [Package-suite release process](releasing.md)
 - [Agent evaluations](agent-evals.md)
 
 Run the standard checks before handoff:
 
 ```sh
+npm ci
 npm test
 npm run smoke
 ```

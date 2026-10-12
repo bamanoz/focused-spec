@@ -2,4 +2,4 @@ scopes:
   current:
     account.eligibility.adult:
       evidence:
-        - go-unit::./eligibility::TestAdultEligible
+        - go::./eligibility::TestAdultEligible

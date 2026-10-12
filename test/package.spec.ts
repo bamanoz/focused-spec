@@ -29,6 +29,8 @@ let root: string
 let consumer: string
 let installedEntries: string[]
 let packedTarball: string
+let markdownTarball: string
+let vitestRunnerTarball: string
 
 async function put(path: string, content: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
@@ -65,8 +67,8 @@ function packPackage(packageRoot: string, destination: string): string {
   return join(destination, packedFilename(pack.stdout))
 }
 
-function installPackage(project: string, tarball: string): void {
-  const install = spawnSync('npm', ['install', '--prefix', project, '--ignore-scripts', '--no-package-lock', '--no-save', tarball], {
+function installPackage(project: string, ...tarballs: readonly string[]): void {
+  const install = spawnSync('npm', ['install', '--prefix', project, '--ignore-scripts', '--no-package-lock', '--no-save', '--prefer-offline', '--no-audit', '--no-fund', ...tarballs], {
     encoding: 'utf8',
     timeout: 180_000,
   })
@@ -180,7 +182,9 @@ beforeAll(async () => {
   consumer = join(root, 'project')
   await mkdir(consumer)
   await writeFile(join(consumer, 'package.json'), '{"name":"consumer","private":true,"type":"module"}\n')
-  packedTarball = packPackage(repository, root)
+  packedTarball = packPackage(join(repository, 'packages/core'), root)
+  markdownTarball = packPackage(join(repository, 'packages/format-markdown'), root)
+  vitestRunnerTarball = packPackage(join(repository, 'packages/runner-vitest'), root)
   installPackage(consumer, packedTarball)
   installedEntries = await readdir(consumer)
 }, 300_000)
@@ -190,6 +194,82 @@ afterAll(async () => {
 })
 
 describe('package distribution', () => {
+  it('installs independent core and adapter packages', async () => {
+    const project = await createPackedConsumer('independent-adapters-')
+    const cli = join(project, 'node_modules/focused-spec/dist/cli.js')
+    for (const name of ['@focused-spec/format-markdown', '@focused-spec/format-gherkin', '@focused-spec/runner-vitest', '@cucumber/gherkin', 'mdast-util-from-markdown', 'vitest']) {
+      await expect(stat(join(project, 'node_modules', name))).rejects.toThrow()
+    }
+    await put(join(project, '.focused-spec/config.yaml'), JSON.stringify({ version: 4,
+      specifications: { formats: { markdown: { package: '@focused-spec/format-markdown' } }, documents: [{ match: 'specs/contract.md', scope: 'current', format: 'markdown' }] },
+      runners: { vitest: { package: '@focused-spec/runner-vitest' } },
+    }))
+    await put(join(project, '.focused-spec/evidence.yaml'), 'scopes:\n  current:\n    consumer.adapters.work:\n      evidence: ["vitest::test/contract.spec.ts::consumer > rejects blocked account"]\n')
+    await put(join(project, 'specs/contract.md'), '<!-- focused-spec:id=consumer.adapters.work -->\n#### Scenario: Blocked accounts are rejected\n')
+    const invoke = () => spawnSync(process.execPath, [cli, 'run', '--root', project, '--json'], { cwd: project, encoding: 'utf8', timeout: 120_000,
+      env: { ...process.env, npm_config_offline: 'true', HTTP_PROXY: 'http://127.0.0.1:1', HTTPS_PROXY: 'http://127.0.0.1:1' },
+    })
+    const missing = invoke()
+    expect(missing.status).toBe(1)
+    expect(JSON.parse(missing.stdout)).toMatchObject({ valid: false, violations: expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining('@focused-spec/format-markdown') })]) })
+    const vitestVersion = packageIdentity(await readFile(join(repository, 'node_modules/vitest/package.json'), 'utf8')).version
+    installPackage(project, packedTarball, markdownTarball, vitestRunnerTarball, `vitest@${vitestVersion}`)
+    await put(join(project, 'auth.mjs'), 'export const authenticate = blocked => !blocked\n')
+    await put(join(project, 'test/contract.spec.ts'), "import { describe, expect, it } from 'vitest'; import { authenticate } from '../auth.mjs'; describe('consumer', () => { it('rejects blocked account', () => expect(authenticate(true)).toBe(false)); });")
+    const passed = invoke()
+    expect(passed.status, passed.stdout + passed.stderr).toBe(0)
+    expect(JSON.parse(passed.stdout)).toMatchObject({ success: true, scenarios: [{ id: 'consumer.adapters.work', status: 'PASS' }] })
+    await put(join(project, 'auth.mjs'), 'export const authenticate = blocked => true\n')
+    const regressed = invoke()
+    expect(regressed.status).toBe(1)
+    expect(JSON.parse(regressed.stdout)).toMatchObject({ success: false, scenarios: [{ id: 'consumer.adapters.work', status: 'FAIL' }] })
+    await put(join(project, 'auth.mjs'), 'export const authenticate = blocked => !blocked\n')
+    const restored = invoke()
+    expect(restored.status, restored.stdout + restored.stderr).toBe(0)
+    expect(JSON.parse(restored.stdout)).toMatchObject({ success: true, scenarios: [{ id: 'consumer.adapters.work', status: 'PASS' }] })
+  }, 300_000)
+
+  it('executes selectors discovered from packed runner documentation', async () => {
+    const project = await createPackedConsumer('runner-documentation-')
+    const pytestTarball = packPackage(join(repository, 'packages/runner-pytest'), root)
+    const goTarball = packPackage(join(repository, 'packages/runner-go'), root)
+    const vitestVersion = packageIdentity(await readFile(join(repository, 'node_modules/vitest/package.json'), 'utf8')).version
+    installPackage(project, packedTarball, markdownTarball, vitestRunnerTarball, pytestTarball, goTarball, `vitest@${vitestVersion}`)
+    const evidence: string[] = []
+    for (const framework of ['vitest', 'pytest', 'go']) {
+      const documentation = await readFile(join(project, `node_modules/@focused-spec/runner-${framework}/README.md`), 'utf8')
+        .then(content => ({ content, error: undefined }), error => ({ content: '', error: error as Error }))
+      expect(documentation.error, `public ${framework} contract is unavailable`).toBeUndefined()
+      const example = documentation.content.match(new RegExp('^\\| `' + framework + '` \\| `([^`]+)` \\|$', 'mu'))?.[1]
+      if (example === undefined) throw new Error(`No documented ${framework} example selector`)
+      evidence.push(`${framework}::${example}`)
+    }
+    await put(join(project, '.focused-spec/config.yaml'), JSON.stringify({ version: 4,
+      specifications: { formats: { markdown: { package: '@focused-spec/format-markdown' } }, documents: [{ match: 'specs/contract.md', scope: 'current', format: 'markdown' }] },
+      runners: { vitest: { package: '@focused-spec/runner-vitest' }, pytest: { package: '@focused-spec/runner-pytest', options: { command: 'uv', commandArgs: ['run', '--with', 'pytest', 'python'] } }, go: { package: '@focused-spec/runner-go' } },
+    }))
+    await put(join(project, '.focused-spec/evidence.yaml'), JSON.stringify({ scopes: { current: { 'consumer.documentation.works': { evidence } } } }))
+    await put(join(project, 'specs/contract.md'), '<!-- focused-spec:id=consumer.documentation.works -->\n#### Scenario: Documented selectors protect the real outcome\n')
+    await put(join(project, 'auth.mjs'), 'export const authenticate = blocked => !blocked\n')
+    await put(join(project, 'test/a.spec.ts'), "import { describe, expect, it } from 'vitest'; import { authenticate } from '../auth.mjs'; describe('outer', () => { describe('inner', () => { it('works', () => expect(authenticate(true)).toBe(false)); }); });")
+    await put(join(project, 'tests/test_auth.py'), 'def test_blocked_account():\n    assert not authenticate(True)\n\ndef authenticate(blocked):\n    return not blocked\n')
+    await put(join(project, 'go.mod'), 'module example.com/public-contracts\n\ngo 1.22\n')
+    await put(join(project, 'auth/auth_test.go'), 'package auth\n\nimport "testing"\n\nfunc TestLogin(t *testing.T) { if authenticate(true) { t.Fatal("blocked account authenticated") } }\nfunc authenticate(blocked bool) bool { return !blocked }\n')
+    const cli = join(project, 'node_modules/focused-spec/dist/cli.js')
+    const invoke = () => spawnSync(process.execPath, [cli, 'run', '--root', project, '--json'], { cwd: project, encoding: 'utf8', timeout: 120_000 })
+    const passed = invoke()
+    expect(passed.status, passed.stdout + passed.stderr).toBe(0)
+    expect(JSON.parse(passed.stdout)).toMatchObject({ success: true, targetCount: 3, scenarios: [{ status: 'PASS' }] })
+    await put(join(project, 'auth.mjs'), 'export const authenticate = blocked => true\n')
+    const regressed = invoke()
+    expect(regressed.status).toBe(1)
+    expect(JSON.parse(regressed.stdout)).toMatchObject({ success: false, scenarios: [{ status: 'FAIL', evidence: expect.arrayContaining([{ reference: evidence[0], status: 'FAIL', diagnostic: expect.stringContaining('expected true to be false') }]) }] })
+    await put(join(project, 'auth.mjs'), 'export const authenticate = blocked => !blocked\n')
+    const restored = invoke()
+    expect(restored.status, restored.stdout + restored.stderr).toBe(0)
+    expect(JSON.parse(restored.stdout)).toMatchObject({ success: true, scenarios: [{ status: 'PASS' }] })
+  }, 300_000)
+
   it('installs the CLI without creating an agent skill or runner', () => {
     expect(installedEntries).not.toContain('.focused-spec')
     expect(installedEntries).not.toContain('.agents')
@@ -202,11 +282,14 @@ describe('package distribution', () => {
   })
 
   it('installs and executes the packed CLI from a consumer project', async () => {
+    installPackage(consumer, packedTarball, markdownTarball)
     await put(join(consumer, '.focused-spec/config.yaml'), [
-      'version: 3',
+      'version: 4',
       'specifications:',
+      '  formats: { markdown: { package: "@focused-spec/format-markdown" } }',
       '  documents:',
       '    - match: specs/**/*.md',
+      '      format: markdown',
       '      scope: current',
       'runners:',
       '  consumer:',
@@ -334,7 +417,9 @@ describe('package distribution', () => {
   it('typechecks a consumer plugin against focused-spec runner', async () => {
     await put(join(consumer, 'plugin.ts'), [
       "import type { RunnerPlugin } from 'focused-spec/runner'",
+      "import type { FormatPlugin } from 'focused-spec/format'",
       'export default { apiVersion: 1, async resolve() { return { targets: [], errors: [] } }, async run() { return { results: [] } } } satisfies RunnerPlugin',
+      'export const format = { apiVersion: 1, parse() { return { items: [], diagnostics: [] } } } satisfies FormatPlugin',
     ].join('\n'))
     await put(join(consumer, 'tsconfig.json'), JSON.stringify({ compilerOptions: { target: 'ES2024', module: 'NodeNext', moduleResolution: 'NodeNext', strict: true, noEmit: true, skipLibCheck: true }, files: ['plugin.ts'] }))
     const tsc = spawnSync(process.execPath, [resolve(repository, 'node_modules/typescript/bin/tsc'), '-p', join(consumer, 'tsconfig.json')], { cwd: consumer, encoding: 'utf8' })

@@ -12,3 +12,9 @@ scopes:
     distribution.package.agent-guidance:
       evidence:
         - vitest::test/package.spec.ts::package distribution > serves guidance from a source-independent packed installation
+    distribution.adapters.independent:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > installs independent core and adapter packages
+    distribution.runner.public-contracts:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > executes selectors discovered from packed runner documentation

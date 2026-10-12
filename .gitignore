@@ -14,3 +14,8 @@ __pycache__/
 .omp
 .agents
 /skills-lock.json
+/packages/core/skills/
+/packages/core/guidance/
+/packages/core/README.md
+/packages/*/LICENSE
+/packages/runner-*/README.md

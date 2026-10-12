@@ -1,17 +1,25 @@
-version: 3
+version: 4
 specifications:
+  formats:
+    markdown:
+      package: '@focused-spec/format-markdown'
   documents:
     - match: specs/account-authentication.md
       scope: current
+      format: markdown
     - match: specs/notifications.md
       scope: notifications
+      format: markdown
 evidence:
   files:
     - .focused-spec/evidence/notifications.yaml
 runners:
-  go-unit:
-    module: ./.focused-spec/runners/go-test.ts
+  go:
+    package: '@focused-spec/runner-go'
     timeoutMs: 120000
-  pytest-functional:
-    module: ./.focused-spec/runners/pytest.ts
+  pytest:
+    package: '@focused-spec/runner-pytest'
     timeoutMs: 120000
+    options:
+      command: uv
+      commandArgs: [run, --with, pytest, python]

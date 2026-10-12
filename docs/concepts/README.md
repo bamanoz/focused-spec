@@ -6,17 +6,17 @@ A focused specification protects the smallest product-boundary outcome that can 
 
 - a lowercase dotted ID bound to that item;
 - one or more exact evidence references in a configured YAML registry, optionally split into domain files;
-- execution results from project-local runners.
+- execution results from runner plugins loaded from the consuming project.
 
 The ID is not a second requirement, and the registry must not repeat or reinterpret the behavior.
 
 ## Native items and bindings
 
-Version 3 discovers native `.md` and `.feature` documents. It records a native item's structural name and location; it does not infer requirements from prose or require a particular source framework.
+Version 4 discovers documents through explicit layouts and parses each with its explicitly registered format adapter. Core records a native item's normalized structural name and location; it does not infer a format from an extension, infer requirements from prose, or require a particular source framework. The core package has no built-in Markdown or Gherkin parser.
 
-Editable Markdown binds an ID with `<!-- focused-spec:id=<id> -->` immediately before one heading, paragraph, or list item. A paragraph or list item may instead end with the marker inline. The marker must resolve to exactly that adjacent item.
+The official Markdown adapter binds an ID with `<!-- focused-spec:id=<id> -->` immediately before one heading, paragraph, or list item. A paragraph or list item may instead end with the marker inline. The marker must resolve to exactly that adjacent item.
 
-Gherkin binds an ID with `@focused.<id>` on one `Scenario` or `Scenario Outline`. Focused tags on `Feature`, `Rule`, `Background`, or `Examples` are invalid because those structures do not identify one executable scenario.
+The official Gherkin adapter binds an ID with `@focused.<id>` on one `Scenario` or `Scenario Outline`. Focused tags on `Feature`, `Rule`, `Background`, or `Examples` are invalid because those structures do not identify one executable scenario.
 
 When a document is generated or cannot preserve either marker, the registry may bind an explicit host-owned native ID:
 
@@ -28,7 +28,7 @@ scopes:
         path: generated/SPEC.md
         nativeId: CAP-1
       evidence:
-        - pytest-functional::tests/test_order_limit.py::test_order_at_limit_rejects_another_item
+        - pytest::tests/test_order_limit.py::test_order_at_limit_rejects_another_item
 ```
 
 `source.nativeId` is resolved only from an explicit declaration in `source.path`. Headings, line numbers, and behavior wording are not identities and are never guessed. Generated output stays unmarked.
@@ -51,10 +51,12 @@ Without `--scope`, validation and execution select all registry scopes and disco
 
 An all-scope selection with `scopes: {}` and no discovered documents is valid and empty. The registry file itself is required. Selecting a missing scope or scenario is an error.
 
-## Runner boundary
+## Plugin boundaries
 
-The runner API is unchanged. The core does not know Go, pytest, or another test framework. A project registers runner plugins in `.focused-spec/config.yaml`; the CLI asks each plugin to resolve opaque selectors and then execute the resolved targets.
+Format API version 1 normalizes native items and diagnostics; core retains ownership of discovery, path, scope, identity validation and evidence binding. A project registers every format under `specifications.formats` and selects one on each document layout. Official Markdown and Gherkin adapters are independently installed packages, not implicit core behavior.
 
-Runner plugins are trusted project code. They must use safe process invocation, bounded diagnostics, deterministic target IDs, and real framework results. A runner must never return `pass` without executing the selected test.
+Runner API version 1 is unchanged. Core does not know Vitest, pytest, Go, or another test framework. A project registers a package or project-contained runner module in `.focused-spec/config.yaml`; the CLI asks each plugin to resolve opaque selectors and execute only the resolved targets. The official `vitest`, `pytest`, and `go` runners are separate packages, while framework installations remain consumer-owned.
+
+Plugins are trusted project code executed in bounded isolated hosts, not security sandboxes. They must use safe process invocation, bounded diagnostics, deterministic identities and real framework results. A runner must never return `pass` without executing the selected test; invalid format output must never become a bound native item.
 
 The focused behavioral contract is recorded in the [capability specs](../../openspec/specs/scenario-authoring/spec.md); the [documentation map](../README.md) links every capability.
