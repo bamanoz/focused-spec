@@ -19,6 +19,8 @@ Use `focused-spec --help`, `<command> --help`, and `focused-spec help <command>`
 
 No command, an unknown command or option, an extra positional argument, a duplicate option, a missing value, or an unknown `help` target exits nonzero with a diagnostic and the relevant help pointer.
 
+Repeated value and boolean options are rejected even if their values agree or a later value is valid. For example, neither `run --scope first --scope second` nor `instructions --protocol 2 --protocol 1` uses the last value. Explicit help on a known command still takes precedence and performs no project work.
+
 ## Agent initialization
 
 `init` copies package-owned integration into the canonical explicitly named existing project directory, or cwd. Only explicit `minimax-code` selection additionally authorizes its global home skill. It does not search for an ancestor, download skills, install dependencies, load evidence configuration, or depend on OpenSpec. The fixed catalog below is audited against published OpenSpec 1.14.1: 50 canonical targets, 34 native wrappers, 16 skills-only targets. `~` denotes the existing canonical home root; all other paths are project-relative.

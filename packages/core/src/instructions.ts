@@ -28,8 +28,13 @@ export async function instructions(argumentsList: readonly string[]): Promise<st
   let protocol = 1
   let topic: 'workflow' | 'runners' = 'workflow'
   let json = false
+  const seen = new Set<string>()
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index]
+    if (argument !== undefined && argument.startsWith('-')) {
+      if (seen.has(argument)) throw argumentError(`duplicate option ${argument}`)
+      seen.add(argument)
+    }
     if (argument === '--json') json = true
     else if (argument === '--protocol' || argument === '--topic') {
       const value = argumentsList[index + 1]

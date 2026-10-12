@@ -19,6 +19,16 @@ The CLI SHALL load a registered project-installed package or project-relative `.
 - **WHEN** a project-local runner does not respond before its configured timeout
 - **THEN** the host terminates it and reports an error rather than a passing result
 
+<!-- focused-spec:id=runner.lifecycle.inherited-pipes -->
+#### Scenario: Timeout settles despite inherited output pipes
+- **WHEN** a timed-out runner leaves a descendant holding its output pipes open
+- **THEN** the host terminates and the invocation reports bounded ERROR without blocking unrelated work
+
+<!-- focused-spec:id=runner.lifecycle.malformed-envelope -->
+#### Scenario: Malformed host messages fail normally
+- **WHEN** a runner sends a null, array or nonboolean success discriminator as its host response
+- **THEN** the invocation reports an ordinary ERROR without crashing the caller
+
 ### Requirement: Exact selector resolution
 Each requested selector SHALL resolve to exactly one validated target or one actionable resolution error. A target SHALL preserve the exact selector, stable target ID, and project-relative source location when present.
 
@@ -45,9 +55,18 @@ For every requested target the runner SHALL return exactly one `pass`, `fail` or
 - **WHEN** a runner returns no result for a requested target or repeats a target ID
 - **THEN** execution reports an error rather than success for the affected evidence
 
+<!-- focused-spec:id=runner.run.vitest-exact -->
+#### Scenario: Vitest selection retains exact task identity
+- **WHEN** distinct Vitest task paths flatten to the same spaced name or a literal title contains the hierarchy delimiter
+- **THEN** only the selected task executes and its real result is reported
+
+<!-- focused-spec:id=runner.run.utf8-stream -->
+#### Scenario: Unicode survives arbitrary output chunk boundaries
+- **WHEN** a framework process splits a multibyte Unicode character across output chunks
+- **THEN** resolution and execution preserve the complete character on stdout and stderr
+
 ### Requirement: Optional exact execution partition
 When bounded concurrent execution is enabled, a participating project-local runner SHALL return executable groups of selected resolved targets and their resource keys.
-
 
 <!-- focused-spec:id=runner.partition.selected-targets -->
 #### Scenario: Runner partitions only selected targets

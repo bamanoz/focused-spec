@@ -18,11 +18,22 @@ function object(value: unknown): Record<string, unknown> | undefined {
 }
 
 export function isJsonValue(value: unknown): value is JsonValue {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true
-  if (typeof value === 'number') return Number.isFinite(value)
-  if (Array.isArray(value)) return value.every(isJsonValue)
-  const record = object(value)
-  return record !== undefined && Object.values(record).every(isJsonValue)
+  const active = new Set<object>()
+  function visit(candidate: unknown): boolean {
+    if (candidate === null || typeof candidate === 'string' || typeof candidate === 'boolean') return true
+    if (typeof candidate === 'number') return Number.isFinite(candidate)
+    if (typeof candidate !== 'object') return false
+    if (active.has(candidate)) return false
+    active.add(candidate)
+    try {
+      if (Array.isArray(candidate)) return candidate.every(visit)
+      const record = object(candidate)
+      return record !== undefined && Object.values(record).every(visit)
+    } finally {
+      active.delete(candidate)
+    }
+  }
+  return visit(value)
 }
 const CONFIG_KEYS: Readonly<Record<string, true>> = { version: true, specifications: true, evidence: true, runners: true, execution: true }
 const SPECIFICATION_KEYS: Readonly<Record<string, true>> = { documents: true, formats: true }

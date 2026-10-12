@@ -24,7 +24,9 @@ function readElicitationDecision(text: string, schema: unknown): ElicitationDeci
 }
 
 function explicitlyProposesPath(path: string, proposed: string, submittedPlan: string): boolean {
-  if (proposed.includes(path) || submittedPlan.includes(path)) return true
+  const escaped = path.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+  const completePath = new RegExp(`(?:^|[^\\w./\\\\-])${escaped}(?=$|[^\\w./\\\\-])`, 'u')
+  if (completePath.test(proposed) || completePath.test(submittedPlan)) return true
   const slash = path.lastIndexOf('/')
   if (slash < 1) return false
   const directory = path.slice(0, slash + 1)

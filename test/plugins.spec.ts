@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ExecutionResult, FocusedSpecConfig, Violation } from '../packages/core/src/model.js'
+import { loadConfig } from '../packages/core/src/config.js'
 
 const cli = fileURLToPath(new URL('../packages/core/dist/cli.js', import.meta.url))
 const modules = fileURLToPath(new URL('../node_modules', import.meta.url))
@@ -52,6 +53,71 @@ function entry(): { evidence: string[] } { return { evidence: ['local::protected
 const nativeFormat = 'export default { apiVersion: 1, parse({ source, options }) { const item = JSON.parse(source); return { items: [{ line: 1, name: item.name, nativeIds: [options.nativeId] }], diagnostics: [] }; } };'
 
 describe('plugin architecture', () => {
+  it.each(['format', 'runner'] as const)('rejects cyclic %s YAML options before loading either plugin', async kind => {
+    const { root } = await fixture()
+    const sentinel = "import { writeFileSync } from 'node:fs'; writeFileSync(new URL('./loaded', import.meta.url), 'loaded');"
+    await put(root, 'format.mjs', sentinel + nativeFormat)
+    await put(root, 'runner.mjs', sentinel + runner)
+    await put(root, 'specs/document.md', '{"name":"Protected"}')
+    await put(root, '.focused-spec/evidence.yaml', JSON.stringify({ scopes: { current: { 'plugin.cycle.bound': { ...entry(), source: { path: 'specs/document.md', nativeId: 'RULE-7' } } } } }))
+    await put(root, '.focused-spec/config.yaml', [
+      'version: 4',
+      'specifications:',
+      '  formats:',
+      '    native:',
+      '      module: ./format.mjs',
+      ...(kind === 'format' ? ['      options: &cycle', '        nativeId: RULE-7', '        self: *cycle'] : ['      options: { nativeId: RULE-7 }']),
+      '  documents:',
+      '    - { match: specs/document.md, scope: current, format: native }',
+      'runners:',
+      '  local:',
+      '    module: ./runner.mjs',
+      ...(kind === 'runner' ? ['    options: &cycle', '      self: *cycle'] : []),
+    ].join('\n'))
+    const child = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8', timeout: 20_000 })
+    expect(child.error, child.stderr).toBeUndefined()
+    await expect(loadConfig(root)).resolves.toMatchObject({
+      violations: expect.arrayContaining([
+        expect.objectContaining({ path: join(root, '.focused-spec/config.yaml'), message: expect.stringMatching(/options.*JSON/iu) }),
+      ]),
+    })
+    expect(child.status).toBe(1)
+    expect(JSON.parse(child.stdout)).toMatchObject({ valid: false, violations: expect.arrayContaining([
+      expect.objectContaining({ path: join(root, '.focused-spec/config.yaml'), message: expect.stringMatching(/options.*JSON/iu) }),
+    ]) })
+    await expect(access(join(root, 'loaded'))).rejects.toThrow()
+    await expect(access(join(root, 'executed'))).rejects.toThrow()
+  })
+
+  it('accepts repeated acyclic YAML aliases in format and runner options', async () => {
+    const { root } = await fixture()
+    const check = 'if (JSON.stringify(options.left) !== JSON.stringify({ values: [1, true, null] }) || JSON.stringify(options.right) !== JSON.stringify(options.left)) throw new Error("alias options lost");'
+    await put(root, 'format.mjs', `export default { apiVersion: 1, parse({ options }) { ${check} return { items: [{ line: 1, name: 'Protected', nativeIds: [], markerId: 'plugin.alias.bound' }], diagnostics: [] }; } };`)
+    await put(root, 'runner.mjs', runner.replace('resolve({ selectors }) {', `resolve({ selectors, options }) { ${check}`))
+    await put(root, 'specs/document.md', 'Consumer-native input')
+    await put(root, '.focused-spec/evidence.yaml', JSON.stringify({ scopes: { current: { 'plugin.alias.bound': entry() } } }))
+    await put(root, '.focused-spec/config.yaml', [
+      'version: 4',
+      'specifications:',
+      '  formats:',
+      '    native:',
+      '      module: ./format.mjs',
+      '      options:',
+      '        left: &shared { values: [1, true, null] }',
+      '        right: *shared',
+      '  documents:',
+      '    - { match: specs/document.md, scope: current, format: native }',
+      'runners:',
+      '  local:',
+      '    module: ./runner.mjs',
+      '    options: { left: *shared, right: *shared }',
+    ].join('\n'))
+    const passed = run(root)
+    expect(passed.code).toBe(0)
+    expect(passed.result.scenarios).toEqual([expect.objectContaining({ id: 'plugin.alias.bound', status: 'PASS' })])
+    await expect(access(join(root, 'executed'))).resolves.toBeUndefined()
+  })
+
   it('selects explicit Markdown and Gherkin formats', async () => {
     const { root, config } = await fixture()
     await configure(root, { ...config, specifications: {

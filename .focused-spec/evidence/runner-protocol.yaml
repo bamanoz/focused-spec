@@ -45,3 +45,28 @@ scopes:
     runner.official.go:
       evidence:
         - vitest::test/official-runners.spec.ts::official framework runners > reports exact Go outcomes
+    runner.lifecycle.inherited-pipes:
+      evidence:
+        - vitest::test/audit-runtime.spec.ts::audit runtime correctness > settles a
+          runner timeout with inherited output pipes and permits subsequent work
+    runner.lifecycle.malformed-envelope:
+      evidence:
+        - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects
+          null host IPC normally and keeps the caller alive
+        - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects
+          string ok host IPC normally and keeps the caller alive
+    runner.run.vitest-exact:
+      evidence:
+        - vitest::test/official-runners.spec.ts::official framework runners >
+          executes only the selected Vitest target with a flattened-name collision
+        - vitest::test/official-runners.spec.ts::official framework runners >
+          executes only the selected Vitest target with a literal hierarchy
+          separator
+    runner.run.utf8-stream:
+      evidence:
+        - vitest::test/official-runners.spec.ts::official framework runners >
+          preserves split UTF-8 stdout and stderr in the Vitest process helper
+        - vitest::test/official-runners.spec.ts::official framework runners >
+          preserves split UTF-8 stdout and stderr in the pytest process helper
+        - vitest::test/official-runners.spec.ts::official framework runners >
+          preserves split UTF-8 stdout and stderr in the Go process helper

@@ -1,11 +1,13 @@
-import { cp, copyFile, readFile, writeFile } from 'node:fs/promises'
+import { cp, copyFile, readFile, rm, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const core = join(root, 'packages/core')
-await cp(join(root, 'skills'), join(core, 'skills'), { recursive: true })
-await cp(join(root, 'guidance'), join(core, 'guidance'), { recursive: true })
+for (const asset of ['skills', 'guidance']) {
+  await rm(join(core, asset), { recursive: true, force: true })
+  await cp(join(root, asset), join(core, asset), { recursive: true })
+}
 await copyFile(join(root, 'README.md'), join(core, 'README.md'))
 for (const name of ['core', 'format-markdown', 'format-gherkin', 'runner-vitest', 'runner-pytest', 'runner-go']) {
   await copyFile(join(root, 'LICENSE'), join(root, 'packages', name, 'LICENSE'))

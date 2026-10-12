@@ -39,6 +39,11 @@ The CLI SHALL load a version-4 `.focused-spec/config.yaml` from the selected pro
 - **WHEN** the selected project has no evidence registry
 - **THEN** validation fails rather than falling back to inline evidence
 
+<!-- focused-spec:id=config.options.cyclic -->
+#### Scenario: Cyclic options fail at configuration boundary
+- **WHEN** format or runner options contain an active YAML alias cycle
+- **THEN** validation returns an actionable configuration violation without loading a plugin; repeated acyclic aliases remain valid
+
 ### Requirement: Specification sources
 The CLI SHALL discover focused scenarios from configured project-relative document patterns with explicitly registered format adapters without requiring a named SDD framework.
 
@@ -82,6 +87,11 @@ The CLI SHALL discover focused scenarios from configured project-relative docume
 #### Scenario: All discovered documents are unmarked-native
 - **WHEN** configured globs discover native scenarios but no enrolled scenarios anywhere and no scope is selected
 - **THEN** validation and run fail with an actionable no-registered-items error rather than reporting executable success
+
+<!-- focused-spec:id=config.source.dot-capture -->
+#### Scenario: Leading relative dot preserves captured scope
+- **WHEN** a captured layout starts with ./ and contains a globstar after the capture
+- **THEN** nested and zero-depth matches belong to the same scope as the equivalent layout without ./
 
 ### Requirement: Bounded glob discovery
 

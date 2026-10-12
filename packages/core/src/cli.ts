@@ -139,9 +139,14 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
   let allowSkip = false
   let scenarioId: string | undefined
   let timings = false
+  const seen = new Set<string>()
 
   for (let index = 1; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index]
+    if (argument !== undefined && argument.startsWith('-')) {
+      if (seen.has(argument)) throw argumentError(`duplicate option ${argument}`, command)
+      seen.add(argument)
+    }
     if (argument === '--strict') strict = true
     else if (argument === '--syntax-only') syntaxOnly = true
     else if (argument === '--json') json = true

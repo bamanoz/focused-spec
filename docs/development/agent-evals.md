@@ -52,7 +52,13 @@ npm run eval:agent -- \
 - registry placement cases independently load the configured sources, preserve every original registration at its original domain location, reject an added default monolith, and require either existing-domain reuse or exactly one explicitly connected new-domain source; configuration outside `evidence.files` remains unchanged. Unconfigured new evidence and domain-wide reorganization cannot satisfy this gate.
 - upgrade cases retain an independently owned pre-migration inventory and candidate artifact expectation; a green remaining selection cannot hide lost legacy outcomes or package tampering. Non-upgrade cases retain unchanged installed-package/skill protection.
 
-The result is written to gitignored `evals/results/<case>-<timestamp>.json`. `--keep-workspace` retains the isolated workspace for diagnosis. A model-specific pass is evidence for that model and prompt; it is not a universal capability claim.
+Proposal checkpoints compare the starting product tree before apply can run, including newly created executable files. Approval matches complete project-relative paths; prefix and suffix lookalikes do not authorize another file. Sensitivity requires the frozen selected reference to execute and report behavioral `FAIL`, followed by exact restored `PASS`; setup/runner `ERROR`, signals, unrelated failures and failed restoration never count.
+
+Direct framework execution proves the exact package/file and selected test actually ran; zero-match Go summaries and wrong-file Python tests are rejected. The same implementation-inspection policy applies to public and native authoring/regeneration transcripts, including directory searches, while public docs/types and CLI execution remain permitted.
+
+Driver exceptions/timeouts record failed turns with bounded available output, and owned process trees terminate before cleanup. Successful transcripts retain their beginning instead of silently tail-truncating. BMad failure interviews resume the last attempted regeneration session. Runtime-loaded eval TypeScript is checked for erasable syntax independently of compiled package source.
+
+The result is written exclusively to gitignored `evals/results/<case>-<timestamp>-<unique-id>.json`; identical timestamps cannot overwrite another run. `--keep-workspace` retains the isolated workspace for diagnosis. A model-specific pass is evidence for that model and prompt; it is not a universal capability claim.
 
 Saved results are immutable. If a gate bug is corrected, captured transcripts may be replayed to verify that correction, but the original model score remains unchanged and the replay is not a new model evaluation.
 

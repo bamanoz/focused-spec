@@ -38,6 +38,8 @@ export interface FormatPlugin {
 
 The default export is an object with `apiVersion: 1`. Official adapters use `satisfies FormatPlugin` while retaining a concrete synchronous `parse` return type, so trusted tooling may call them directly without widening the result to a promise; third-party adapters may return synchronously or asynchronously. The adapter reports positive source lines, structural names, zero or more explicit native IDs, an optional direct focused marker ID, and structured diagnostics. Results contain no document path or scope; core owns discovery, scope and evidence binding.
 
+Source lines are diagnostic coordinates, not item identity. Distinct normalized items may share a source line and bind independently; two registrations may not claim the same actual item.
+
 Core validates every normalized result before binding evidence. Invalid lines, names, IDs, result shapes, crashes, timeouts, or generic host failures are violations and never cause extension inference or fallback to another adapter. Format code runs as trusted project code in a bounded child host, not a security sandbox.
 
 The public core function and configuration types are exported from `focused-spec` and are asynchronous at the core boundary:
@@ -116,6 +118,8 @@ export interface RunnerPlugin {
 ```
 
 `resolve` returns `{ targets, errors }`; `run` returns `{ results }`. The host validates that every requested selector and every resolved target is represented exactly once.
+
+Malformed host envelopes fail through ordinary runner errors, never a caller crash or a truthy success discriminator. Timeout settlement waits for host termination but is bounded independently of descendants retaining output pipes; plugins remain responsible for their own subprocess cleanup.
 
 `partition` is optional and keeps `apiVersion: 1`. It receives the unique **selected** resolved targets after strict validation, only when `execution.maxConcurrentGroups` exceeds 1. With the default limit of 1 the host calls `run` once per runner and never calls `partition`. Without `partition`, a runner remains one exclusive invocation; its work cannot overlap other groups.
 

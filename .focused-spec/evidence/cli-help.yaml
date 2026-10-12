@@ -21,3 +21,23 @@ scopes:
     cli.help.agent-guide:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > explains guide compatibility without loading package guidance
+    cli.help.duplicate-options:
+      evidence:
+        - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects
+          run repeated scope before project execution with no stdout and a help
+          pointer
+        - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects
+          validate repeated scope before project execution with no stdout and a help
+          pointer
+        - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects
+          run repeated json before project execution with no stdout and a help
+          pointer
+        - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects
+          validate repeated json before project execution with no stdout and a help
+          pointer
+        - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects
+          instructions repeated json before project execution with no stdout and a
+          help pointer
+        - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects
+          instructions protocol 2 then 1 before project execution with no stdout and
+          a help pointer

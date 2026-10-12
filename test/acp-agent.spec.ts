@@ -42,6 +42,20 @@ describe('genuine planning consent', () => {
     expect(() => parseElicitationDecision('{"value":false,"approvedPaths":["agent-os/specs/login/shape.md"]}', confirmSchema, proposed)).toThrow()
   })
 
+  it.each([
+    'other/agent-os/specs/login/shape.md',
+    'prefix-agent-os/specs/login/shape.md',
+    'agent-os/specs/login/shape.md.backup',
+    'agent-os/specs/login/shape.md/child',
+  ])('rejects consent for a partial proposed path inside %s', proposedPath => {
+    const approvedPath = 'agent-os/specs/login/shape.md'
+    const decision = JSON.stringify({ value: 'Approve and execute', approvedPaths: [approvedPath] })
+    expect(() => parseElicitationDecision(decision, planSchema, `Create \`${proposedPath}\`.`)).toThrow('proposed')
+    expect(() => parseElicitationDecision(decision, planSchema, '', `Create \`${proposedPath}\`.`)).toThrow('proposed')
+    expect(parseElicitationDecision(decision, planSchema, `Create \`${approvedPath}\`.`).approvedPaths).toEqual([approvedPath])
+    expect(parseElicitationDecision(decision, planSchema, '', `Create \`${approvedPath}\`.`).approvedPaths).toEqual([approvedPath])
+  })
+
   it('recognizes exact companion paths from the authoritative submitted plan', () => {
     const submittedPlan = [
       'Create the Agent OS specification at `agent-os/specs/2026-10-09-1200-blocked-login/shape.md` for the single outcome: an account blocked by an administrator cannot log in even with valid credentials.',

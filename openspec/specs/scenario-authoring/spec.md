@@ -27,7 +27,6 @@ Each bound native item SHALL have one lowercase dotted stable ID unique within i
 ### Requirement: Evidence rows
 Evidence SHALL live only in the required logical evidence registry composed from configured YAML files, keyed by scope and stable ID.
 
-
 <!-- focused-spec:id=scenario.evidence.required -->
 #### Scenario: Every occurrence needs explicit evidence
 - **WHEN** a native marker has no own scope-local registry evidence
@@ -51,7 +50,6 @@ Evidence SHALL live only in the required logical evidence registry composed from
 
 ### Requirement: Native scenario enrollment
 Behavior SHALL remain solely in the host native checkable item.
-
 
 <!-- focused-spec:id=scenario.enrollment.mixed-document -->
 #### Scenario: Registered evidence beside untouched native content
@@ -104,6 +102,16 @@ Behavior SHALL remain solely in the host native checkable item.
 - **WHEN** a document contains legacy focused ID or EVIDENCE rows
 - **THEN** validation rejects the obsolete format instead of interpreting it
 
+<!-- focused-spec:id=native.binding.markdown.trailing -->
+#### Scenario: Inline marker must trail the permitted item
+- **WHEN** a marker is inline on a heading or precedes later content in the same list item
+- **THEN** binding fails while preceding-heading and truly trailing paragraph/list markers remain valid
+
+<!-- focused-spec:id=native.binding.markdown.list-gap -->
+#### Scenario: List-contained markers retain actual adjacency
+- **WHEN** a standalone marker inside a list is separated from the following paragraph by more than one blank line
+- **THEN** binding fails instead of measuring adjacency from the enclosing list start
+
 ### Requirement: Normalized format parsing
 Explicit format adapters SHALL return native structural names, positive line locations, direct focused IDs, explicit native IDs and diagnostics without taking ownership of document scope or path. The core SHALL validate returned data before binding evidence. Unknown document extensions SHALL be usable through an explicitly selected adapter.
 
@@ -116,6 +124,11 @@ Explicit format adapters SHALL return native structural names, positive line loc
 #### Scenario: Invalid format results cannot bind evidence
 - **WHEN** an adapter returns malformed items, invalid IDs or diagnostics
 - **THEN** the core reports a format error without inventing items or executing evidence
+
+<!-- focused-spec:id=format.contract.same-line -->
+#### Scenario: Distinct native items share diagnostic coordinates
+- **WHEN** an adapter returns two distinct native items on the same source line with independent bindings
+- **THEN** both bind and execute while two registrations claiming the same actual item fail
 
 ### Requirement: Bounded isolated format execution
 Format parsing SHALL execute outside the CLI process with bounded lifetimes and output. A selected adapter that hangs synchronously, crashes or fails to export its declared interface SHALL produce an actionable violation rather than hanging the CLI or falling back to another parser.

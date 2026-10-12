@@ -37,7 +37,9 @@ Runnable selector examples (create the corresponding ordinary framework test):
 | `pytest` | `tests/test_auth.py::test_blocked_account` |
 | `go` | `./auth::TestLogin` |
 
-Duplicate full Vitest names are ambiguous. The official runners omit `partition`, so their invocations are exclusive. They collect exact selectors and read per-test results: missing, ambiguous, skipped, failed, unexecuted, or malformed outcomes cannot become `pass` because a process exited zero.
+Duplicate full Vitest names within the same file are ambiguous; identical names in different files remain distinct selectors. The official runners omit `partition`, so their invocations are exclusive. They collect exact selectors and read per-test results: missing, ambiguous, skipped, failed, unexecuted, or malformed outcomes cannot become `pass` because a process exited zero.
+
+Vitest execution selects collected public task identities in one batch, not a regex over flattened titles. Results retain both file and test identity. Distinct hierarchy paths that flatten to the same spaced name do not execute each other's tests, and literal ` > ` text in a title remains literal. All official process helpers decode stdout and stderr as UTF-8 streams, preserving multibyte characters split across output chunks.
 
 ## Custom runners
 

@@ -17,7 +17,6 @@ The CLI SHALL accept `focused-spec --help`, `focused-spec -h`, and `focused-spec
 ### Requirement: Command-specific help
 For `validate`, `run`, `instructions`, and `init`, the CLI SHALL accept `<command> --help`, `<command> -h`, and `help <command>` as successful help requests.
 
-
 <!-- focused-spec:id=cli.help.validate -->
 #### Scenario: Validate help explains validation options
 - **WHEN** a user requests `validate` help using any supported form
@@ -49,6 +48,11 @@ An absent or unknown command, an unknown option, a missing option value, or an u
 #### Scenario: Invalid invocation points to help
 - **WHEN** a user supplies an unknown command, an unknown option, a missing option value, an unknown help target, or a retired transition command/help invocation
 - **THEN** the CLI fails with an actionable stderr diagnostic and the relevant help command, with no successful help or usable result on stdout
+
+<!-- focused-spec:id=cli.help.duplicate-options -->
+#### Scenario: Repeated options are invalid invocations
+- **WHEN** run, validate or instructions receives a repeated value or boolean option
+- **THEN** it returns nonzero with a help pointer and no usable stdout or execution; explicit help still takes precedence
 
 ### Requirement: Initialization help
 Init help SHALL support `init --help`, `init -h` and `help init` without config, prompts, assets or project/home inspection/mutation. It SHALL explain path, all 50 IDs/destinations, alias/shared roots, native setup, explicit selection, preview/JSON/replacement, preservation and installation-only success. MiniMax SHALL be identified as explicitly selected global-only integration with absolute JSON paths. Help SHALL stay human-readable with JSON.

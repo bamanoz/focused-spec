@@ -16,6 +16,7 @@ This repository uses specification-driven development (SDD) with OpenSpec. For e
 
 - `npm ci` installs the complete private workspace from its lockfile; do not install separately inside package directories.
 - `npm run build` builds `focused-spec` first, then every adapter package, and stages root `README.md`, `LICENSE`, `skills/`, and `guidance/` into `packages/core`. It also generates each official runner's `README.md` from `docs/guides/runners.md`, converting its relative links to canonical repository URLs. Generated package copies are ignored; the root assets and runner guide remain the only authored owners.
+- Every workspace package build replaces its owned `dist/` tree before compilation. Asset staging replaces only core's generated `skills/` and `guidance/` mirrors, so removed authored modules or assets cannot survive in a later tarball. Authored source, root assets and unrelated files are preserved.
 - `npm run typecheck:tests` checks test and eval TypeScript; examples consume the compiled official packages rather than copied runner source.
 - `npm test` runs build, typechecks, and Vitest.
 - `npm run smoke` runs the real [OpenSpec example](../../examples/openspec/) with Go and pytest evidence.

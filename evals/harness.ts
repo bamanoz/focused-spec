@@ -1,14 +1,15 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { glob } from 'glob'
 import type { AgentDriver, AgentRequest, EvalGate, EvalResult, EvalRunOptions } from './types.ts'
 import { evalCase } from './cases.ts'
-import { guidanceActivationGate, judgeCompletedWorkspace, judgeProposalCheckpoint, judgeWorkingCheckpoint, skillActivationGate, snapshotProtectedFiles } from './judge.ts'
+import { guidanceActivationGate, judgeCompletedWorkspace, judgeProposalCheckpoint, judgeWorkingCheckpoint, skillActivationGate, snapshotProtectedFiles, snapshotProposalFiles } from './judge.ts'
 import type { WorkingEvidenceCheckpoint } from './judge.ts'
 import { OmpAgentDriver } from './omp-agent.ts'
 import { evalRepositoryRoot, provisionWorkspace, readEvalPrompt } from './provision.ts'
 import { interviewFailedAgent } from './diagnostic.ts'
 import { isUpgradeArtifact, upgradeArtifactsGate, upgradePreservationGate } from './upgrade.ts'
+import { runAgentTurn, saveEvalResult } from './result.ts'
 
 export async function runEval(
   options: EvalRunOptions,
@@ -26,7 +27,9 @@ export async function runEval(
   let lastRequest: AgentRequest | undefined
 
   try {
+    try {
     const snapshots = new Map(await snapshotProtectedFiles(workspace.path, selected.editablePaths))
+    const proposalBefore = await snapshotProposalFiles(workspace.path)
     if (workspace.upgrade !== undefined) {
       for (const path of snapshots.keys()) if (isUpgradeArtifact(path)) snapshots.delete(path)
       const unrelated = await glob('node_modules/yaml/**/*', { cwd: workspace.path, nodir: true, dot: true, follow: true, nocase: false })
@@ -45,7 +48,7 @@ export async function runEval(
         timeoutMs,
       }
       lastRequest = request
-      const result = await driver.run(request)
+      const result = await runAgentTurn(driver, request)
       turns.push(result)
       transcripts.push(result.output)
       gates.push({
@@ -57,7 +60,7 @@ export async function runEval(
       gates.push(skillActivationGate(result.output), await guidanceActivationGate(workspace.path, [result.output]))
       if (gates.some(item => !item.passed)) break
       if (turn.checkpoint === 'proposal') {
-        const checkpoint = await judgeProposalCheckpoint(workspace.path, selected)
+        const checkpoint = await judgeProposalCheckpoint(workspace.path, selected, proposalBefore)
         gates.push(...checkpoint.gates)
         selectedScenarioId ??= checkpoint.selectedScenarioId
       }
@@ -78,6 +81,9 @@ export async function runEval(
         gates.push({ name: 'evaluation-error', passed: false, detail: error instanceof Error ? error.message : String(error) })
       }
     }
+    } catch (error) {
+      gates.push({ name: 'evaluation-error', passed: false, detail: error instanceof Error ? error.message : String(error) })
+    }
     const passed = gates.length > 0 && gates.every(item => item.passed)
     const diagnostic = !passed && lastRequest !== undefined
       ? await interviewFailedAgent(lastRequest, gates, selected.description, driver) : null
@@ -90,8 +96,7 @@ export async function runEval(
       diagnostic,
     }
     const resultsDirectory = join(evalRepositoryRoot(), 'evals', 'results')
-    await mkdir(resultsDirectory, { recursive: true })
-    await writeFile(join(resultsDirectory, `${selected.id}-${Date.now()}.json`), `${JSON.stringify(result, null, 2)}\n`)
+    await saveEvalResult(resultsDirectory, selected.id, result)
     return result
   } finally {
     await workspace.finish()

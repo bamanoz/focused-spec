@@ -12,6 +12,7 @@ const REPORT_LIMIT = 4_000_000
 
 type ListedTest = { readonly file: string; readonly name: string }
 type Assertion = {
+  readonly file: string
   readonly ancestorTitles: readonly string[]
   readonly title: string
   readonly status: string
@@ -84,9 +85,9 @@ function parseJson<T>(output: string, operation: string): T {
   }
 }
 
-function exactNamePattern(name: string): string {
-  const fullName = name.split(' > ').join(' ')
-  return `^${fullName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}$`
+function collectorPath(): string {
+  const compiled = fileURLToPath(new URL('./collect.js', import.meta.url))
+  return existsSync(compiled) ? compiled : fileURLToPath(new URL('./collect.ts', import.meta.url))
 }
 
 function diagnostic(process: ProcessResult): string {
@@ -95,15 +96,15 @@ function diagnostic(process: ProcessResult): string {
 
 async function executeWithReport(
   command: CommandOptions,
-  cli: string,
-  args: readonly string[],
+  api: string,
+  selected: readonly { readonly file: string; readonly names: readonly string[] }[],
   cwd: string,
   signal: AbortSignal,
 ): Promise<{ readonly process: ProcessResult; readonly report: Report }> {
   const directory = await mkdtemp(join(tmpdir(), 'focused-spec-vitest-report-'))
   const reportPath = join(directory, 'report.json')
   try {
-    const processResult = await runProcess(command.command, [...command.commandArgs, cli, ...args, '--reporter=json', '--outputFile', reportPath, '--silent'], cwd, signal)
+    const processResult = await runProcess(command.command, [...command.commandArgs, collectorPath(), api, reportPath, JSON.stringify(selected.map(selection => selection.file)), JSON.stringify(selected)], cwd, signal)
     let size: number
     try {
       size = (await stat(reportPath)).size
@@ -121,12 +122,11 @@ async function executeWithReport(
 export default {
   apiVersion: 1,
   async resolve(request) {
-    const cli = await vitestCli(request.projectRoot)
+    await vitestCli(request.projectRoot)
     const command = commandOptions(request.options)
     const directory = await mkdtemp(join(tmpdir(), 'focused-spec-vitest-collection-'))
     const output = join(directory, 'tests.json')
-    const compiled = fileURLToPath(new URL('./collect.js', import.meta.url))
-    const collector = existsSync(compiled) ? compiled : fileURLToPath(new URL('./collect.ts', import.meta.url))
+    const collector = collectorPath()
     const api = createRequire(resolve(request.projectRoot, 'package.json')).resolve('vitest/node')
     const filters = [...new Set(request.selectors.flatMap(selector => {
       const parsed = parseSelector(selector)
@@ -169,7 +169,8 @@ export default {
   },
 
   async run(request) {
-    const cli = await vitestCli(request.projectRoot)
+    await vitestCli(request.projectRoot)
+    const api = createRequire(resolve(request.projectRoot, 'package.json')).resolve('vitest/node')
     const command = commandOptions(request.options)
     const files = new Map<string, Map<string, ResolvedTarget>>()
     for (const target of request.targets) {
@@ -185,22 +186,23 @@ export default {
       tests.set(selected.name, target)
     }
 
+    const selected = await Promise.all([...files].map(async ([file, tests]) => ({ file: await realpath(file), names: [...tests.keys()] })))
+    const execution = await executeWithReport(command, api, selected, request.cwd, request.signal)
+    const report = execution.report
+    if (!Array.isArray(report.testResults)) throw new Error('Vitest returned no execution results')
+    const suiteMessages = report.testResults.map(result => result.message ?? '').filter(message => message !== '')
+    if ((report.numRuntimeErrorTestSuites ?? 0) > 0 || suiteMessages.length > 0) {
+      throw new Error(`Vitest suite failed: ${(suiteMessages.join('\n') || diagnostic(execution.process)).slice(-DIAGNOSTIC_LIMIT)}`)
+    }
+    const assertions = report.testResults.flatMap(result => result.assertionResults)
+    if (execution.process.code !== 0 && !assertions.some(assertion => assertion.status === 'failed')) {
+      throw new Error(`Vitest exited ${execution.process.code}${diagnostic(execution.process) === '' ? '' : `: ${diagnostic(execution.process)}`}`)
+    }
     const resultByTarget = new Map<string, TargetResult>()
-    for (const [file, tests] of files) {
-      const selectedPattern = [...tests.keys()].map(exactNamePattern).join('|')
-      const execution = await executeWithReport(command, cli, ['run', await realpath(file), '--testNamePattern', selectedPattern], request.cwd, request.signal)
-      const report = execution.report
-      if (!Array.isArray(report.testResults)) throw new Error('Vitest returned no execution results')
-      const suiteMessages = report.testResults.map(result => result.message ?? '').filter(message => message !== '')
-      if ((report.numRuntimeErrorTestSuites ?? 0) > 0 || suiteMessages.length > 0) {
-        throw new Error(`Vitest suite failed: ${(suiteMessages.join('\n') || diagnostic(execution.process)).slice(-DIAGNOSTIC_LIMIT)}`)
-      }
-      const assertions = report.testResults.flatMap(result => result.assertionResults)
-      if (execution.process.code !== 0 && !assertions.some(assertion => assertion.status === 'failed')) {
-        throw new Error(`Vitest exited ${execution.process.code}${diagnostic(execution.process) === '' ? '' : `: ${diagnostic(execution.process)}`}`)
-      }
+    for (const [index, [, tests]] of [...files].entries()) {
+      const file = selected[index]!.file
       for (const [name, target] of tests) {
-        const matching = assertions.filter(assertion => [...assertion.ancestorTitles, assertion.title].join(' > ') === name)
+        const matching = assertions.filter(assertion => assertion.file === file && [...assertion.ancestorTitles, assertion.title].join(' > ') === name)
         if (matching.length !== 1) throw new Error(`Vitest reported ${matching.length} results for ${target.selector}`)
         const assertion = matching[0]!
         const status = assertion.status === 'passed' ? 'pass'

@@ -100,3 +100,83 @@ scopes:
     agent.upgrade.reject-loss:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > rejects lost scope-local evidence and tampered upgrade artifacts
+    agent.proposal.product-checkpoint:
+      evidence:
+        - vitest::test/audit-eval-runtime.spec.ts::audit eval runtime boundaries >
+          stops a proposal modifying app/auth.py before an apply turn can restore it
+        - vitest::test/audit-eval-runtime.spec.ts::audit eval runtime boundaries >
+          stops a proposal modifying auth/auth_test.go before an apply turn can
+          restore it
+        - vitest::test/audit-eval-runtime.spec.ts::audit eval runtime boundaries >
+          stops a proposal modifying tests/functional/test_auth.py before an apply
+          turn can restore it
+        - vitest::test/audit-eval-runtime.spec.ts::audit eval runtime boundaries >
+          stops a proposal modifying new-product.py before an apply turn can restore
+          it
+    agent.evidence.exact-mutation:
+      evidence:
+        - "vitest::test/evals.spec.ts::agent eval harness > requires selected
+          behavioral failure and restored pass: selected ERROR"
+        - "vitest::test/evals.spec.ts::agent eval harness > requires selected
+          behavioral failure and restored pass: unrelated FAIL"
+        - "vitest::test/evals.spec.ts::agent eval harness > requires selected
+          behavioral failure and restored pass: validation error"
+        - "vitest::test/evals.spec.ts::agent eval harness > requires selected
+          behavioral failure and restored pass: signal termination"
+        - "vitest::test/evals.spec.ts::agent eval harness > requires selected
+          behavioral failure and restored pass: failed restoration"
+        - "vitest::test/evals.spec.ts::agent eval harness > requires selected
+          behavioral failure and restored pass: selected FAIL then restored PASS"
+    agent.eval.direct-exact:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries >
+          rejects zero-match Go and wrong-file Python execution while accepting
+          observed exact tests
+    agent.eval.timeout-persist:
+      evidence:
+        - vitest::test/audit-eval-runtime.spec.ts::audit eval runtime boundaries >
+          persists a thrown driver as a failed turn without claiming downstream
+          success
+        - vitest::test/audit-eval-runtime.spec.ts::audit eval runtime boundaries >
+          terminates owned descendants on timeout and persists the captured failed
+          transcript
+        - vitest::test/audit-eval-runtime.spec.ts::audit eval runtime boundaries >
+          preserves initial events across large eval transcripts
+    agent.eval.inspection-directories:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects implementation
+          directory searches while allowing public declarations and CLI execution
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries >
+          rejects native implementation reads and directory searches without
+          rejecting docs types or CLI execution
+    agent.eval.immutable-collision:
+      evidence:
+        - vitest::test/audit-eval-runtime.spec.ts::audit eval runtime boundaries >
+          saves distinct immutable same-case results when the clock collides
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries >
+          preserves distinct immutable native result artifacts when timestamps
+          collide
+    agent.eval.diagnostic-last-phase:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries >
+          retains the failed BMad regeneration request for diagnosis of its own
+          session without rescoring (throws=false)
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries >
+          retains the failed BMad regeneration request for diagnosis of its own
+          session without rescoring (throws=true)
+    agent.eval.working-checkpoint-scope:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > checkpoints and publishes
+          the configured working scope rather than the change name
+        - vitest::test/evals.spec.ts::agent eval harness > rejects ambiguous
+          configured working scopes and a changed checkpoint identity
+    agent.eval.consent-path-boundaries:
+      evidence:
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > rejects consent
+          for a partial proposed path inside other/agent-os/specs/login/shape.md
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > rejects consent
+          for a partial proposed path inside prefix-agent-os/specs/login/shape.md
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > rejects consent
+          for a partial proposed path inside agent-os/specs/login/shape.md.backup
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > rejects consent
+          for a partial proposed path inside agent-os/specs/login/shape.md/child

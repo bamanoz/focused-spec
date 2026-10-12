@@ -1,13 +1,13 @@
 {
   "name": "focused-spec",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Format-neutral executable evidence for behavioral specifications",
   "repository": {"type": "git", "url": "git+https://github.com/bamanoz/focused-spec.git", "directory": "packages/core"},
   "type": "module",
   "bin": {"focused-spec": "dist/cli.js"},
   "exports": {".": "./dist/index.js", "./runner": "./dist/runner-api.js", "./format": "./dist/format-api.js"},
   "files": ["dist", "skills", "guidance", "README.md", "LICENSE"],
-  "scripts": {"build": "tsc -p tsconfig.json", "prepare": "npm run build && node ../../scripts/stage-assets.mjs"},
+  "scripts": {"build": "node ../../scripts/build-package.mjs", "prepare": "npm run build && node ../../scripts/stage-assets.mjs"},
   "engines": {"node": ">=22.16.0"},
   "dependencies": {"glob": "^13.0.6", "minimatch": "^10.2.6", "yaml": "^2.8.1"},
   "license": "MIT"

@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import goRunner from '../packages/runner-go/src/index.js'
 import pytestRunner from '../packages/runner-pytest/src/index.js'
 import vitestRunner from '../packages/runner-vitest/src/index.js'
+import { runProcess as runGoProcess } from '../packages/runner-go/src/process.js'
+import { runProcess as runPytestProcess } from '../packages/runner-pytest/src/process.js'
+import { runProcess as runVitestProcess } from '../packages/runner-vitest/src/process.js'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -18,6 +21,73 @@ async function temporaryRoot(prefix: string): Promise<string> {
 }
 
 describe('official framework runners', () => {
+  for (const [name, selected, sentinel, declarations] of [
+    ['flattened-name collision', 'a > b c', 'a b > c', [
+      "describe('a', () => { it('b c', selectedBody) })",
+      "describe('a b', () => { it('c', sentinelBody) })",
+    ]],
+    ['literal hierarchy separator', 'literal > title', 'literal title', [
+      "it('literal > title', selectedBody)",
+      "it('literal title', sentinelBody)",
+    ]],
+  ] as const) {
+    it(`executes only the selected Vitest target with a ${name}`, async () => {
+      const root = await temporaryRoot('focused-spec-vitest-identity-')
+      await symlink(resolve('node_modules'), join(root, 'node_modules'), 'dir')
+      await writeFile(join(root, 'package.json'), '{"type":"module"}\n')
+      await writeFile(join(root, 'identity.spec.ts'), [
+        "import { writeFileSync } from 'node:fs'",
+        "import { describe, it } from 'vitest'",
+        "const selectedBody = () => { writeFileSync('selected-ran', 'yes') }",
+        "const sentinelBody = () => { writeFileSync('unselected-ran', 'yes'); throw new Error('unselected sentinel') }",
+        ...declarations,
+      ].join('\n'))
+      const context = { projectRoot: root, cwd: root, runnerId: 'vitest', options: null, signal: new AbortController().signal }
+      const selector = `identity.spec.ts::${selected}`
+      const resolution = await vitestRunner.resolve({ ...context, selectors: [selector, `identity.spec.ts::${sentinel}`] })
+      expect(resolution.errors).toEqual([])
+      expect(resolution.targets.map(target => target.selector)).toEqual([selector, `identity.spec.ts::${sentinel}`])
+      const target = resolution.targets[0]!
+      const execution = await vitestRunner.run({ ...context, targets: [target] })
+      expect(execution.results).toEqual([{ targetId: target.targetId, status: 'pass' }])
+      await expect(access(join(root, 'selected-ran'))).resolves.toBeUndefined()
+      await expect(access(join(root, 'unselected-ran'))).rejects.toThrow()
+    }, 60_000)
+  }
+
+  for (const [name, runProcess] of [
+    ['Vitest', runVitestProcess],
+    ['pytest', runPytestProcess],
+    ['Go', runGoProcess],
+  ] as const) {
+    it(`preserves split UTF-8 stdout and stderr in the ${name} process helper`, async () => {
+      const root = await temporaryRoot('focused-spec-split-utf8-')
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 5_000)
+      const script = [
+        "const { setTimeout: delay } = require('node:timers/promises');",
+        'const write = (stream, bytes) => new Promise((resolve, reject) => stream.write(Buffer.from(bytes), error => error ? reject(error) : resolve()));',
+        '(async () => {',
+        '  await write(process.stdout, [0x41, 0xe2]);',
+        '  await write(process.stderr, [0x42, 0xf0, 0x9f]);',
+        '  await delay(150);',
+        '  await write(process.stdout, [0x82]);',
+        '  await write(process.stderr, [0x98]);',
+        '  await delay(150);',
+        '  await write(process.stdout, [0xac, 0x5a]);',
+        '  await write(process.stderr, [0x80, 0x59]);',
+        '})().catch(error => { console.error(error); process.exitCode = 1 });',
+      ].join('\n')
+      try {
+        const result = await runProcess(process.execPath, ['-e', script], root, controller.signal)
+        expect(result).toEqual({ code: 0, stdout: 'A€Z', stderr: 'B😀Y' })
+      } finally {
+        clearTimeout(timer)
+        controller.abort()
+      }
+    }, 10_000)
+  }
+
   it('reports exact Vitest outcomes', async () => {
     const root = await temporaryRoot('focused-spec-official-vitest-')
     await mkdir(join(root, 'test'))
@@ -35,14 +105,23 @@ describe('official framework runners', () => {
       "  it('duplicate', () => {})",
       '})',
     ].join('\n'))
+    await writeFile(join(root, 'test/other.spec.ts'), [
+      "import { appendFileSync } from 'node:fs'",
+      "import { describe, expect, it } from 'vitest'",
+      "describe('exact', () => {",
+      "  it('passes', () => { expect(2 + 2).toBe(6) })",
+      "  it('unselected failure', () => { appendFileSync('unselected-ran', 'yes'); throw new Error('unselected sentinel') })",
+      '})',
+    ].join('\n'))
     const context = { projectRoot: root, cwd: root, runnerId: 'vitest', options: null, signal: new AbortController().signal }
     const passing = 'test/framework.spec.ts::exact > passes'
     const failing = 'test/framework.spec.ts::exact > fails'
     const skipped = 'test/framework.spec.ts::exact > skips'
     const missing = 'test/framework.spec.ts::exact > missing'
     const ambiguous = 'test/framework.spec.ts::exact > duplicate'
-    const resolution = await vitestRunner.resolve({ ...context, selectors: [passing, failing, skipped, missing, ambiguous] })
-    expect(resolution.targets.map(target => target.selector)).toEqual([passing, failing, skipped])
+    const otherFile = 'test/other.spec.ts::exact > passes'
+    const resolution = await vitestRunner.resolve({ ...context, selectors: [passing, failing, skipped, missing, ambiguous, otherFile] })
+    expect(resolution.targets.map(target => target.selector)).toEqual([passing, failing, skipped, otherFile])
     expect(resolution.errors).toEqual([
       { selector: missing, message: expect.stringContaining('not found') },
       { selector: ambiguous, message: expect.stringContaining('ambiguous') },
@@ -52,6 +131,7 @@ describe('official framework runners', () => {
       { targetId: passing, status: 'pass' },
       { targetId: failing, status: 'fail', diagnostic: expect.stringContaining('expected 4 to be 5') },
       { targetId: skipped, status: 'skip' },
+      { targetId: otherFile, status: 'fail', diagnostic: expect.stringContaining('expected 4 to be 6') },
     ])
     await expect(access(join(root, 'unselected-ran'))).rejects.toThrow()
   }, 60_000)

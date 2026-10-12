@@ -91,6 +91,61 @@ describe('native specification parsing', () => {
     expect(duplicate.violations.map(value => value.message).join('\n')).toMatch(/(?:duplicate|multiple).*marker/iu)
   })
 
+  it('rejects inline focused markers on Markdown headings', () => {
+    const invalid = parseNativeDocument('specs/heading.md',
+      '## Heading behavior <!-- focused-spec:id=audit.markdown.heading -->', 'current')
+    expect(invalid.violations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ scenarioId: 'audit.markdown.heading', message: expect.stringMatching(/inline|heading|placement/iu) }),
+    ]))
+    const valid = parseNativeDocument('specs/heading.md',
+      '<!-- focused-spec:id=audit.markdown.heading -->\n\n## Heading behavior', 'current')
+    expect(valid.violations).toEqual([])
+    expect(valid.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Heading behavior', markerId: 'audit.markdown.heading' }),
+    ]))
+  })
+
+  it('rejects inline focused markers before later list-item paragraphs', () => {
+    const invalid = parseNativeDocument('specs/list.md', [
+      '- First paragraph. <!-- focused-spec:id=audit.markdown.list-inline -->',
+      '',
+      '  Later paragraph in the same item.',
+    ].join('\n'), 'current')
+    expect(invalid.violations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ scenarioId: 'audit.markdown.list-inline', message: expect.stringMatching(/inline|follow|end|trailing/iu) }),
+    ]))
+    const valid = parseNativeDocument('specs/list.md', [
+      '- First paragraph.',
+      '',
+      '  Final paragraph. <!-- focused-spec:id=audit.markdown.list-inline -->',
+    ].join('\n'), 'current')
+    expect(valid.violations).toEqual([])
+    expect(valid.items.some(item => item.markerId === 'audit.markdown.list-inline')).toBe(true)
+  })
+
+  it('measures list-contained preceding marker adjacency from the neighboring paragraph', () => {
+    for (const blankLines of [0, 1, 2, 3]) {
+      const document = parseNativeDocument('specs/list-gap.md', [
+        '- Earlier paragraph.',
+        '',
+        '  <!-- focused-spec:id=audit.markdown.list-gap -->',
+        ...Array.from({ length: blankLines }, () => ''),
+        '  Neighboring behavior paragraph.',
+      ].join('\n'), 'current')
+      if (blankLines <= 1) {
+        expect(document.violations).toEqual([])
+        expect(document.items).toEqual(expect.arrayContaining([
+          expect.objectContaining({ line: 4 + blankLines, name: 'Neighboring behavior paragraph.', markerId: 'audit.markdown.list-gap' }),
+        ]))
+      } else {
+        expect(document.violations).toEqual(expect.arrayContaining([
+          expect.objectContaining({ line: 3, scenarioId: 'audit.markdown.list-gap', message: expect.stringMatching(/detach|adjacen|immediate/iu) }),
+        ]))
+        expect(document.items.some(item => item.markerId === 'audit.markdown.list-gap')).toBe(false)
+      }
+    }
+  })
+
   it('ignores marker-looking text in fenced code blocks', () => {
     const document = parseNativeDocument('specs/example.md', [
       '# Literal example',

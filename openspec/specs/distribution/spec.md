@@ -19,6 +19,16 @@ The package SHALL install in Node.js 22.16.0+ consumers with a `focused-spec` CL
 - **WHEN** a consumer imports `RunnerPlugin` as a type from `focused-spec/runner`
 - **THEN** the plugin typechecks against the published runner contract without internal source imports
 
+<!-- focused-spec:id=distribution.package.retired-assets -->
+#### Scenario: Rebuild removes retired generated assets
+- **WHEN** a generated package asset no longer exists in its authored owner before repeated staging
+- **THEN** the rebuilt package omits the retired asset and retains current authored contents
+
+<!-- focused-spec:id=distribution.package.retired-runtime -->
+#### Scenario: Rebuild removes retired runtime outputs
+- **WHEN** an authored runtime module is removed before the next package build
+- **THEN** the resulting package no longer contains its retired compiled runtime or declaration
+
 ### Requirement: Skill installation is separate
 Installing the CLI SHALL NOT silently install an agent skill or manufacture a framework runner. The focused-spec skill SHALL be installable separately for supported agents.
 
@@ -29,7 +39,6 @@ Installing the CLI SHALL NOT silently install an agent skill or manufacture a fr
 
 ### Requirement: CLI-owned workflow and separate loader
 The npm package SHALL contain the authoritative focused-spec workflow and runner guidance required by `instructions`, together with an independently installable focused-spec loader skill.
-
 
 <!-- focused-spec:id=distribution.package.agent-guidance -->
 #### Scenario: Packed guidance works independently of the source checkout

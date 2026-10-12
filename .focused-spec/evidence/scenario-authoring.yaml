@@ -60,3 +60,24 @@ scopes:
     format.lifecycle.timeout:
       evidence:
         - vitest::test/plugins.spec.ts::plugin architecture > terminates a blocking format host
+    native.binding.markdown.trailing:
+      evidence:
+        - vitest::test/core.spec.ts::native specification parsing > rejects inline
+          focused markers on Markdown headings
+        - vitest::test/core.spec.ts::native specification parsing > rejects inline
+          focused markers before later list-item paragraphs
+    native.binding.markdown.list-gap:
+      evidence:
+        - vitest::test/core.spec.ts::native specification parsing > measures
+          list-contained preceding marker adjacency from the neighboring paragraph
+    format.contract.same-line:
+      evidence:
+        - vitest::test/runner.spec.ts::native item evidence execution > binds
+          distinct same-line native items independently through direct identities
+          and executes AND evidence
+        - vitest::test/runner.spec.ts::native item evidence execution > binds
+          distinct same-line native items independently through external identities
+          and executes AND evidence
+        - vitest::test/runner.spec.ts::native item evidence execution > rejects two
+          external registrations claiming the same actual native item through
+          different native IDs

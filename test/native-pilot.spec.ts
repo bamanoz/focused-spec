@@ -1,12 +1,16 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   agentEvidenceGate, canonicalMemlogReadGate, companionGate, creationGate, evidenceGate, hostPrerequisiteGate, hostWorkflowGate,
   infrastructureIntegrityGate, infrastructureSnapshot,
   hostWriteConstraintGate, judged, nativeSingleSourceGate,
 } from '../evals/native-pilot.ts'
+import * as nativePilot from '../evals/native-pilot.ts'
+import { OmpAgentDriver } from '../evals/omp-agent.ts'
+import type { AgentRequest } from '../evals/types.ts'
+import { saveEvalResult } from '../evals/result.ts'
 
 const roots: string[] = []
 
@@ -20,9 +24,25 @@ function readTranscript(path: string, isError = false): string {
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
+  vi.restoreAllMocks()
 })
 
 describe('native pilot evaluation boundaries', () => {
+  it('preserves distinct immutable native result artifacts when timestamps collide', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-results-'))
+    roots.push(root)
+    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
+    const first = { caseId: 'bmad', transcript: 'first captured run', certified: false }
+    const second = { caseId: 'bmad', transcript: 'second captured run', certified: false }
+    const path = await saveEvalResult(root, 'native-bmad', first)
+    const bytes = await readFile(path, 'utf8')
+    const other = await saveEvalResult(root, 'native-bmad', second)
+    expect(other).not.toBe(path)
+    expect(await readdir(root)).toHaveLength(2)
+    expect(await readFile(path, 'utf8')).toBe(bytes)
+    expect(JSON.parse(await readFile(other, 'utf8'))).toEqual(second)
+  })
+
   it('requires a successful in-project canonical memlog read before regeneration starts', () => {
     const workspace = join(tmpdir(), 'focused-native-read-contract')
     const memlog = '_bmad-output/specs/spec-blocked-login/.memlog.md'
@@ -305,9 +325,9 @@ describe('native pilot evaluation boundaries', () => {
   it('does not label a test as unexecuted when no valid evidence binding selected it', () => {
     const transcript = [
       JSON.stringify({ type: 'tool_execution_start', toolCallId: 'direct-go', toolName: 'bash',
-        args: { command: "go test ./auth -run '^TestBlockedAccount$' -count=1" } }),
+        args: { command: "go test ./auth -v -run '^TestBlockedAccount$' -count=1" } }),
       JSON.stringify({ type: 'tool_execution_end', toolCallId: 'direct-go', toolName: 'bash',
-        result: { content: [{ type: 'text', text: 'ok example.com/auth 0.2s' }] } }),
+        result: { content: [{ type: 'text', text: '=== RUN   TestBlockedAccount\n--- PASS: TestBlockedAccount (0.00s)\nPASS\nok example.com/auth 0.2s' }] } }),
     ].join('\n')
     const blocked = agentEvidenceGate(transcript, [])
     expect(blocked).toMatchObject({ passed: null, blockedBy: 'evidence-only-registry' })
@@ -332,6 +352,22 @@ describe('native pilot evaluation boundaries', () => {
     const jsonOutput = JSON.stringify({ success: true, executionStarted: true, scenarios: [{ evidence: [{ reference, status: 'PASS' }] }] })
     expect(agentEvidenceGate(events('node node_modules/focused-spec/dist/cli.js run --json', jsonOutput), [reference]).passed).toBe(true)
     expect(agentEvidenceGate(JSON.stringify({ type: 'tool_execution_start', toolCallId: 'execution', toolName: 'bash', args: { command: 'focused-spec run' } }), [reference]).passed).toBe(false)
+  })
+
+  it('rejects zero-match Go and wrong-file Python execution while accepting observed exact tests', () => {
+    const events = (command: string, output: string) => [
+      JSON.stringify({ type: 'tool_execution_start', toolCallId: 'direct', toolName: 'bash', args: { command } }),
+      JSON.stringify({ type: 'tool_execution_end', toolCallId: 'direct', toolName: 'bash',
+        result: { details: { exitCode: 0 }, content: [{ type: 'text', text: output }] } }),
+    ].join('\n')
+    const go = ['go::./auth::TestBlockedAccount']
+    expect(agentEvidenceGate(events("go test ./auth -run '^NotTestBlockedAccount$' -count=1", 'ok example.com/auth 0.2s [no tests to run]'), go).passed).toBe(false)
+    expect(agentEvidenceGate(events("go test ./auth -run '^TestBlockedAccount$' -count=1", 'ok example.com/auth 0.2s [no tests to run]'), go).passed).toBe(false)
+    expect(agentEvidenceGate(events("go test ./other -v -run '^TestBlockedAccount$'", '=== RUN   TestBlockedAccount\n--- PASS: TestBlockedAccount (0.00s)\nPASS\nok example.com/other 0.2s'), go).passed).toBe(false)
+    expect(agentEvidenceGate(events("go test ./auth -v -run '^TestBlockedAccount$' -count=1", '=== RUN   TestBlockedAccount\n--- PASS: TestBlockedAccount (0.00s)\nPASS\nok example.com/auth 0.2s'), go).passed).toBe(true)
+    const python = ['pytest::tests/functional/test_auth.py::test_blocked_account']
+    expect(agentEvidenceGate(events('python -m pytest -v tests/other/test_auth.py::test_blocked_account', 'tests/other/test_auth.py::test_blocked_account PASSED\n1 passed in 0.01s'), python).passed).toBe(false)
+    expect(agentEvidenceGate(events('python -m pytest -v tests/functional/test_auth.py::test_blocked_account', 'tests/functional/test_auth.py::test_blocked_account PASSED\n1 passed in 0.01s'), python).passed).toBe(true)
   })
 
   it('does not certify authoring when genuine plan mode is unavailable', () => {
@@ -405,5 +441,63 @@ describe('native pilot evaluation boundaries', () => {
     const explicit = '# Blocked Login\n\n- **CAP-1**\n  - **success:** A blocked account with valid credentials is denied login.\n'
     expect((await evidenceGate(root, 'bmad', explicit)).gate.passed).toBe(true)
     expect((await evidenceGate(root, 'bmad', '# CAP-1\n\nA blocked account with valid credentials is denied login.\n')).gate.passed).toBe(false)
+  })
+
+  it('rejects native implementation reads and directory searches without rejecting docs types or CLI execution', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-inspection-'))
+    roots.push(root)
+    const before = await infrastructureSnapshot(root)
+    // Include both authoring and regeneration transcripts at the existing integrity boundary.
+    const integrity = infrastructureIntegrityGate as (workspace: string, before: ReadonlyMap<string, string>, transcripts: readonly string[]) => ReturnType<typeof infrastructureIntegrityGate>
+    const event = (toolName: string, args: object) => JSON.stringify({ type: 'tool_execution_start', toolName, args })
+    for (const transcript of [
+      event('read', { path: 'node_modules/focused-spec/dist/cli.js' }),
+      event('grep', { path: 'node_modules/focused-spec/dist', pattern: 'run' }),
+    ]) {
+      expect(await integrity(root, before, [transcript])).toMatchObject({ passed: false })
+      expect(await integrity(root, before, ['', transcript])).toMatchObject({ passed: false })
+    }
+    for (const transcript of [
+      event('read', { path: 'node_modules/focused-spec/README.md' }),
+      event('read', { path: 'node_modules/focused-spec/docs/reference/runner-api.md' }),
+      event('read', { path: 'node_modules/focused-spec/dist/runner-api.d.ts' }),
+      event('bash', { command: 'node node_modules/focused-spec/dist/cli.js run --json' }),
+    ]) expect(await integrity(root, before, [transcript])).toMatchObject({ passed: true })
+  })
+
+  it.each([false, true])('retains the failed BMad regeneration request for diagnosis of its own session without rescoring (throws=%s)', async throws => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-bmad-diagnostic-'))
+    roots.push(root)
+    await cp(join(nativePilot.nativePilotRoot, 'evals/fixtures/polyglot'), root, { recursive: true })
+    await mkdir(join(root, '.focused-spec'))
+    await writeFile(join(root, '.focused-spec/config.yaml'), "version: 4\nspecifications:\n  formats:\n    markdown:\n      package: '@focused-spec/format-markdown'\n  documents: [{ match: _bmad-output/specs/**/*.md, scope: current, format: markdown }]\nrunners: {}\n")
+    const sourcePath = '_bmad-output/specs/spec-blocked-login/spec-blocked-login.md'
+    await mkdir(join(root, '_bmad-output/specs/spec-blocked-login'), { recursive: true })
+    await writeFile(join(root, sourcePath), '# Blocked Login\n\n- **CAP-1**\n  - **success:** A blocked account with valid credentials is denied login.\n')
+    await writeFile(join(root, '.focused-spec/evidence.yaml'), `scopes:\n  current:\n    auth.login.blocked-account:\n      source:\n        path: ${sourcePath}\n        nativeId: CAP-1\n      evidence: [go::./auth::TestBlockedAccount]\n`)
+    await mkdir(join(root, '.omp-eval-sessions'))
+    await writeFile(join(root, '.omp-eval-sessions/authoring.jsonl'), 'successful authoring journal')
+    const requests: AgentRequest[] = []
+    vi.spyOn(OmpAgentDriver.prototype, 'run').mockImplementation(async request => {
+      requests.push(request)
+      if (request.resume !== undefined) {
+        expect(await readFile(request.resume, 'utf8')).toBe('failed regeneration journal')
+        return { success: true, exitCode: 0, durationMs: 1, output: JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Diagnose the failed regeneration, not the successful authoring.' }] } }) }
+      }
+      expect(request.sessionDir).toBe(join(root, '.omp-regeneration-sessions'))
+      await mkdir(request.sessionDir!, { recursive: true })
+      await writeFile(join(request.sessionDir!, 'regeneration.jsonl'), 'failed regeneration journal')
+      if (throws) throw Object.assign(new Error('regeneration transport failed'), { output: 'regeneration failed after starting' })
+      return { success: false, exitCode: 17, durationMs: 1, output: 'regeneration failed after starting' }
+    })
+    const authoringRequest: AgentRequest = { workspace: root, model: 'test-model', sessionDir: join(root, '.omp-eval-sessions'), skills: ['focused-spec', 'bmad-spec'], prompt: 'The original blind authoring task', timeoutMs: 600_000 }
+    const phase = await nativePilot.evaluateBmadLifecycle(root, 'test-model', new OmpAgentDriver(), authoringRequest)
+    expect(phase.verdict.status).toBe('failed')
+    expect(phase.transcript).toContain('regeneration failed after starting')
+    expect(phase.request).toEqual(requests[0])
+    expect(phase.gates).toEqual([expect.objectContaining({ name: 'bmad-regenerated-kernel', passed: false })])
+    expect(phase.diagnostic).toMatchObject({ status: 'answered', answer: expect.stringContaining('failed regeneration') })
+    expect(requests).toHaveLength(2)
+    expect(requests[1]?.resume).toBe(join(root, '.omp-regeneration-sessions/regeneration.jsonl'))
   })
 })

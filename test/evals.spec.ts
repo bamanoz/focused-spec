@@ -2,7 +2,7 @@ import { cp, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentDriver, AgentRequest, AgentResult, EvalCase } from '../evals/types.ts'
 import { runEval } from '../evals/harness.ts'
 import { brownfieldGate, guidanceActivationGate, integrityGate, judgeCompletedWorkspace, judgeProposalCheckpoint, judgeWorkingCheckpoint, mutationGate, registryPlacementGate, scenarioGate, skillActivationGate, snapshotProtectedFiles } from '../evals/judge.ts'
@@ -15,6 +15,18 @@ import { captureUpgradeBaseline, upgradeArtifactsGate, upgradePreservationGate }
 const roots: string[] = []
 const repository = fileURLToPath(new URL('..', import.meta.url))
 const WORKFLOW_GUIDANCE = '# Authoritative workflow\n\nFollow the installed package guidance.\n'
+
+vi.mock('../evals/result.ts', async importOriginal => {
+  const actual = await importOriginal<typeof import('../evals/result.ts')>()
+  return {
+    ...actual,
+    async saveEvalResult(_directory: string, prefix: string, result: unknown) {
+      const directory = await mkdtemp(join(tmpdir(), 'focused-eval-test-results-'))
+      roots.push(directory)
+      return actual.saveEvalResult(directory, prefix, result)
+    },
+  }
+})
 const change: EvalCase = {
   id: 'focused-test', description: 'deterministic gate fixture', source: 'openspec',
   changeName: 'add-auth', turns: [], prescribedScenarioId: 'auth.blocked',
@@ -404,6 +416,32 @@ describe('agent eval harness', () => {
     ])
   }, 60_000)
 
+  it('checkpoints and publishes the configured working scope rather than the change name', async () => {
+    const root = await brownfieldFixture()
+    const configPath = join(root, '.focused-spec/config.yaml')
+    const config = (await readFile(configPath, 'utf8')).replace('openspec/changes/{scope}/specs/**/spec.md', 'openspec/changes/add-auth/specs/**/spec.md')
+      .replace('        - openspec/changes/archive/**\n      format: markdown', '        - openspec/changes/archive/**\n      scope: working\n      format: markdown')
+    await put(root, '.focused-spec/config.yaml', config)
+    await put(root, '.focused-spec/evidence.yaml', (await readFile(join(root, '.focused-spec/evidence.yaml'), 'utf8')).replace('  add-auth:', '  working:'))
+    const checkpoint = await judgeWorkingCheckpoint(root, brownfieldChange)
+    expect(checkpoint.gates.map(item => item.passed)).toEqual([true, true])
+    expect(checkpoint.registry).toMatchObject({ scope: 'working', id: 'auth.login.blocked-account' })
+    expect((await brownfieldGate(root, brownfieldChange, checkpoint)).map(item => item.passed)).toEqual([true, true, true])
+    await put(root, '.focused-spec/config.yaml', config.replace('    - match: openspec/changes/add-auth/specs/**/spec.md\n      exclude:\n        - openspec/changes/archive/**\n      scope: working\n      format: markdown\n', ''))
+    await rm(join(root, 'openspec/changes/add-auth'), { recursive: true })
+    expect((await brownfieldGate(root, brownfieldChange, checkpoint)).map(item => item.passed)).toEqual([true, true, true])
+  }, 60_000)
+
+  it('rejects ambiguous configured working scopes and a changed checkpoint identity', async () => {
+    const root = await brownfieldFixture()
+    const config = await readFile(join(root, '.focused-spec/config.yaml'), 'utf8')
+    const explicit = '    - match: openspec/changes/add-auth/specs/**/spec.md\n      scope: working\n      format: markdown\n'
+    await put(root, '.focused-spec/config.yaml', config.replace('runners:', `${explicit}runners:`))
+    expect((await judgeWorkingCheckpoint(root, brownfieldChange)).gates.some(item => !item.passed)).toBe(true)
+    await put(root, '.focused-spec/config.yaml', config)
+    expect((await judgeWorkingCheckpoint(root, brownfieldChange, 'different.identity')).gates.some(item => !item.passed)).toBe(true)
+  }, 60_000)
+
   it('stops before sync when working evidence fails', async () => {
     let turns = 0
     const driver: AgentDriver = {
@@ -774,6 +812,19 @@ describe('agent eval harness', () => {
     }
   })
 
+  it('rejects implementation directory searches while allowing public declarations and CLI execution', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-audit-inspection-'))
+    roots.push(root)
+    const event = (toolName: string, args: object) => JSON.stringify({ type: 'tool_execution_start', toolName, args })
+    for (const path of ['node_modules/focused-spec/dist', 'node_modules/focused-spec/src/', 'node_modules/@focused-spec/runner-go/dist']) {
+      expect(await integrityGate(root, new Map(), [event('grep', { path, pattern: 'resolve' })]), path).toMatchObject({ passed: false })
+    }
+    for (const path of ['node_modules/focused-spec/docs', 'node_modules/focused-spec/README.md', 'node_modules/focused-spec/dist/runner-api.d.ts']) {
+      expect(await integrityGate(root, new Map(), [event('read', { path })]), path).toMatchObject({ passed: true })
+    }
+    expect(await integrityGate(root, new Map(), [event('bash', { command: 'node node_modules/focused-spec/dist/cli.js run --json' })])).toMatchObject({ passed: true })
+  })
+
   it('rejects protected test and package changes in an evaluated workspace', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-eval-integrity-'))
     roots.push(root)
@@ -829,15 +880,63 @@ describe('agent eval harness', () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-eval-mutation-'))
     roots.push(root)
     await cp(join(repository, 'evals/fixtures/polyglot'), root, { recursive: true })
+    await installFocusedPackage(root)
+    await put(root, '.focused-spec/config.yaml', [
+      'version: 4', 'specifications:', '  formats:', '    markdown:', "      package: '@focused-spec/format-markdown'",
+      '  documents:', '    - match: specs/**/*.md', '      scope: current', '      format: markdown',
+      'runners:', "  go: { package: '@focused-spec/runner-go' }", "  pytest: { package: '@focused-spec/runner-pytest' }",
+    ].join('\n'))
+    await put(root, 'specs/auth.md', '<!-- focused-spec:id=auth.blocked -->\n#### Scenario: Blocked\n- **WHEN** blocked\n- **THEN** rejected\n')
+    await put(root, '.focused-spec/evidence.yaml', 'scopes:\n  current:\n    auth.blocked:\n      evidence: [go::./auth::TestBlockedAccount, pytest::tests/functional/test_auth.py::test_blocked_account]\n')
     await put(root, 'node_modules/focused-spec/dist/cli.js', 'process.exit(0)\n')
     const goBefore = await readFile(join(root, 'auth/auth.go'), 'utf8')
     const pythonBefore = await readFile(join(root, 'app/auth.py'), 'utf8')
     const { changeName: _, ...withoutChange } = change
-    const gate = await mutationGate(root, withoutChange)
-    expect(gate).toMatchObject({ name: 'mutation-sensitivity', passed: false, detail: 'mutation results: go=0 python=0' })
+    const gate = await mutationGate(root, { ...withoutChange, expectedEvidenceCount: 2, expectedSelectorFragments: ['TestBlockedAccount', 'test_blocked_account'] })
+    expect(gate).toMatchObject({ name: 'mutation-sensitivity', passed: false })
     expect(await readFile(join(root, 'auth/auth.go'), 'utf8')).toBe(goBefore)
     expect(await readFile(join(root, 'app/auth.py'), 'utf8')).toBe(pythonBefore)
   })
+
+  it.each(['selected ERROR', 'unrelated FAIL', 'validation error', 'signal termination', 'failed restoration', 'selected FAIL then restored PASS'])
+    ('requires selected behavioral failure and restored pass: %s', async mode => {
+      const root = await mkdtemp(join(tmpdir(), 'focused-audit-mutation-'))
+      roots.push(root)
+      await cp(join(repository, 'evals/fixtures/polyglot'), root, { recursive: true })
+      const beforeGo = await readFile(join(root, 'auth/auth.go'), 'utf8')
+      const beforePython = await readFile(join(root, 'app/auth.py'), 'utf8')
+      const references = ['go::./auth::TestBlockedAccount', 'pytest::tests/functional/test_auth.py::test_blocked_account']
+      await installFocusedPackage(root)
+      await put(root, '.focused-spec/config.yaml', [
+        'version: 4', 'specifications:', '  formats:', '    markdown:', "      package: '@focused-spec/format-markdown'",
+        '  documents:', '    - match: openspec/changes/add-auth/specs/**/*.md', '      scope: add-auth', '      format: markdown',
+        'runners:', "  go: { package: '@focused-spec/runner-go' }", "  pytest: { package: '@focused-spec/runner-pytest' }",
+      ].join('\n'))
+      await put(root, 'openspec/changes/add-auth/specs/auth/spec.md', '<!-- focused-spec:id=auth.blocked -->\n#### Scenario: Blocked\n- **WHEN** a blocked account has valid credentials\n- **THEN** authentication is rejected\n')
+      await put(root, '.focused-spec/evidence.yaml', `scopes:\n  add-auth:\n    auth.blocked:\n      evidence:\n${references.map(reference => `        - ${reference}`).join('\n')}\n`)
+      await put(root, 'node_modules/focused-spec/dist/cli.js', [
+        "import fs from 'node:fs'",
+        `const mode = ${JSON.stringify(mode)}`,
+        `const references = ${JSON.stringify(references)}`,
+        "const mutated = !fs.readFileSync('auth/auth.go', 'utf8').includes('return credentialsValid && !blocked') || !fs.readFileSync('app/auth.py', 'utf8').includes('return credentials_valid and not blocked')",
+        "const restored = !mutated && fs.existsSync('.audit-mutation-seen')",
+        "if (mutated) fs.writeFileSync('.audit-mutation-seen', 'seen')",
+        "if (mutated && mode === 'signal termination') process.kill(process.pid, 'SIGTERM')",
+        "const status = mutated ? (mode === 'selected ERROR' ? 'ERROR' : mode === 'unrelated FAIL' ? 'PASS' : 'FAIL') : restored && mode === 'failed restoration' ? 'FAIL' : 'PASS'",
+        "const evidence = references.map(reference => ({ reference, status }))",
+        "const unrelatedFailure = mutated && mode === 'unrelated FAIL'",
+        "const validationError = mutated && mode === 'validation error'",
+        "const scenarios = [{ scope: 'add-auth', id: 'auth.blocked', status, evidence }]",
+        "if (unrelatedFailure) scenarios.push({ scope: 'add-auth', id: 'auth.unrelated', status: 'FAIL', evidence: [{ reference: 'go::./other::TestUnrelated', status: 'FAIL' }] })",
+        "const success = status === 'PASS' && !unrelatedFailure && !validationError",
+        "console.log(JSON.stringify({ success, executionStarted: !validationError, scenarios }))",
+        "process.exit(success ? 0 : 1)",
+      ].join('\n'))
+      const result = await mutationGate(root, { ...change, expectedEvidenceCount: 2, expectedSelectorFragments: ['TestBlockedAccount', 'test_blocked_account'] })
+      expect(await readFile(join(root, 'auth/auth.go'), 'utf8')).toBe(beforeGo)
+      expect(await readFile(join(root, 'app/auth.py'), 'utf8')).toBe(beforePython)
+      expect(result.passed).toBe(mode === 'selected FAIL then restored PASS')
+    })
 
   it('retains checkpointed scope-local evidence after a working document leaves discovery', async () => {
     const root = await brownfieldFixture()

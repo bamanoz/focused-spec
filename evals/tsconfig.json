@@ -3,7 +3,8 @@
   "compilerOptions": {
     "rootDir": "..",
     "noEmit": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true
   },
-  "include": ["../packages/*/src/**/*.ts", "./**/*.ts"]
+  "include": ["./**/*.ts"]
 }

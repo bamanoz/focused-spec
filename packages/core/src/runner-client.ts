@@ -57,6 +57,7 @@ async function invokeHost(projectRoot: string, runnerId: string, config: RunnerC
   let timeoutError: Error | undefined
   let processError: Error | undefined
   let shutdownTimer: NodeJS.Timeout | undefined
+  let pipeTimer: NodeJS.Timeout | undefined
   let output = ''
   child.stdout?.on('data', chunk => { output = boundedAppend(output, chunk) })
   child.stderr?.on('data', chunk => { output = boundedAppend(output, chunk) })
@@ -68,8 +69,17 @@ async function invokeHost(projectRoot: string, runnerId: string, config: RunnerC
   }, timeoutMs + 1_000)
 
   child.once('message', message => {
-    if (settled || timeoutError !== undefined || response !== undefined) return
-    response = message as HostResponse
+    if (settled || timeoutError !== undefined || processError !== undefined || response !== undefined) return
+    const envelope = record(message)
+    if (envelope === undefined || typeof envelope.ok !== 'boolean'
+      || (envelope.ok && (!Object.hasOwn(envelope, 'value') || !isJsonValue(envelope.value)))
+      || (!envelope.ok && typeof envelope.error !== 'string')) {
+      processError = new Error(`runner ${runnerId} returned an invalid host response`)
+    } else {
+      response = envelope.ok
+        ? { ok: true, value: envelope.value }
+        : { ok: false, error: envelope.error as string }
+    }
     shutdownTimer = setTimeout(() => {
       if (!settled) child.kill('SIGKILL')
     }, 1_000)
@@ -78,11 +88,14 @@ async function invokeHost(projectRoot: string, runnerId: string, config: RunnerC
   child.once('error', error => {
     processError = error
   })
-  child.once('close', code => {
+  const finish = (code: number | null): void => {
     if (settled) return
     settled = true
     clearTimeout(timer)
     clearTimeout(shutdownTimer)
+    clearTimeout(pipeTimer)
+    child.stdout?.destroy()
+    child.stderr?.destroy()
     const diagnosticOutput = output === '' ? '' : `\n${output}`
     if (timeoutError !== undefined) {
       rejectPromise(new Error(`${timeoutError.message}${diagnosticOutput}`))
@@ -101,6 +114,11 @@ async function invokeHost(projectRoot: string, runnerId: string, config: RunnerC
       return
     }
     resolvePromise(response.value)
+  }
+  child.once('close', finish)
+  child.once('exit', code => {
+    // Drain buffered output briefly, but never wait for descendant-owned pipes.
+    pipeTimer = setTimeout(() => finish(code), 100)
   })
   child.send({
     ...payload,

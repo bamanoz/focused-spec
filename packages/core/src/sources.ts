@@ -29,7 +29,7 @@ function compareText(left: string, right: string): number {
 
 
 function capturedScope(layout: DocumentLayout, path: string): string | undefined {
-  const segments = layout.match.split('/')
+  const segments = layout.match.replace(/^(?:\.\/)+/u, '').split('/')
   const captureIndex = segments.findIndex(segment => segment.includes(SCOPE_TOKEN))
   const captureSegment = segments[captureIndex]
   if (captureIndex < 0 || captureSegment === undefined) return undefined
@@ -216,7 +216,7 @@ export async function discoverDocuments(
     }
   }
   const registeredMarkers = new Set<string>()
-  const boundItems = new Set<string>()
+  const boundItems = new Set<NativeItem>()
   for (const entry of registry.entries) {
     const key = `${entry.scope}\u0000${entry.id}`
     registeredMarkers.add(key)
@@ -233,12 +233,11 @@ export async function discoverDocuments(
       violations.push({ path: item.path, line: item.line, scenarioId: entry.id, message: 'external native-ID binding requires an unmarked native item' })
       continue
     }
-    const itemKey = `${item.scope}\u0000${item.path}\u0000${item.line}`
-    if (boundItems.has(itemKey)) {
+    if (boundItems.has(item)) {
       violations.push({ path: item.path, line: item.line, scenarioId: entry.id, message: 'native item is bound more than once within its scope' })
       continue
     }
-    boundItems.add(itemKey)
+    boundItems.add(item)
     const documentKey = `${item.scope}\u0000${item.path}`
     const scenario: Scenario = { id: entry.id, scope: item.scope, path: item.path, line: item.line, name: item.name, evidence: entry.evidence }
     const previous = boundByDocument.get(documentKey)

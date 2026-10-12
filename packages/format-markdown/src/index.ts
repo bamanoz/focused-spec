@@ -46,10 +46,12 @@ function parseMarkdown(source: string): { items: ParsedItem[]; diagnostics: Form
       const id = marker(child)
       if (id === undefined) continue
       ids.push(id)
-      if (node.children.slice(index + 1).some(next => text(next).trim() !== '')) report(child, 'inline focused marker must follow its native item', id)
+      if (node.type === 'heading') report(child, 'inline focused markers are not supported on headings', id)
+      if (node.children.slice(index + 1).some(next => (next.position?.end.offset ?? 0) > (child.position?.end.offset ?? 0) && (text(next).trim() !== '' || next.type !== 'text'))) report(child, 'inline focused marker must follow its native item', id)
+      if (item !== undefined && (node.position?.end.offset ?? 0) < (item.children.at(-1)?.position?.end.offset ?? 0)) report(child, 'inline focused marker must be at the end of its list item', id)
     }
     if (pending !== undefined) {
-      if (at(item ?? node) - (pending.node.position?.end.line ?? at(pending.node)) > 2) report(pending.node, 'focused marker is detached from a native item', pending.id)
+      if (at(node) - (pending.node.position?.end.line ?? at(pending.node)) > 2) report(pending.node, 'focused marker is detached from a native item', pending.id)
       else ids.unshift(pending.id)
     }
     if (ids.length > 1) for (const id of ids) report(item ?? node, 'multiple focused markers cannot bind one native item', id)
@@ -57,7 +59,7 @@ function parseMarkdown(source: string): { items: ParsedItem[]; diagnostics: Form
     if (ids.length > 0 && name === '') report(item ?? node, 'focused marker requires a non-empty native item', ids[0])
     const explicitAnchor = node.type === 'heading' ? /\{#([^}\s]+)\}\s*$/u.exec(name)?.[1] : undefined
     items.push({
-      line: at(item ?? node),
+      line: at(node),
       name,
       nativeIds: explicitAnchor === undefined ? leadingNativeId(node.children) : [explicitAnchor],
       ...(ids.length === 1 ? { markerId: ids[0]! } : {}),

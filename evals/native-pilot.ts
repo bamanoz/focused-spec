@@ -9,13 +9,16 @@ import { loadConfig, loadEvidenceRegistry } from '../packages/core/dist/index.js
 import type { NativeItem } from '../packages/core/dist/index.js'
 import { OmpAgentDriver } from './omp-agent.ts'
 import { runProcess } from './process.ts'
-import { guidanceActivationGate, skillActivationGate } from './judge.ts'
+import { guidanceActivationGate, skillActivationGate, inspectsImplementation } from './judge.ts'
 import { runAuthoringDialogue } from './dialogue.ts'
 import type { DialogueResult } from './dialogue.ts'
 import { runPlanningDialogue } from './acp-agent.ts'
 import type { PlanningResult } from './acp-agent.ts'
 import { interviewFailedAgent } from './diagnostic.ts'
 import { parseTrustedNativeDocument } from './native-parse.ts'
+import { runAgentTurn, saveEvalResult } from './result.ts'
+import type { AgentDriver, AgentRequest } from './types.ts'
+import type { EvalDiagnostic } from './types.ts'
 
 export const nativePilotRoot = fileURLToPath(new URL('..', import.meta.url))
 const root = nativePilotRoot
@@ -400,10 +403,11 @@ export async function infrastructureSnapshot(workspace: string): Promise<Map<str
   return files
 }
 
-export async function infrastructureIntegrityGate(workspace: string, before: ReadonlyMap<string, string>): Promise<Gate> {
+export async function infrastructureIntegrityGate(workspace: string, before: ReadonlyMap<string, string>, transcripts: readonly string[] = []): Promise<Gate> {
   const after = await infrastructureSnapshot(workspace)
   const paths = new Set([...before.keys(), ...after.keys()])
   const changed = [...paths].filter(path => before.get(path) !== after.get(path))
+  if (inspectsImplementation(workspace, transcripts)) return gate('pilot-infrastructure-integrity', false, 'agent inspected protected implementation')
   return gate('pilot-infrastructure-integrity', changed.length === 0,
     changed.length === 0 ? 'packed CLI, installed format/runner packages, host skills, and generated .agents copies unchanged' : `modified protected pilot infrastructure: ${changed.join(', ')}`)
 }
@@ -467,14 +471,18 @@ export function canonicalMemlogReadGate(workspace: string, transcript: string): 
   return gate('canonical-memlog-read', read, `canonical memlog successfully read before regeneration=${read}`)
 }
 
-async function regenerateBmad(workspace: string, model: string): Promise<{ gates: Gate[]; verdict: Outcome; transcript: string }> {
+async function regenerateBmad(workspace: string, model: string, driver: AgentDriver, attempted: (request: AgentRequest) => void, captured: (output: string) => void): Promise<{ gates: Gate[]; verdict: Outcome; transcript: string }> {
   const path = cases.bmad.path
   const before = await readFile(join(workspace, path), 'utf8')
   const registry = await registrySnapshot(workspace)
   const config = await readFile(join(workspace, '.focused-spec/config.yaml'), 'utf8')
   await rm(join(workspace, path))
-  const agent = await new OmpAgentDriver().run({ workspace, model, sessionDir: join(workspace, '.omp-regeneration-sessions'), skills: ['focused-spec', 'bmad-spec'], timeoutMs: 600_000,
-    prompt: `Regenerate the existing BMad specification at ${path} from its recorded decisions. No new behavior is requested.` })
+  const request = { workspace, model, sessionDir: join(workspace, '.omp-regeneration-sessions'), skills: ['focused-spec', 'bmad-spec'], timeoutMs: 600_000,
+    prompt: `Regenerate the existing BMad specification at ${path} from its recorded decisions. No new behavior is requested.` }
+  attempted(request)
+  const agent = await runAgentTurn(driver, request)
+  captured(agent.output)
+  if (!agent.success) return { gates: [gate('bmad-regenerated-kernel', false, agent.output)], verdict: outcome('failed', 'regeneration agent failed'), transcript: agent.output }
   const focusedSkill = skillActivationGate(agent.output)
   const workflow = await guidanceActivationGate(workspace, [agent.output])
   const after = await readFile(join(workspace, path), 'utf8').catch(() => '')
@@ -494,6 +502,23 @@ async function regenerateBmad(workspace: string, model: string): Promise<{ gates
   const detail = `regeneration exit=${agent.exitCode}; focused skill=${focusedSkill.passed}; local workflow=${workflow.passed}; memlog read=${memlogRead}; CAP-1 outcome retained=${atomicBlockedOutcome(after)}; unique CAP-1=${unique}; registry unchanged=${registryPreserved}; config unchanged=${configPreserved}; binding valid=${binding.gate.passed}; CLI binding/execution=${cliPassed}; single source=${singleSource}; product preserved=${productPreserved}; host skill loaded=${hostLoaded}`
   const regeneration = gate('bmad-regenerated-kernel', stable, detail)
   return { gates: [focusedSkill, workflow, regeneration], verdict: outcome(stable ? 'passed' : 'failed', detail), transcript: agent.output }
+}
+
+export async function evaluateBmadLifecycle(workspace: string, model: string, driver: AgentDriver, authoringRequest: AgentRequest): Promise<{
+  gates: Gate[]; verdict: Outcome; transcript: string; request: AgentRequest; diagnostic: EvalDiagnostic | null
+}> {
+  let request = authoringRequest
+  let transcript = ''
+  let phase: { gates: Gate[]; verdict: Outcome; transcript: string }
+  try {
+    phase = await regenerateBmad(workspace, model, driver, attempted => { request = attempted }, output => { transcript = output })
+  } catch (error) {
+    const failed = await runAgentTurn({ async run() { throw error } }, request)
+    phase = { gates: [gate('bmad-regenerated-kernel', false, failed.output)], verdict: outcome('failed', failed.output), transcript: [transcript, failed.output].join('\n') }
+  }
+  const diagnostic = phase.gates.some(item => item.passed === false)
+    ? await interviewFailedAgent(request, phase.gates, 'Regenerate the existing BMad specification from its recorded decisions.', driver) : null
+  return { ...phase, request, diagnostic }
 }
 
 export async function companionGate(workspace: string, name: NativeCase): Promise<Gate> {
@@ -560,10 +585,20 @@ export function agentEvidenceGate(transcript: string, references: string[]): Gat
           scenario.evidence?.some(evidence => evidence.reference === reference && evidence.status === 'PASS'))) return true
       } catch { /* Non-JSON CLI output is checked through exact evidence rows above. */ }
     }
-    if (selectedKind(reference) === 'go') return /(?:^|&&|;)\s*go\s+test\b/u.test(command)
-      && command.includes('TestBlockedAccount') && /(?:--- PASS: TestBlockedAccount\b|^ok\s)/mu.test(output)
+    const [, target, selector] = reference.split('::')
+    if (target === undefined || selector === undefined) return false
+    const tokens = command.match(/'[^']*'|"[^"]*"|[^\s]+/gu)?.map(token => token.replace(/^['"]|['"]$/gu, '')) ?? []
+    if (selectedKind(reference) === 'go') {
+      const run = tokens.indexOf('-run')
+      const exact = run >= 0 ? tokens[run + 1] : tokens.find(token => token.startsWith('-run='))?.slice(5)
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+      return /(?:^|&&|;)\s*go\s+test\b/u.test(command) && tokens.includes(target)
+        && exact === `^${selector}$` && new RegExp(`^=== RUN\\s+${escaped}$`, 'mu').test(output)
+        && new RegExp(`^--- PASS: ${escaped}(?: \\(|$)`, 'mu').test(output)
+    }
+    const node = `${target}::${selector}`
     return /(?:^|&&|;)\s*(?:uv\s+run\s+[^;&]*|python(?:3)?\s+-m\s+)?pytest\b/u.test(command)
-      && command.includes('test_blocked_account') && /\b\d+ passed\b/u.test(output)
+      && tokens.includes(node) && output.split('\n').some(line => line.startsWith(`${node} PASSED`))
   }))
   return gate('agent-executed-selected-evidence', executed, executed ? references.join(', ') : 'no completed matching test execution in agent transcript')
 }
@@ -696,6 +731,9 @@ export async function evaluateNativePilot(name: NativeCase, model: string, keep:
   let regenerationTranscript = ''
   let dialogue: DialogueResult | null = null
   let planning: PlanningResult | null = null
+  let lastRequest: AgentRequest | undefined
+  const driver = new OmpAgentDriver()
+  let lifecycleDiagnostic: EvalDiagnostic | null = null
   try {
     await prepareNativeWorkspace(workspace, name, create)
     const protectedInfrastructure = await infrastructureSnapshot(workspace)
@@ -709,20 +747,22 @@ export async function evaluateNativePilot(name: NativeCase, model: string, keep:
           : name === 'gsd' ? ['focused-spec', 'gsd-new-project', 'gsd-requirements']
             : name === 'kiro' ? ['focused-spec', 'kiro-requirements']
               : name === 'agent-os' ? ['focused-spec', 'agent-os-shape-spec'] : ['focused-spec']
-    const driver = new OmpAgentDriver()
+    const safeDriver: AgentDriver = { run: request => runAgentTurn(driver, request) }
     const request = { workspace, sessionDir, prompt, skills, model, timeoutMs: 600_000 }
+    lastRequest = request
+    try {
     if (name === 'agent-os') planning = await runPlanningDialogue(request, () => authoringSnapshot(workspace, name))
     const prerequisite = hostPrerequisiteGate(name, planning ?? undefined)
     if (prerequisite !== null) gates.push(prerequisite)
     if (planning !== null) gates.push(gate('host-write-constraints', planning.unauthorizedPaths.length === 0,
       planning.unauthorizedPaths.length === 0 ? 'each authored file followed explicit plan and path approval' : `files changed without approval: ${planning.unauthorizedPaths.join(', ')}`))
     if (name === 'openspec' || name === 'kiro') {
-      dialogue = await runAuthoringDialogue(request, driver, () => authoringSnapshot(workspace, name), name === 'openspec' && !create)
+      dialogue = await runAuthoringDialogue(request, safeDriver, () => authoringSnapshot(workspace, name), name === 'openspec' && !create)
       gates.push(gate('authoring-dialogue', dialogue.completed, dialogue.detail))
       if (name === 'openspec' && !create) gates.push(gate('host-write-constraints', dialogue.unauthorizedPaths.length === 0,
         dialogue.unauthorizedPaths.length === 0 ? 'each authored revision followed test-user approval' : `files changed before approval: ${dialogue.unauthorizedPaths.join(', ')}`))
     }
-    const agent = planning?.agent ?? dialogue?.agent ?? await driver.run(request)
+    const agent = planning?.agent ?? dialogue?.agent ?? await runAgentTurn(driver, request)
     transcript = agent.output
     gates.push(gate('agent-turn', agent.success, `exit=${agent.exitCode} durationMs=${agent.durationMs}`))
     if (agent.success) {
@@ -753,24 +793,33 @@ export async function evaluateNativePilot(name: NativeCase, model: string, keep:
         if (actual !== original) modified.push(path)
       }
       gates.push(gate('product-and-tests-preserved', modified.length === 0, modified.length === 0 ? 'product and selected tests unchanged' : modified.join(', ')))
-      const infrastructureBeforeLifecycle = await infrastructureIntegrityGate(workspace, protectedInfrastructure)
+      const infrastructureBeforeLifecycle = await infrastructureIntegrityGate(workspace, protectedInfrastructure, [transcript])
       if (name === 'bmad' && gates.every(item => item.passed) && infrastructureBeforeLifecycle.passed) {
-        const regenerated = await regenerateBmad(workspace, model)
+        const regenerated = await evaluateBmadLifecycle(workspace, model, driver, request)
+        lastRequest = regenerated.request
+        lifecycleDiagnostic = regenerated.diagnostic
         gates.push(...regenerated.gates)
         lifecycle = regenerated.verdict
         regenerationTranscript = regenerated.transcript
       }
     }
-    gates.push(await infrastructureIntegrityGate(workspace, protectedInfrastructure))
-    const authoring = judged(gates, ['agent-turn', 'authoring-dialogue', 'focused-skill-loaded', 'focused-workflow-acquired', 'host-workflow-loaded', 'host-authoring-prerequisites', 'host-write-constraints', 'native-item-created', 'native-item-single-source', 'one-behavior-source', 'product-and-tests-preserved', 'pilot-infrastructure-integrity', 'bmad-memlog-workflow'])
-    const evidence = agent.success ? judged(gates, ['evidence-only-registry', 'focused-cli-validation', 'focused-cli-execution', 'agent-executed-selected-evidence', 'selected-test-executes', 'selected-test-sensitivity'])
+    gates.push(await infrastructureIntegrityGate(workspace, protectedInfrastructure, [transcript, regenerationTranscript]))
+    } catch (error) {
+      const failed = await runAgentTurn({ async run() { throw error } }, lastRequest ?? request)
+      if (lastRequest?.sessionDir === join(workspace, '.omp-regeneration-sessions')) {
+        regenerationTranscript += failed.output
+        lifecycle = outcome('failed', failed.output)
+      } else transcript += failed.output
+      gates.push(gate('evaluation-error', false, failed.output))
+    }
+    const authoring = judged(gates, ['agent-turn', 'authoring-dialogue', 'focused-skill-loaded', 'focused-workflow-acquired', 'host-workflow-loaded', 'host-authoring-prerequisites', 'host-write-constraints', 'native-item-created', 'native-item-single-source', 'one-behavior-source', 'product-and-tests-preserved', 'pilot-infrastructure-integrity', 'bmad-memlog-workflow', 'evaluation-error'])
+    const evidence = gates.find(item => item.name === 'agent-turn')?.passed === true ? judged(gates, ['evidence-only-registry', 'focused-cli-validation', 'focused-cli-execution', 'agent-executed-selected-evidence', 'selected-test-executes', 'selected-test-sensitivity', 'evaluation-error'])
       : outcome('unverified', 'agent turn failed; downstream evidence was not judged')
     const certified = [authoring, evidence, validation, lifecycle].every(item => item.status === 'passed')
-    const diagnostic = gates.some(item => item.passed === false)
-      ? await interviewFailedAgent(request, gates, 'One native checkable item for blocked-account login, a stable focused ID tied to exact executable evidence, applicable host workflow and format checks, and successful validation and execution through the installed focused-spec CLI.', driver) : null
+    const diagnostic = lifecycleDiagnostic ?? (gates.some(item => item.passed === false)
+      ? await interviewFailedAgent(lastRequest ?? request, gates, 'One native checkable item for blocked-account login, a stable focused ID tied to exact executable evidence, applicable host workflow and format checks, and successful validation and execution through the installed focused-spec CLI.', driver) : null)
     const result = { caseId: name, mode: create ? 'create' : 'revise', certified, authoring, evidence, nativeValidation: validation, nativeLifecycle: lifecycle, workspace, model, gates, transcript, dialogue, planning, regenerationTranscript, diagnostic }
-    await mkdir(join(root, 'evals/results'), { recursive: true })
-    await writeFile(join(root, 'evals/results', `native-${create ? 'create-' : ''}${name}-${Date.now()}.json`), `${JSON.stringify(result, null, 2)}\n`)
+    await saveEvalResult(join(root, 'evals/results'), `native-${create ? 'create-' : ''}${name}`, result)
     for (const item of gates) console.log(`${item.passed === null ? 'BLOCKED' : item.passed ? 'PASS' : 'FAIL'} ${name} ${item.name}: ${item.detail}`)
     for (const [aspect, verdict] of Object.entries({ authoring, evidence, nativeValidation: validation, nativeLifecycle: lifecycle })) console.log(`${verdict.status.toUpperCase()} ${name} ${aspect}: ${verdict.detail}`)
     if (diagnostic !== null) console.log(`DIAGNOSTIC ${name} ${diagnostic.status}: ${diagnostic.detail}`)

@@ -194,6 +194,52 @@ afterAll(async () => {
 })
 
 describe('package distribution', () => {
+  it('omits retired generated assets after repeated staging', async () => {
+    const checkout = await mkdtemp(join(root, 'staging-'))
+    for (const name of ['scripts', 'skills', 'guidance']) await cp(join(repository, name), join(checkout, name), { recursive: true })
+    await put(join(checkout, 'docs/guides/runners.md'), await readFile(join(repository, 'docs/guides/runners.md'), 'utf8'))
+    for (const name of ['README.md', 'LICENSE']) await cp(join(repository, name), join(checkout, name))
+    for (const name of ['core', 'format-markdown', 'format-gherkin', 'runner-vitest', 'runner-pytest', 'runner-go']) await mkdir(join(checkout, 'packages', name), { recursive: true })
+    const stage = () => spawnSync(process.execPath, ['scripts/stage-assets.mjs'], { cwd: checkout, encoding: 'utf8' })
+    await put(join(checkout, 'skills/retired/SKILL.md'), 'retired loader')
+    await put(join(checkout, 'guidance/retired.md'), 'retired guidance')
+    expect(stage().status).toBe(0)
+    await rm(join(checkout, 'skills/retired'), { recursive: true })
+    await rm(join(checkout, 'guidance/retired.md'))
+    expect(stage().status).toBe(0)
+    await expect(stat(join(checkout, 'packages/core/skills/retired/SKILL.md'))).rejects.toThrow()
+    await expect(stat(join(checkout, 'packages/core/guidance/retired.md'))).rejects.toThrow()
+    expect(await readFile(join(checkout, 'packages/core/guidance/workflow.md'), 'utf8')).toBe(await readFile(join(checkout, 'guidance/workflow.md'), 'utf8'))
+    expect(await readFile(join(checkout, 'packages/core/skills/focused-spec/SKILL.md'), 'utf8')).toBe(await readFile(join(checkout, 'skills/focused-spec/SKILL.md'), 'utf8'))
+  })
+
+  it('omits retired runtime modules from every independently rebuilt package', async () => {
+    const checkout = await mkdtemp(join(root, 'rebuild-'))
+    await cp(join(repository, 'tsconfig.json'), join(checkout, 'tsconfig.json'))
+    await cp(join(repository, 'package.json'), join(checkout, 'package.json'))
+    await cp(join(repository, 'scripts'), join(checkout, 'scripts'), { recursive: true })
+    await symlink(join(repository, 'node_modules'), join(checkout, 'node_modules'), 'dir')
+    for (const name of ['core', 'format-markdown', 'format-gherkin', 'runner-vitest', 'runner-pytest', 'runner-go']) {
+      const packageRoot = join(checkout, 'packages', name)
+      await mkdir(packageRoot, { recursive: true })
+      for (const asset of ['src', 'package.json', 'tsconfig.json']) await cp(join(repository, 'packages', name, asset), join(packageRoot, asset), { recursive: true })
+      const retiredSource = join(packageRoot, 'src/audit-retired-runtime.ts')
+      await put(retiredSource, 'export const retired = true\n')
+      const build = () => spawnSync('npm', ['run', 'build'], { cwd: packageRoot, encoding: 'utf8', timeout: 60000 })
+      const first = build()
+      expect(first.status, name + first.stdout + first.stderr).toBe(0)
+      expect(await readFile(join(packageRoot, 'dist/audit-retired-runtime.js'), 'utf8')).toContain('retired')
+      await rm(retiredSource)
+      const second = build()
+      expect(second.status, name + second.stdout + second.stderr).toBe(0)
+      const packed = spawnSync('npm', ['pack', '--dry-run', '--ignore-scripts', '--json'], { cwd: packageRoot, encoding: 'utf8', timeout: 60000 })
+      expect(packed.status, packed.stderr).toBe(0)
+      const files = (JSON.parse(packed.stdout) as { files: { path: string }[] }[])[0]!.files.map(file => file.path)
+      expect(files, name).toContain('dist/index.js')
+      expect(files.filter(path => path.startsWith('dist/audit-retired-runtime')), name).toEqual([])
+    }
+  }, 180000)
+
   it('installs independent core and adapter packages', async () => {
     const project = await createPackedConsumer('independent-adapters-')
     const cli = join(project, 'node_modules/focused-spec/dist/cli.js')

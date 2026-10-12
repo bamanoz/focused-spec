@@ -18,3 +18,11 @@ scopes:
     distribution.runner.public-contracts:
       evidence:
         - vitest::test/package.spec.ts::package distribution > executes selectors discovered from packed runner documentation
+    distribution.package.retired-assets:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > omits retired
+          generated assets after repeated staging
+    distribution.package.retired-runtime:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > omits retired runtime
+          modules from every independently rebuilt package

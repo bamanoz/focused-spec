@@ -27,7 +27,7 @@ export async function planEvidence(
   documents: readonly SpecDocument[],
   options: PlanOptions = {},
 ): Promise<PlanOutput> {
-  const uses: EvidenceUse[] = []
+  const byRunner = new Map<string, Map<string, EvidenceUse[]>>()
   const scenarioUses = new Map<string, EvidenceUse[]>()
   let selectedScenarioFound = false
   for (const document of documents) {
@@ -40,12 +40,18 @@ export async function planEvidence(
         const reference = parseEvidenceReference(raw)
         if ('error' in reference || reference.planned) continue
         const use = { scope: document.scope, raw, runnerId: reference.runnerId, selector: reference.selector, path: scenario.path, line: scenario.line, scenarioId }
-        uses.push(use)
+        let selectors = byRunner.get(use.runnerId)
+        if (selectors === undefined) byRunner.set(use.runnerId, selectors = new Map())
+        let selectorUses = selectors.get(use.selector)
+        if (selectorUses === undefined) selectors.set(use.selector, selectorUses = [])
+        selectorUses.push(use)
         selected.push(use)
       }
       if (selected.length > 0) {
         const key = `${document.scope}\u0000${scenarioId}`
-        scenarioUses.set(key, [...(scenarioUses.get(key) ?? []), ...selected])
+        const prior = scenarioUses.get(key)
+        if (prior === undefined) scenarioUses.set(key, selected)
+        else for (const use of selected) prior.push(use)
       }
     }
   }
@@ -54,29 +60,26 @@ export async function planEvidence(
     return { violations: [{ path: options.scenarioId, message: `selected scenario has no executable evidence: ${options.scenarioId}` }] }
   }
 
-  const byRunner = new Map<string, EvidenceUse[]>()
-  for (const use of uses) byRunner.set(use.runnerId, [...(byRunner.get(use.runnerId) ?? []), use])
-
   const violations: Violation[] = []
   const targetsByRunnerSelector = new Map<string, PlannedTarget>()
-  for (const [runnerId, runnerUses] of [...byRunner].sort(([left], [right]) => left.localeCompare(right))) {
+  for (const [runnerId, bySelector] of [...byRunner].sort(([left], [right]) => left.localeCompare(right))) {
     const runnerConfig = config.runners[runnerId]
     if (runnerConfig === undefined) {
-      for (const use of runnerUses) {
+      for (const selectorUses of bySelector.values()) for (const use of selectorUses) {
         violations.push({ path: use.path, line: use.line, scenarioId: use.scenarioId, message: `unknown evidence runner ${runnerId}` })
       }
       continue
     }
-    const selectors = [...new Set(runnerUses.map(use => use.selector))].sort()
+    const selectors = [...bySelector.keys()].sort()
     try {
       const resolved = await resolveRunnerTargets(projectRoot, runnerId, runnerConfig, selectors)
       for (const error of resolved.errors) {
-        for (const use of runnerUses.filter(candidate => candidate.selector === error.selector)) {
+        for (const use of bySelector.get(error.selector) ?? []) {
           violations.push({ path: use.path, line: use.line, scenarioId: use.scenarioId, message: `unresolved evidence ${use.raw}: ${error.message}` })
         }
       }
       for (const target of resolved.targets) {
-        const references = [...new Set(runnerUses.filter(use => use.selector === target.selector).map(use => use.raw))]
+        const references = [...new Set((bySelector.get(target.selector) ?? []).map(use => use.raw))]
         const key = `${runnerId}\u0000${target.targetId}`
         const prior = targetsByRunnerSelector.get(`${runnerId}\u0000${target.selector}`)
         if (prior !== undefined && prior.key !== key) {
@@ -122,7 +125,11 @@ export async function planEvidence(
 
   const targets = [...targetsByKey.values()].sort((left, right) => left.key.localeCompare(right.key))
   const grouped = new Map<string, PlannedTarget[]>()
-  for (const target of targets) grouped.set(target.runnerId, [...(grouped.get(target.runnerId) ?? []), target])
+  for (const target of targets) {
+    let runnerTargets = grouped.get(target.runnerId)
+    if (runnerTargets === undefined) grouped.set(target.runnerId, runnerTargets = [])
+    runnerTargets.push(target)
+  }
   const groups = [...grouped].sort(([left], [right]) => left.localeCompare(right)).map(([runnerId, runnerTargets]) => ({
     runnerId,
     config: config.runners[runnerId] as NonNullable<typeof config.runners[string]>,

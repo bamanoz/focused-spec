@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 
 const OUTPUT_LIMIT = 2_000_000
 const DIAGNOSTIC_LIMIT = 8_000
@@ -9,8 +10,8 @@ export interface ProcessResult {
   readonly stderr: string
 }
 
-function appendBounded(current: string, chunk: Buffer, limit: number): { text: string; overflow: boolean } {
-  const next = current + chunk.toString('utf8')
+function appendBounded(current: string, chunk: string, limit: number): { text: string; overflow: boolean } {
+  const next = current + chunk
   return next.length <= limit
     ? { text: next, overflow: false }
     : { text: next.slice(next.length - limit), overflow: true }
@@ -27,6 +28,8 @@ export async function runProcess(
   const child = spawn(command, args, { cwd, env: env ?? process.env, shell: false, stdio: ['ignore', 'pipe', 'pipe'] })
   let stdout = ''
   let stderr = ''
+  const stdoutDecoder = new StringDecoder('utf8')
+  const stderrDecoder = new StringDecoder('utf8')
   let overflow = false
   let killTimer: NodeJS.Timeout | undefined
   let aborting = false
@@ -40,7 +43,7 @@ export async function runProcess(
   signal.addEventListener('abort', abort, { once: true })
   if (signal.aborted) abort()
   child.stdout.on('data', (chunk: Buffer) => {
-    const appended = appendBounded(stdout, chunk, OUTPUT_LIMIT)
+    const appended = appendBounded(stdout, stdoutDecoder.write(chunk), OUTPUT_LIMIT)
     stdout = appended.text
     if (appended.overflow) {
       overflow = true
@@ -48,8 +51,14 @@ export async function runProcess(
     }
   })
   child.stderr.on('data', (chunk: Buffer) => {
-    stderr = appendBounded(stderr, chunk, DIAGNOSTIC_LIMIT).text
+    stderr = appendBounded(stderr, stderrDecoder.write(chunk), DIAGNOSTIC_LIMIT).text
   })
+  child.stdout.on('end', () => {
+    const appended = appendBounded(stdout, stdoutDecoder.end(), OUTPUT_LIMIT)
+    stdout = appended.text
+    overflow ||= appended.overflow
+  })
+  child.stderr.on('end', () => { stderr = appendBounded(stderr, stderrDecoder.end(), DIAGNOSTIC_LIMIT).text })
   let result: ProcessResult
   try {
     result = await new Promise<ProcessResult>((resolve, reject) => {

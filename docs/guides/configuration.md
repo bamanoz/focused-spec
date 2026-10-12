@@ -50,11 +50,15 @@ execution:
 
 `match` and optional `exclude` globs are project-relative and may select any extension accepted by the chosen adapter. Absolute paths, traversal, symlink escapes, malformed captures, and unknown format IDs are errors. `{scope}` captures one nonempty path-safe fragment and preserves it exactly. It may be a complete segment, such as `changes/{scope}/spec.md`, or the variable part of one segment, such as `specs/spec-{scope}/SPEC.md`.
 
+A harmless leading `./` (including repeated `./` prefixes) does not change discovery or `{scope}` capture, including layouts with a following `**`.
+
 There are no implicit archive exclusions, source-framework defaults, privileged scopes, format defaults, or fallback locations. Multiple layouts may contribute documents to one scope, but each document must match exactly one layout and scope; overlapping claims are errors.
 
 Document matches, exclusions and evidence source patterns share security limits: at most 4096 characters, 32 nested brace/group levels (parentheses separately limited to 2 levels), 256 unescaped brace delimiter characters and 256 brace-expanded alternatives per pattern. Excess fails with a `glob pattern exceeds ...` violation before matching or plugin loading; selected files are never silently truncated. Hidden files are included, matching is case-sensitive, and padded (`{01..03}`) and stepped (`{1..5..2}`) ranges retain their numeric meaning. Split oversized alternatives into explicit source patterns instead of increasing the limits.
 
 Runner IDs name execution environments. Like formats, a runner declares exactly one installed `package` or contained project `module`, with optional JSON-compatible `options` and `timeoutMs`; runners additionally accept a project-relative `cwd`. `timeoutMs` is a positive integer no greater than `2147482647`. `execution.maxConcurrentGroups` is optional, defaults to 1, and only permits overlap for compatible groups explicitly returned by runners. The public runner API remains version 1. See the [runner guide](runners.md) and [plugin API reference](../reference/runner-api.md).
+
+Format and runner options must be JSON-compatible: cyclic YAML aliases are rejected as configuration violations before plugins load. Reusing an acyclic alias in several option fields is valid.
 
 ## Required evidence registry
 
@@ -117,7 +121,7 @@ A paragraph or list item may instead carry the marker inline at its end:
 1. **Given** a blocked account, **When** it logs in, **Then** authentication is rejected. <!-- focused-spec:id=auth.login.blocked-account -->
 ```
 
-The marker belongs to exactly the adjacent structural item. One blank line is allowed; two blank lines or an intervening node detach it. Before a list, it identifies the immediately following first item, not the whole list. A detached marker, an invalid ID, two markers on one item, or one `(scope, ID)` bound to multiple items is an error. Inline markers must be at the item's end. Code examples never enroll items.
+The marker belongs to exactly the adjacent structural item. One blank line is allowed; two blank lines or an intervening node detach it, including inside lists. Before a list, it identifies the immediately following first item, not the whole list. A detached marker, an invalid ID, two markers on one item, or one `(scope, ID)` bound to multiple items is an error. Headings require a preceding marker; inline markers are supported only at the end of a paragraph or the complete list item, after all its content. Code examples never enroll items.
 
 ### Gherkin with `@focused-spec/format-gherkin`
 

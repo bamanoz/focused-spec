@@ -140,6 +140,28 @@ afterEach(async () => {
 })
 
 describe('focused-spec CLI', () => {
+  it.each(['zero-depth', 'nested'] as const)('preserves captured scope before a globstar with leading ./ for %s documents', async depth => {
+    const root = await fixture()
+    const path = depth === 'zero-depth' ? 'changes/alpha/spec.md' : 'changes/alpha/auth/deep/spec.md'
+    await put(root, path, nativeScenario('fixture.capture.passes'))
+    await put(root, 'changes/beta/spec.md', nativeScenario('fixture.capture.other'))
+    await writeRegistry(root, [
+      { scope: 'alpha', id: 'fixture.capture.passes', evidence: ['fixture::captured'] },
+      { scope: 'beta', id: 'fixture.capture.other', evidence: ['fixture::other'] },
+    ])
+    for (const match of ['changes/{scope}/**/spec.md', './changes/{scope}/**/spec.md']) {
+      await configure(root, [{ match }])
+      const validate = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'alpha', '--strict', '--json'], { encoding: 'utf8', timeout: 20_000 })
+      expect(validate.error, validate.stderr).toBeUndefined()
+      expect(validate.status, validate.stdout).toBe(0)
+      expect(json(validate.stdout)).toMatchObject({ valid: true, scenarios: 1, targets: 1, validationScope: { scopes: { mode: 'selected', name: 'alpha' } } })
+      const executed = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scope', 'alpha', '--json'], { encoding: 'utf8', timeout: 20_000 })
+      expect(executed.error, executed.stderr).toBeUndefined()
+      expect(executed.status, executed.stdout).toBe(0)
+      expect(json(executed.stdout)).toMatchObject({ success: true, targetCount: 1, scenarios: [{ id: 'fixture.capture.passes', scope: 'alpha', status: 'PASS' }] })
+    }
+  })
+
   it('discovers commands and native options without reading project state', async () => {
     const root = await emptyFixture()
     await put(root, '.focused-spec/config.yaml', 'invalid: [')

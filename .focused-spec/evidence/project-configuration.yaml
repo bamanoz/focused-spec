@@ -54,3 +54,17 @@ scopes:
     format.selection.missing:
       evidence:
         - vitest::test/plugins.spec.ts::plugin architecture > rejects missing and conflicting format registrations
+    config.options.cyclic:
+      evidence:
+        - vitest::test/plugins.spec.ts::plugin architecture > rejects cyclic format
+          YAML options before loading either plugin
+        - vitest::test/plugins.spec.ts::plugin architecture > rejects cyclic runner
+          YAML options before loading either plugin
+        - vitest::test/plugins.spec.ts::plugin architecture > accepts repeated
+          acyclic YAML aliases in format and runner options
+    config.source.dot-capture:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > preserves captured scope
+          before a globstar with leading ./ for zero-depth documents
+        - vitest::test/cli.spec.ts::focused-spec CLI > preserves captured scope
+          before a globstar with leading ./ for nested documents
