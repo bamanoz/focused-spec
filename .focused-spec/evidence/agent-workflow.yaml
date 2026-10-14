@@ -180,3 +180,11 @@ scopes:
           for a partial proposed path inside agent-os/specs/login/shape.md.backup
         - vitest::test/acp-agent.spec.ts::genuine planning consent > rejects consent
           for a partial proposed path inside agent-os/specs/login/shape.md/child
+    agent.review.evidence-sync:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects stale green evidence after native revision and accepts synchronized sensitive evidence
+        - vitest::test/evals.spec.ts::agent eval harness > rejects unchanged native behavior and loss of an independent registry entry during revision
+    agent.review.phase-boundaries:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects a proposal that creates configuration or a planned evidence registry
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > keeps host questions independent from runtime plan approval

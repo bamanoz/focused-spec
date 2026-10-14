@@ -1,6 +1,6 @@
 ---
 name: focused-spec
-description: "MUST-LOAD before any SDD/spec-driven development workflow step that creates, revises, publishes, moves, or completes behavioral requirements or scenarios. This applies across frameworks, artifact formats, and commands, even when the user does not name focused-spec. Load alongside the host workflow skill; bind changed native outcomes to exact evidence and execute it before completion."
+description: "MUST-LOAD before any SDD/spec-driven development workflow step that reviews, creates, revises, publishes, moves, or completes behavioral requirements or scenarios. This applies across frameworks, artifact formats, and commands, even when the user does not name focused-spec. Load alongside the host workflow skill; reconcile changed native outcomes with exact evidence and execute it before completion, respecting read-only and planning boundaries."
 ---
 
 # Focused Spec

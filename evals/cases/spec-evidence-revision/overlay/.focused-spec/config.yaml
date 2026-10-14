@@ -1,0 +1,25 @@
+version: 4
+specifications:
+  formats:
+    markdown:
+      package: '@focused-spec/format-markdown'
+  documents:
+    - match: specs/account-authentication.md
+      scope: current
+      format: markdown
+    - match: specs/active-account.md
+      scope: auth-baseline
+      format: markdown
+evidence:
+  files:
+    - .focused-spec/evidence/auth.yaml
+runners:
+  go:
+    package: '@focused-spec/runner-go'
+    timeoutMs: 120000
+  pytest:
+    package: '@focused-spec/runner-pytest'
+    timeoutMs: 120000
+    options:
+      command: uv
+      commandArgs: [run, --with, pytest, python]

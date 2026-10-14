@@ -60,6 +60,17 @@ export const EVAL_CASES: readonly EvalCase[] = [
     expectedSelectorAlternatives: ['pytest::tests/functional/test_auth.py::test_blocked_account'],
   },
   {
+    id: 'spec-evidence-revision',
+    description: 'Revises an enrolled native outcome and replaces stale green evidence with exact tests for valid-credential rejection while preserving unrelated registrations.',
+    source: 'files',
+    overlay: 'cases/spec-evidence-revision/overlay',
+    turns: [{ promptPath: 'cases/spec-evidence-revision/prompt.md', skills: FOCUSED }],
+    editablePaths: ['specs/account-authentication.md', '.focused-spec/evidence/auth.yaml'],
+    prescribedScenarioId: 'auth.login.blocked-account',
+    expectedEvidenceCount: 2,
+    expectedSelectorFragments: ['TestBlockedAccountWithValidCredentials', 'test_blocked_account_with_valid_credentials'],
+  },
+  {
     id: 'openspec-apply',
     description: 'Applies an existing OpenSpec change and binds native behavior to executable Go and pytest evidence.',
     overlay: 'cases/openspec-apply/overlay',

@@ -8,6 +8,7 @@ import { judgeEvidenceRepair } from './evidence-repair.ts'
 import { evalRepositoryRoot } from './provision.ts'
 import { upgradeSensitivityGate } from './upgrade.ts'
 import { parseTrustedNativeDocument } from './native-parse.ts'
+import { specRevisionGate } from './spec-revision.ts'
 
 const PROTECTED_PATHS = [
   'auth/auth.go',
@@ -910,6 +911,7 @@ export async function judgeCompletedWorkspace(
   gates.push(await integrityGate(workspace, snapshots, transcripts))
   const effectiveScenarioId = scenario?.selectedScenarioId ?? selectedScenarioId
   if (evalCase.registryPlacement !== undefined) gates.push(await registryPlacementGate(workspace, evalCase, effectiveScenarioId))
+  if (evalCase.id === 'spec-evidence-revision') gates.push(await specRevisionGate(workspace, evalCase))
   if (evalCase.id === 'vacuous-evidence') gates.push(...await judgeEvidenceRepair(workspace, transcripts))
   else if (evalCase.id === 'project-upgrade' && strict?.code === 0 && run?.code === 0) gates.push(await upgradeSensitivityGate(workspace))
   else if (strict?.code === 0 && run?.code === 0) gates.push(await mutationGate(workspace, evalCase, scope, effectiveScenarioId))

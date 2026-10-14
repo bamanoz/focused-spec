@@ -1,0 +1,1 @@
+Review specs/account-authentication.md and revise the existing blocked-account outcome to make it explicit that a blocked account must be denied login even when its credentials are valid. Complete the specification change and verify it. The authentication implementation and tests already exist; do not modify them.

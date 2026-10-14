@@ -2,11 +2,12 @@ import { cp, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentDriver, AgentRequest, AgentResult, EvalCase } from '../evals/types.ts'
 import { runEval } from '../evals/harness.ts'
 import { brownfieldGate, guidanceActivationGate, integrityGate, judgeCompletedWorkspace, judgeProposalCheckpoint, judgeWorkingCheckpoint, mutationGate, registryPlacementGate, scenarioGate, skillActivationGate, snapshotProtectedFiles } from '../evals/judge.ts'
 import { judgeEvidenceRepair } from '../evals/evidence-repair.ts'
+import { specRevisionGate } from '../evals/spec-revision.ts'
 import { evalCase } from '../evals/cases.ts'
 import { provisionWorkspace } from '../evals/provision.ts'
 import { runProcess } from '../evals/process.ts'
@@ -245,6 +246,16 @@ class FakeDriver implements AgentDriver {
 }
 
 describe('agent eval harness', () => {
+  const checkpointRetirement = 'retains executed checkpoints after working identity and registry retire in place'
+  let retirementFixture: { root: string; checkpoint: Awaited<ReturnType<typeof judgeWorkingCheckpoint>> }
+  beforeEach(async ({ task }) => {
+    if (task.name !== checkpointRetirement) return
+    const root = await brownfieldFixture()
+    const checkpoint = await judgeWorkingCheckpoint(root, brownfieldChange)
+    expect(checkpoint.gates.every(gate => gate.passed)).toBe(true)
+    retirementFixture = { root, checkpoint }
+  })
+
   it('rejects lost scope-local evidence and tampered upgrade artifacts', async () => {
     const selected = evalCase('project-upgrade')!
     const root = await mkdtemp(join(tmpdir(), 'focused-eval-upgrade-'))
@@ -853,6 +864,48 @@ describe('agent eval harness', () => {
     expect(gate.detail).toContain('node_modules/focused-spec/dist/cli.js')
   })
 
+  it('rejects stale green evidence after native revision and accepts synchronized sensitive evidence', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-eval-spec-revision-'))
+    roots.push(root)
+    await cp(join(repository, 'evals/fixtures/polyglot'), root, { recursive: true })
+    await cp(join(repository, 'evals/cases/spec-evidence-revision/overlay'), root, { recursive: true, force: true })
+    await installFocusedPackage(root)
+    const selected = evalCase('spec-evidence-revision')!
+    const cli = join(root, 'node_modules/focused-spec/dist/cli.js')
+    await put(root, 'specs/account-authentication.md', 'A blocked account with valid credentials is denied login. <!-- focused-spec:id=auth.login.blocked-account -->\n')
+    const oldGreen = await runProcess(process.execPath, [cli, 'run', '--json'], { cwd: root, timeoutMs: 120_000 })
+    expect(JSON.parse(oldGreen.stdout)).toMatchObject({ success: true, targetCount: 4 })
+    expect(await scenarioGate(root, selected)).toMatchObject({ passed: false })
+    const staleSensitivity = await mutationGate(root, { ...selected,
+      expectedSelectorFragments: ['TestBlockedAccount', 'test_blocked_account'],
+    })
+    expect(staleSensitivity, staleSensitivity.detail).toMatchObject({ passed: false })
+    const originalRegistry = await readFile(join(root, '.focused-spec/evidence/auth.yaml'), 'utf8')
+    const revisedRegistry = originalRegistry.replace('::TestBlockedAccount\n', '::TestBlockedAccountWithValidCredentials\n')
+      .replace('::test_blocked_account\n', '::test_blocked_account_with_valid_credentials\n')
+    await put(root, '.focused-spec/evidence/auth.yaml', revisedRegistry)
+    expect(await specRevisionGate(root, selected)).toMatchObject({ passed: true })
+    expect(await scenarioGate(root, selected)).toMatchObject({ passed: true })
+    const sensitive = await mutationGate(root, selected)
+    expect(sensitive, sensitive.detail).toMatchObject({ passed: true })
+    const synchronized = await runProcess(process.execPath, [cli, 'run', '--json'], { cwd: root, timeoutMs: 120_000 })
+    expect(JSON.parse(synchronized.stdout)).toMatchObject({ success: true, targetCount: 4 })
+  }, 60_000)
+
+  it('rejects unchanged native behavior and loss of an independent registry entry during revision', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-eval-spec-ownership-'))
+    roots.push(root)
+    await cp(join(repository, 'evals/fixtures/polyglot'), root, { recursive: true })
+    await cp(join(repository, 'evals/cases/spec-evidence-revision/overlay'), root, { recursive: true, force: true })
+    const selected = evalCase('spec-evidence-revision')!
+    expect(await specRevisionGate(root, selected)).toMatchObject({ passed: false })
+    await put(root, 'specs/account-authentication.md', 'A blocked account with valid credentials is denied login. <!-- focused-spec:id=auth.login.blocked-account -->\n')
+    expect(await specRevisionGate(root, selected)).toMatchObject({ passed: true })
+    const registry = await readFile(join(root, '.focused-spec/evidence/auth.yaml'), 'utf8')
+    await put(root, '.focused-spec/evidence/auth.yaml', registry.split('  auth-baseline:')[0]!)
+    expect(await specRevisionGate(root, selected)).toMatchObject({ passed: false })
+  })
+
   it('rejects vacuous evidence even after product repair and requires an agent sensitivity probe', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-eval-vacuous-'))
     roots.push(root)
@@ -960,10 +1013,8 @@ describe('agent eval harness', () => {
     expect(regression.find(gate => gate.name === 'transition-stable-evidence')).toMatchObject({ passed: false })
   }, 60_000)
 
-  it('retains executed checkpoints after working identity and registry retire in place', async () => {
-    const root = await brownfieldFixture()
-    const checkpoint = await judgeWorkingCheckpoint(root, brownfieldChange)
-    expect(checkpoint.gates.every(gate => gate.passed)).toBe(true)
+  it(checkpointRetirement, async () => {
+    const { root, checkpoint } = retirementFixture
     const path = 'openspec/changes/add-auth/specs/account-authentication/spec.md'
     await put(root, path, (await readFile(join(root, path), 'utf8')).replace('<!-- focused-spec:id=auth.login.blocked-account -->\n', ''))
     await put(root, '.focused-spec/evidence.yaml', JSON.stringify({ scopes: { current: {
