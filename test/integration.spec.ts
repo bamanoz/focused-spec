@@ -564,6 +564,190 @@ describe('project-local TypeScript runners', () => {
     expect(result.success).toBe(true)
   })
 
+  it('reports overlapping admitted group intervals without summing wall time', async () => {
+    const groupedTargets = [
+      ['holder'],
+      ['free-skip', 'free-pass'],
+      ['middle-a', 'middle-b', 'middle-c'],
+      ['release-a', 'release-b', 'release-c', 'release-d'],
+      ['queued-a', 'queued-b', 'queued-c', 'queued-d', 'queued-e'],
+    ] as const
+    const targets = groupedTargets.flat()
+    const root = await schedulerRoot({
+      'barrier.ts': [
+        "import { access, mkdir, watch, writeFile } from 'node:fs/promises'",
+        "import { basename, dirname, join } from 'node:path'",
+        'async function present(path) {',
+        '  try { await access(path); return true } catch { return false }',
+        '}',
+        'async function waitFor(path) {',
+        '  const events = watch(dirname(path))',
+        '  try {',
+        '    if (await present(path)) return',
+        '    for await (const event of events) {',
+        '      if (event.filename === basename(path) && await present(path)) return',
+        '    }',
+        '  } finally {',
+        '    await events.return()',
+        '  }',
+        '}',
+        'export default {',
+        '  apiVersion: 1,',
+        '  async resolve({ selectors }) {',
+        '    return { targets: selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] }',
+        '  },',
+        '  async partition() {',
+        '    return { groups: [',
+        `      { targetIds: ${JSON.stringify(groupedTargets[0])}, resources: ["database:shared"] },`,
+        `      { targetIds: ${JSON.stringify(groupedTargets[1])}, resources: ["pipeline:free"] },`,
+        `      { targetIds: ${JSON.stringify(groupedTargets[2])}, resources: ["pipeline:free"] },`,
+        `      { targetIds: ${JSON.stringify(groupedTargets[3])}, resources: ["pipeline:free"] },`,
+        `      { targetIds: ${JSON.stringify(groupedTargets[4])}, resources: ["database:shared"] },`,
+        '    ] }',
+        '  },',
+        '  async run({ projectRoot, targets }) {',
+        '    const barriers = join(projectRoot, ".barriers")',
+        '    await mkdir(barriers, { recursive: true })',
+        '    await writeFile(join(barriers, `started-${targets.length}`), "")',
+        '    if (targets.length === 1) await waitFor(join(barriers, "started-4"))',
+        '    return { results: targets.map(target => ({ targetId: target.targetId, status: target.targetId === "free-skip" ? "skip" : "pass" })) }',
+        '  },',
+        '}',
+      ].join('\n'),
+    })
+    await put(root, '.focused-spec/config.yaml', [
+      'version: 4',
+      'specifications:',
+      '  formats: { markdown: { package: "@focused-spec/format-markdown" } }',
+      '  documents:',
+      '    - match: specs/**/*.md',
+      '      format: markdown',
+      '      scope: current',
+      'runners:',
+      '  barrier:',
+      '    module: ./barrier.ts',
+      'execution:',
+      '  maxConcurrentGroups: 2',
+    ].join('\n'))
+    await put(root, '.focused-spec/evidence.yaml', [
+      'scopes:',
+      '  current:',
+      ...targets.flatMap(target => [
+        `    timing.${target.replaceAll('-', '.')}:`,
+        `      evidence: ["barrier::${target}"]`,
+      ]),
+    ].join('\n'))
+    await put(root, 'specs/timings.md', [
+      '### Requirement: Scheduler timing fixture',
+      '',
+      ...targets.flatMap(target => [
+        `<!-- focused-spec:id=timing.${target.replaceAll('-', '.')} -->`,
+        `#### Scenario: ${target} retains its result`,
+        '',
+        `The ${target} target keeps its status when timings are requested.`,
+        '',
+      ]),
+    ].join('\n'))
+
+    type OperationTiming = {
+      readonly runnerId: string
+      readonly startedMs: number
+      readonly durationMs: number
+      readonly outcome: 'completed' | 'error'
+    } & (
+      | { readonly operation: 'resolve'; readonly selectorCount: number }
+      | { readonly operation: 'partition' | 'run'; readonly targetCount: number }
+    )
+    interface CliResult {
+      readonly success: boolean
+      readonly targetCount: number
+      readonly scenarios: readonly {
+        readonly id: string
+        readonly status: string
+        readonly evidence: readonly { readonly status: string }[]
+      }[]
+      readonly timings?: {
+        readonly executionMs: number
+        readonly runnerOperations: readonly OperationTiming[]
+      }
+    }
+    const cli = fileURLToPath(new URL('../packages/core/dist/cli.js', import.meta.url))
+    const args = [cli, 'run', '--root', root, '--json', '--allow-skip']
+    const ordinary = spawnSync(process.execPath, args, { encoding: 'utf8' })
+    expect(ordinary.status, ordinary.stderr || ordinary.stdout).toBe(0)
+    const ordinaryOutput = JSON.parse(ordinary.stdout) as CliResult
+    expect(ordinaryOutput).not.toHaveProperty('timings')
+
+    await rm(join(root, '.barriers'), { recursive: true, force: true })
+    const timed = spawnSync(process.execPath, [...args, '--timings'], { encoding: 'utf8' })
+    expect(timed.status, timed.stderr || timed.stdout).toBe(0)
+    const timedOutput = JSON.parse(timed.stdout) as CliResult
+    const timings = timedOutput.timings
+    expect(timings).toBeDefined()
+    const ordinaryResults = {
+      success: ordinaryOutput.success,
+      targetCount: ordinaryOutput.targetCount,
+      scenarios: ordinaryOutput.scenarios.map(scenario => ({
+        id: scenario.id,
+        status: scenario.status,
+        evidence: scenario.evidence.map(item => item.status),
+      })),
+    }
+    const timedResults = {
+      success: timedOutput.success,
+      targetCount: timedOutput.targetCount,
+      scenarios: timedOutput.scenarios.map(scenario => ({
+        id: scenario.id,
+        status: scenario.status,
+        evidence: scenario.evidence.map(item => item.status),
+      })),
+    }
+    expect(timedResults).toEqual(ordinaryResults)
+    expect(timedOutput).toMatchObject({
+      success: true,
+      targetCount: targets.length,
+      scenarios: expect.arrayContaining(targets.map(target => expect.objectContaining({
+        id: `timing.${target.replaceAll('-', '.')}`,
+        status: target === 'free-skip' ? 'SKIP' : 'PASS',
+      }))),
+    })
+
+    const operations = timings!.runnerOperations
+    expect(operations.map(row => row.operation === 'resolve'
+      ? { runnerId: row.runnerId, operation: row.operation, count: row.selectorCount, outcome: row.outcome }
+      : { runnerId: row.runnerId, operation: row.operation, count: row.targetCount, outcome: row.outcome })).toEqual([
+      { runnerId: 'barrier', operation: 'resolve', count: targets.length, outcome: 'completed' },
+      { runnerId: 'barrier', operation: 'partition', count: targets.length, outcome: 'completed' },
+      ...groupedTargets.map(group => ({ runnerId: 'barrier', operation: 'run', count: group.length, outcome: 'completed' })),
+    ])
+    expect(operations.every((row, index) => index === 0 || operations[index - 1]!.startedMs <= row.startedMs)).toBe(true)
+    expect(operations.every(row => Number.isFinite(row.startedMs) && row.startedMs >= 0
+      && Number.isFinite(row.durationMs) && row.durationMs >= 0)).toBe(true)
+
+    const runs = operations.filter((row): row is OperationTiming & { readonly operation: 'run'; readonly targetCount: number } => row.operation === 'run')
+    const byCount = new Map(runs.map(row => [row.targetCount, row]))
+    const holder = byCount.get(1)!
+    const free = byCount.get(2)!
+    const middle = byCount.get(3)!
+    const release = byCount.get(4)!
+    const queued = byCount.get(5)!
+    const end = (row: OperationTiming): number => row.startedMs + row.durationMs
+
+    expect(free.startedMs).toBeLessThan(end(holder))
+    expect(end(free)).toBeLessThanOrEqual(middle.startedMs)
+    expect(end(middle)).toBeLessThanOrEqual(release.startedMs)
+    expect(release.startedMs).toBeLessThan(end(holder))
+    expect(end(free)).toBeLessThan(end(holder))
+    expect(queued.startedMs).toBeGreaterThanOrEqual(end(holder))
+
+    const runDurationSum = runs.reduce((sum, row) => sum + row.durationMs, 0)
+    const runWallSpan = Math.max(...runs.map(end)) - Math.min(...runs.map(row => row.startedMs))
+    const partition = operations.find((row): row is OperationTiming & { readonly operation: 'partition'; readonly targetCount: number } => row.operation === 'partition')!
+    expect(runDurationSum).toBeGreaterThan(runWallSpan)
+    expect(timings!.executionMs).toBeGreaterThanOrEqual(runWallSpan)
+    expect(timings!.executionMs).toBeLessThan(partition.durationMs + runDurationSum)
+  })
+
   it('reports grouped runner failures without claiming evidence passed', async () => {
     const partition = 'return { groups: request.targets.map(target => ({ targetIds: [target.targetId], resources: [] })) }'
     const root = await schedulerRoot({ 'mixed.ts': observedRunner(partition, 'bad') })

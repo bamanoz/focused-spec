@@ -1,6 +1,7 @@
 import type { ExecutionPlan, FocusedSpecConfig, PlannedScenario, PlannedTarget, SpecDocument, Violation } from './model.js'
 import { parseEvidenceReference } from './parser.js'
 import { resolveRunnerTargets } from './runner-client.js'
+import type { OperationTimings } from './timings.js'
 
 interface EvidenceUse {
   readonly scope: string
@@ -26,6 +27,7 @@ export async function planEvidence(
   config: FocusedSpecConfig,
   documents: readonly SpecDocument[],
   options: PlanOptions = {},
+  timings?: OperationTimings,
 ): Promise<PlanOutput> {
   const byRunner = new Map<string, Map<string, EvidenceUse[]>>()
   const scenarioUses = new Map<string, EvidenceUse[]>()
@@ -72,7 +74,9 @@ export async function planEvidence(
     }
     const selectors = [...bySelector.keys()].sort()
     try {
-      const resolved = await resolveRunnerTargets(projectRoot, runnerId, runnerConfig, selectors)
+      const resolved = timings === undefined
+        ? await resolveRunnerTargets(projectRoot, runnerId, runnerConfig, selectors)
+        : await timings.runner({ runnerId, operation: 'resolve', selectorCount: selectors.length }, () => resolveRunnerTargets(projectRoot, runnerId, runnerConfig, selectors))
       for (const error of resolved.errors) {
         for (const use of bySelector.get(error.selector) ?? []) {
           violations.push({ path: use.path, line: use.line, scenarioId: use.scenarioId, message: `unresolved evidence ${use.raw}: ${error.message}` })

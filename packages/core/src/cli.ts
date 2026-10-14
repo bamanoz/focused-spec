@@ -10,6 +10,7 @@ import type { ExecutionPlan, ExecutionResult, SpecDocument, Violation } from './
 import { parseEvidenceReference } from './parser.js'
 import { planEvidence, projectExecutionPlan } from './planner.js'
 import { validateFocusedSpecs } from './validate.js'
+import { OperationTimings } from './timings.js'
 
 interface CliOptions {
   readonly command: 'validate' | 'run'
@@ -204,7 +205,7 @@ interface RunContext {
   readonly executionSelection: ExecutionSelection
 }
 
-interface PhaseTimings {
+interface PhaseTimings extends ReturnType<OperationTimings['snapshot']> {
   readonly validationMs?: number
   readonly resolutionMs?: number
   readonly executionMs?: number
@@ -266,7 +267,9 @@ function displayTimings(timings: PhaseTimings): string {
     ...(timings.executionMs === undefined ? [] : [`execution ${timings.executionMs.toFixed(2)} ms`]),
     `total ${timings.totalMs.toFixed(2)} ms`,
   ]
-  return `timings: ${phases.join(', ')}\n`
+  const runners = timings.runnerOperations.map(row => `  runner ${row.runnerId} ${row.operation}: ${row.durationMs.toFixed(2)} ms, start ${row.startedMs.toFixed(2)} ms, ${row.operation === 'resolve' ? `selectors ${row.selectorCount}` : `targets ${row.targetCount}`}, ${row.outcome}\n`)
+  const formats = timings.formatOperations.map(row => `  format ${row.formatId} [${row.scope}] ${row.path}: ${row.durationMs.toFixed(2)} ms, start ${row.startedMs.toFixed(2)} ms, ${row.coldStart ? 'cold-start' : 'reused-host'}, ${row.outcome}\n`)
+  return `timings: ${phases.join(', ')}\n${runners.join('')}${formats.join('')}`
 }
 
 function printViolations(
@@ -343,9 +346,10 @@ async function main(argumentsList: readonly string[]): Promise<number> {
   const context = options.command === 'run' ? runContext(options) : validationContext(options)
   const projectRoot = isAbsolute(options.root) ? options.root : resolve(options.root)
   const phases: { validationMs?: number; resolutionMs?: number; executionMs?: number } = {}
-  const reportedTimings = (): PhaseTimings | undefined => options.timings
-    ? { ...phases, totalMs: elapsed(totalStarted) }
-    : undefined
+  const operationTimings = options.timings ? new OperationTimings(totalStarted) : undefined
+  const reportedTimings = (): PhaseTimings | undefined => operationTimings === undefined
+    ? undefined
+    : { ...phases, ...operationTimings.snapshot(), totalMs: elapsed(totalStarted) }
   const loaded = await loadConfig(projectRoot, options.configPath)
   if (loaded.config === undefined) {
     printViolations(loaded.violations, options.json, context, reportedTimings())
@@ -357,7 +361,7 @@ async function main(argumentsList: readonly string[]): Promise<number> {
     ...(options.scopeName === undefined ? {} : { scopeName: options.scopeName }),
     strict: options.command === 'run' || options.strict,
     ...(options.command === 'run' && options.scenarioId !== undefined ? { scenarioId: options.scenarioId } : {}),
-  })
+  }, operationTimings)
   phases.validationMs = elapsed(validationStarted)
   if (validation.violations.length > 0) {
     printViolations(validation.violations, options.json, context, reportedTimings())
@@ -372,7 +376,7 @@ async function main(argumentsList: readonly string[]): Promise<number> {
   }
 
   const resolutionStarted = performance.now()
-  const resolution = await planEvidence(projectRoot, loaded.config, validation.resolutionDocuments)
+  const resolution = await planEvidence(projectRoot, loaded.config, validation.resolutionDocuments, {}, operationTimings)
   phases.resolutionMs = elapsed(resolutionStarted)
   if (resolution.violations.length > 0) {
     printViolations(resolution.violations, options.json, context, reportedTimings())
@@ -399,7 +403,7 @@ async function main(argumentsList: readonly string[]): Promise<number> {
   const result = await executePlan(planned.plan, {
     allowSkip: options.allowSkip,
     maxConcurrentGroups: loaded.config.execution?.maxConcurrentGroups ?? 1,
-  })
+  }, operationTimings)
   phases.executionMs = elapsed(executionStarted)
   printExecution(result, options.json, context as RunContext, reportedTimings())
   return result.success ? 0 : 1

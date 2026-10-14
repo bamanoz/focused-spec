@@ -4,6 +4,7 @@ import { expandGlobPattern, globFiles } from './glob.js'
 import type { DocumentLayout, FocusedSpecConfig, NativeDocument, NativeItem, Scenario, SpecDocument, Violation } from './model.js'
 import { FormatClient } from './format-client.js'
 import { loadEvidenceRegistry } from './registry.js'
+import type { OperationTimings } from './timings.js'
 
 const SCOPE_TOKEN = '{scope}'
 const SCOPE_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$/u
@@ -97,6 +98,7 @@ export async function discoverDocuments(
   config: FocusedSpecConfig,
   selectedScope?: string,
   selectedScenarioId?: string,
+  timings?: OperationTimings,
 ): Promise<{
   scopes: ReadonlyMap<string, readonly SpecDocument[]>
   violations: readonly Violation[]
@@ -177,12 +179,16 @@ export async function discoverDocuments(
       const layout = config.specifications.documents[claim.layoutIndex]!
       const format = config.specifications.formats[layout.format]
       if (format === undefined) throw new Error(`unknown format ${layout.format}`)
+      const source = await readFile(claim.absolutePath, 'utf8')
       let client = formatClients.get(layout.format)
+      const coldStart = client === undefined
       if (client === undefined) {
         client = new FormatClient(projectRoot, format)
         formatClients.set(layout.format, client)
       }
-      document = await client.parse(path, await readFile(claim.absolutePath, 'utf8'), claim.scope)
+      document = timings === undefined
+        ? await client.parse(path, source, claim.scope)
+        : await timings.format({ formatId: layout.format, path, scope: claim.scope, coldStart }, () => client.parse(path, source, claim.scope))
     } catch (error) {
       if (selectedScope === undefined || claim.scope === selectedScope) violations.push({ path, message: `cannot parse native document: ${error instanceof Error ? error.message : String(error)}` })
       continue

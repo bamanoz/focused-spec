@@ -45,6 +45,18 @@ scopes:
     execution.timings.failure:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > reports reached timings on unresolved evidence without starting execution
+    execution.timings.runner-attribution:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > attributes timed runner operations to selected unique workloads
+    execution.timings.format-attribution:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > attributes document parsing to configured formats and reused hosts
+    execution.timings.operation-errors:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > retains attempted plugin timings across errors and negative results
+    execution.timings.overlap:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners > reports overlapping admitted group intervals without summing wall time
     execution.groups.independent:
       evidence:
         - vitest::test/integration.spec.ts::project-local TypeScript runners > overlaps independent groups within the configured limit

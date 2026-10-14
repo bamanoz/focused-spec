@@ -1,0 +1,26 @@
+# Tasks
+
+## 1. Opt-in collection and resolution attribution
+
+- [x] 1.1 Inspect references before changing exported core signatures; add a command-scoped optional internal timing collector and thread it through validation/planning without globals or untimed row allocation. TypeScript server unavailable (marksman only); repository callsites inspected. Core and all adapter builds PASS; old calls retain valid optional signatures.
+- [x] 1.2 Extend existing `--timings` JSON/text output with `runnerOperations` and `formatOperations` arrays, monotonic offsets, durations and defined outcomes while retaining phase totals and ordinary output. Update `docs/reference/cli.md` with output types, units, nonadditive intervals and semantics; extend `vitest::test/cli.spec.ts::focused-spec CLI > reports phase timings only when requested` to prove timed/untimed results remain equivalent and ordinary output has no telemetry.
+- [x] 1.3 Measure each actual runner resolve invocation and input selector count, including valid unresolved responses and failures; do not repeat resolution or include unselected runners. Verify `vitest::test/cli.spec.ts::focused-spec CLI > attributes timed runner operations to selected unique workloads` and extend `vitest::test/cli.spec.ts::focused-spec CLI > reports reached timings on unresolved evidence without starting execution`; record exact references for the working occurrence of execution.timings.opt-in, execution.timings.failure and execution.timings.runner-attribution in `.focused-spec/evidence/scenario-execution.yaml` only now that implementation is authorized.
+
+## 2. Document parsing attribution
+
+- [x] 2.1 Measure each entered format parse after source reading, identifying configured format ID, path, scope and first-host-call coldStart; include whole-call initialization/IPC/normalization without calling it pure CPU time. Add parsing example and cold-start limitations to `docs/reference/cli.md`; verify `vitest::test/cli.spec.ts::focused-spec CLI > attributes document parsing to configured formats and reused hosts` for multiple formats, repeated-host documents, exclusions, syntax-only and native diagnostics; register execution.timings.format-attribution with this exact evidence in the existing shard.
+
+## 3. Execution groups and partial failures
+
+- [x] 3.1 Measure actual partition and admitted run invocations with target counts; preserve scheduler behavior and omit dormant partition or never-started run operations. Update run examples and overlap/queue semantics in `docs/reference/cli.md`; verify `vitest::test/integration.spec.ts::project-local TypeScript runners > reports overlapping admitted group intervals without summing wall time` using barrier-controlled independent/conflicting groups and unchanged evidence statuses; register execution.timings.overlap with that exact reference.
+- [x] 3.2 Retain finally-recorded measured intervals on parse/resolve/run errors, crashes, timeouts and malformed responses while distinguishing valid missing-selector/native-diagnostic/test-FAIL responses from invocation errors. Document the outcome distinction and partial arrays in `docs/reference/cli.md`; verify `vitest::test/cli.spec.ts::focused-spec CLI > retains attempted plugin timings across errors and negative results`; register execution.timings.operation-errors with that exact reference and confirm all six working native outcomes have concrete evidence.
+
+## 4. Integrated behavioral proof
+
+- [x] 4.1 Execute an owned temporary installed-package CLI fixture with timed/untimed validate, syntax-only and run; compare non-timing results and inspect actual runner/document attribution. Verify text and JSON examples and documentation links. Run the six exact focused native outcomes and safely prove each changed assertion with controlled timing-product regression FAIL followed by restored PASS; no test/selector edits qualify as sensitivity. Proof: `.eval-cache/plugin-operation-timings-verification.json` and `.eval-cache/plugin-operation-timings-sensitivity.json`; all six exact IDs cover baseline PASS → AssertionError FAIL → restored PASS across four isolated collector regressions.
+- [x] 4.2 Run `npm test`, `npm run smoke`, `openspec validate expose-plugin-operation-timings --strict --no-interactive`, strict focused validation and complete working-scope execution. Record exact counts, failed/skipped/unavailable checks and proof artifacts; no model matrix is required unless implementation also changes instruction-distribution owners. Observed 14 test files / 239 tests PASS, Go/pytest smoke 1 scenario / 2 targets PASS, strict native change validation PASS, working scope 6 scenarios / 6 targets PASS; none skipped in the full suite. Proof: `.eval-cache/plugin-operation-timings-verification.json` and `.eval-cache/plugin-operation-timings-sensitivity.json`.
+
+## Workflow follow-up
+
+- After implementation approval and verified completion, sync the native delta through OpenSpec, explicitly publish all six scope-local evidence registrations into the surviving scope, archive through the native host and retire obsolete working entries.
+- Validate/run the surviving all-scope selection, remove only owned temporary probes and retain proof artifacts. Do not commit, push, bump versions or publish without a new explicit request.

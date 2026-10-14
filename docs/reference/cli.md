@@ -199,7 +199,87 @@ If configuration, registry parsing, native binding, selected evidence resolution
 
 ## Timing output
 
-`--timings` adds a `timings` object to JSON or a `timings:` line to text. `validationMs` covers registry loading, document discovery, parsing, and binding; `resolutionMs` covers runner resolution; `executionMs` covers execution and scheduling; `totalMs` covers the command until output construction begins. A phase appears only when reached. Concurrent activities may overlap, so phase values are not additive.
+`--timings` opts into operation telemetry as well as phase timing. Without the flag, JSON has no `timings` property and text has no timing lines. With it, JSON uses this output shape (shown in TypeScript notation; these are CLI result types, not plugin APIs or package exports):
+
+```ts
+type TimingOutcome = 'completed' | 'error'
+
+type RunnerOperationTiming = {
+  readonly startedMs: number
+  readonly durationMs: number
+  readonly outcome: TimingOutcome
+  readonly runnerId: string
+} & (
+  | { readonly operation: 'resolve'; readonly selectorCount: number }
+  | { readonly operation: 'partition' | 'run'; readonly targetCount: number }
+)
+
+interface FormatOperationTiming {
+  readonly startedMs: number
+  readonly durationMs: number
+  readonly outcome: TimingOutcome
+  readonly formatId: string
+  readonly path: string
+  readonly scope: string
+  readonly coldStart: boolean
+}
+
+interface Timings {
+  readonly validationMs?: number
+  readonly resolutionMs?: number
+  readonly executionMs?: number
+  readonly totalMs: number
+  readonly runnerOperations: readonly RunnerOperationTiming[]
+  readonly formatOperations: readonly FormatOperationTiming[]
+}
+```
+
+All timing values are finite, nonnegative milliseconds of elapsed wall time. `startedMs` is an offset from the command's monotonic timing origin; `durationMs` measures the operation interval. The existing phase fields retain their meanings: `validationMs` covers registry loading, document discovery, parsing, and binding; `resolutionMs` covers runner resolution; `executionMs` covers execution and scheduling; and `totalMs` covers the command until output construction begins. A phase appears only when reached.
+
+Each runner row represents one actual core-facing invocation. A `resolve` row's `selectorCount` is the number of unique selectors passed to that invocation, not the number of scenario references. A `partition` or `run` row's `targetCount` is the number of input targets passed to that invocation, not every test in the project. Partition rows appear only when partitioning is invoked, and each admitted execution group has its own run row; time waiting for scheduler admission is excluded from the run interval.
+
+Each format row represents one entered parse call and identifies its configured format, normalized project-relative document path, and scope. The first actual request to a newly created format client/host has `coldStart: true`; later requests through that client have `coldStart: false`. Its duration covers the whole core-facing call, including host startup when applicable, lazy module initialization, IPC, parsing, response validation, and normalization. It excludes document reading and registry binding, and is not a measurement of pure parser CPU time. A failure before the parse call, such as a source-read failure, produces no format row.
+
+`outcome: 'completed'` means the plugin returned a valid response. Native diagnostics, missing selectors, and test `FAIL` or `SKIP` results are therefore completed operations; their normal violations and statuses remain authoritative. Thrown errors, malformed responses, timeouts, and host crashes use `outcome: 'error'`. Failed output retains rows for calls that started and omits calls that were never reached; it never fabricates later work.
+
+When timing collection is enabled, both arrays are present even when empty. Ordinary `validate` may report format parses and runner resolution, but never partition or run rows. `validate --syntax-only` reports entered format parses but no runner rows. `run` may report format parses, resolution, an actually invoked partition operation, and each actual run invocation. Unknown format configuration or another failure before parsing can leave both arrays empty.
+
+Arrays are ordered by `startedMs`, with deterministic identity tie-breakers. Concurrent intervals can overlap, so operation durations and phase values are not additive: summing them does not produce command wall time. Use offsets to understand overlap and phase totals or `totalMs` for elapsed command time.
+
+The following values are illustrative and nonmeasured:
+
+```json
+{
+  "timings": {
+    "validationMs": 18,
+    "resolutionMs": 9,
+    "executionMs": 24,
+    "totalMs": 53,
+    "runnerOperations": [
+      { "runnerId": "vitest", "operation": "resolve", "selectorCount": 3, "startedMs": 19, "durationMs": 8, "outcome": "completed" },
+      { "runnerId": "vitest", "operation": "partition", "targetCount": 3, "startedMs": 28, "durationMs": 1, "outcome": "completed" },
+      { "runnerId": "vitest", "operation": "run", "targetCount": 2, "startedMs": 30, "durationMs": 20, "outcome": "completed" },
+      { "runnerId": "vitest", "operation": "run", "targetCount": 1, "startedMs": 31, "durationMs": 12, "outcome": "completed" }
+    ],
+    "formatOperations": [
+      { "formatId": "markdown", "path": "specs/auth.md", "scope": "current", "coldStart": true, "startedMs": 2, "durationMs": 10, "outcome": "completed" },
+      { "formatId": "markdown", "path": "specs/access.md", "scope": "current", "coldStart": false, "startedMs": 13, "durationMs": 3, "outcome": "completed" }
+    ]
+  }
+}
+```
+
+Equivalent illustrative, nonmeasured text detail is appended below the existing phase line:
+
+```text
+timings: validation 18.00 ms, resolution 9.00 ms, execution 24.00 ms, total 53.00 ms
+  runner vitest resolve: 8.00 ms, start 19.00 ms, selectors 3, completed
+  runner vitest partition: 1.00 ms, start 28.00 ms, targets 3, completed
+  runner vitest run: 20.00 ms, start 30.00 ms, targets 2, completed
+  runner vitest run: 12.00 ms, start 31.00 ms, targets 1, completed
+  format markdown [current] specs/auth.md: 10.00 ms, start 2.00 ms, cold-start, completed
+  format markdown [current] specs/access.md: 3.00 ms, start 13.00 ms, reused-host, completed
+```
 
 ## Execution concurrency
 

@@ -2,6 +2,7 @@ import type { FocusedSpecConfig, Scenario, SpecDocument, Violation } from './mod
 import { parseEvidenceReference } from './parser.js'
 import { STABLE_ID } from './model.js'
 import { discoverDocuments, isScopeName } from './sources.js'
+import type { OperationTimings } from './timings.js'
 
 function diagnostic(scenario: Scenario, message: string): Violation {
   return { path: scenario.path, line: scenario.line, scenarioId: scenario.id, message }
@@ -47,11 +48,11 @@ export interface ValidationOutput {
   readonly resolutionDocuments: readonly SpecDocument[]
 }
 
-export async function validateFocusedSpecs(projectRoot: string, config: FocusedSpecConfig, options: ValidationOptions = {}): Promise<ValidationOutput> {
+export async function validateFocusedSpecs(projectRoot: string, config: FocusedSpecConfig, options: ValidationOptions = {}, timings?: OperationTimings): Promise<ValidationOutput> {
   if (options.scopeName !== undefined && !isScopeName(options.scopeName)) {
     return { violations: [{ path: '.focused-spec/config.yaml', message: `invalid scope name ${options.scopeName}` }], targetDocuments: [], resolutionDocuments: [] }
   }
-  const discovery = await discoverDocuments(projectRoot, config, options.scopeName, options.scenarioId)
+  const discovery = await discoverDocuments(projectRoot, config, options.scopeName, options.scenarioId, timings)
   const violations = [...discovery.violations]
   const selected = options.scopeName === undefined ? [...discovery.scopes.values()].flat() : [...(discovery.scopes.get(options.scopeName) ?? [])]
   if (options.scopeName !== undefined && !discovery.scopes.has(options.scopeName)) violations.push({ path: options.scopeName, message: `scope has no matching documents: ${options.scopeName}` })

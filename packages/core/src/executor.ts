@@ -1,5 +1,6 @@
 import type { EvidenceResult, ExecutionPlan, ExecutionResult, EvidenceStatus, PlannedTarget, RunnerGroup } from './model.js'
 import { partitionRunnerTargets, runRunnerTargets } from './runner-client.js'
+import type { OperationTimings } from './timings.js'
 
 function aggregate(statuses: readonly EvidenceStatus[]): EvidenceStatus {
   if (statuses.length === 0 || statuses.includes('ERROR')) return 'ERROR'
@@ -32,14 +33,13 @@ async function runGroup(
   plan: ExecutionPlan,
   group: ScheduledGroup,
   resultByKey: Map<string, Omit<EvidenceResult, 'reference'>>,
+  timings?: OperationTimings,
 ): Promise<void> {
   try {
-    const output = await runRunnerTargets(
-      plan.projectRoot,
-      group.runner.runnerId,
-      group.runner.config,
-      group.targets.map(target => target.target),
-    )
+    const output = timings === undefined
+      ? await runRunnerTargets(plan.projectRoot, group.runner.runnerId, group.runner.config, group.targets.map(target => target.target))
+      : await timings.runner({ runnerId: group.runner.runnerId, operation: 'run', targetCount: group.targets.length },
+        () => runRunnerTargets(plan.projectRoot, group.runner.runnerId, group.runner.config, group.targets.map(target => target.target)))
     const outputById = new Map(output.results.map(result => [result.targetId, result]))
     for (const target of group.targets) {
       const result = outputById.get(target.target.targetId)
@@ -61,6 +61,7 @@ async function buildSchedule(
   plan: ExecutionPlan,
   maxConcurrentGroups: number,
   resultByKey: Map<string, Omit<EvidenceResult, 'reference'>>,
+  timings?: OperationTimings,
 ): Promise<readonly ScheduledGroup[]> {
   if (maxConcurrentGroups === 1) {
     return plan.groups.map((runner, id) => ({ id, runner, targets: runner.targets, exclusive: true }))
@@ -68,12 +69,10 @@ async function buildSchedule(
 
   const scheduledByRunner = await Promise.all(plan.groups.map(async (runner): Promise<readonly Omit<ScheduledGroup, 'id'>[]> => {
     try {
-      const groups = await partitionRunnerTargets(
-        plan.projectRoot,
-        runner.runnerId,
-        runner.config,
-        runner.targets.map(target => target.target),
-      )
+      const groups = timings === undefined
+        ? await partitionRunnerTargets(plan.projectRoot, runner.runnerId, runner.config, runner.targets.map(target => target.target))
+        : await timings.runner({ runnerId: runner.runnerId, operation: 'partition', targetCount: runner.targets.length },
+          () => partitionRunnerTargets(plan.projectRoot, runner.runnerId, runner.config, runner.targets.map(target => target.target)))
       if (groups === undefined) return [{ runner, targets: runner.targets, exclusive: true }]
 
       const targetsById = new Map(runner.targets.map(target => [target.target.targetId, target]))
@@ -99,6 +98,7 @@ async function runSchedule(
   schedule: readonly ScheduledGroup[],
   maxConcurrentGroups: number,
   resultByKey: Map<string, Omit<EvidenceResult, 'reference'>>,
+  timings?: OperationTimings,
 ): Promise<void> {
   const queued = [...schedule]
   const active = new Map<number, Promise<number>>()
@@ -121,7 +121,7 @@ async function runSchedule(
       exclusiveActive = group.exclusive
       for (const resource of group.resources ?? []) activeResources.add(resource)
       activeGroups.set(group.id, group)
-      active.set(group.id, runGroup(plan, group, resultByKey).then(() => group.id))
+      active.set(group.id, runGroup(plan, group, resultByKey, timings).then(() => group.id))
     }
 
     if (active.size === 0) throw new Error('scheduler cannot start a queued execution group')
@@ -138,6 +138,7 @@ async function runSchedule(
 export async function executePlan(
   plan: ExecutionPlan,
   options: { readonly allowSkip?: boolean; readonly maxConcurrentGroups?: number } = {},
+  timings?: OperationTimings,
 ): Promise<ExecutionResult> {
   const maxConcurrentGroups = options.maxConcurrentGroups ?? 1
   if (!Number.isInteger(maxConcurrentGroups) || maxConcurrentGroups <= 0) {
@@ -145,8 +146,8 @@ export async function executePlan(
   }
 
   const resultByKey = new Map<string, Omit<EvidenceResult, 'reference'>>()
-  const schedule = await buildSchedule(plan, maxConcurrentGroups, resultByKey)
-  await runSchedule(plan, schedule, maxConcurrentGroups, resultByKey)
+  const schedule = await buildSchedule(plan, maxConcurrentGroups, resultByKey, timings)
+  await runSchedule(plan, schedule, maxConcurrentGroups, resultByKey, timings)
 
   const scenarios = plan.scenarios.map(scenario => {
     const evidence = scenario.evidence.map(item => {
