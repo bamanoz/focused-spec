@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
+import { loadEvidenceRegistry } from '@focused-spec/format-registry'
 import { loadConfig } from '../packages/core/dist/config.js'
 import type { ExecutionResult, FocusedSpecConfig } from '../packages/core/dist/model.js'
-import { loadEvidenceRegistry } from '../packages/core/dist/registry.js'
 import { discoverDocuments } from '../packages/core/dist/sources.js'
 
 const roots: string[] = []
@@ -22,9 +22,8 @@ async function fixture(files: readonly string[] = ['registry/*.yaml']): Promise<
   roots.push(root)
   await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir')
   const config: FocusedSpecConfig = {
-    version: 4,
-    specifications: { formats: { markdown: { package: '@focused-spec/format-markdown' } }, documents: [{ match: 'specs/{scope}.md', format: 'markdown' }] },
-    evidence: { files },
+    version: 5,
+    specifications: { formats: { markdown: { package: '@focused-spec/format-registry', options: { parser: { package: '@focused-spec/format-markdown' }, files } } }, documents: [{ match: 'specs/{scope}.md', format: 'markdown' }] },
     runners: { local: { module: './runner.mjs' } },
   }
   await put(root, '.focused-spec/config.yaml', JSON.stringify(config))
@@ -130,7 +129,7 @@ describe('sharded evidence registry', () => {
     const working = await discoverDocuments(root, config, 'working', 'auth.good')
     expect(working.violations).toEqual([])
     expect(working.scopes.get('working')?.[0]?.scenarios[0]?.evidence).toEqual(['local::second'])
-    const full = await loadEvidenceRegistry(root, config.evidence?.files)
+    const full = await loadEvidenceRegistry(root, ['registry/*.yaml'])
     expect(full.violations.map(item => item.message)).toEqual(expect.arrayContaining([
       expect.stringMatching(/unknown registry entry key behavior/u), expect.stringMatching(/duplicate.*working\/auth\.duplicate/u),
     ]))
@@ -147,16 +146,23 @@ describe('sharded evidence registry', () => {
 
   it('rejects unsafe evidence configuration before discovery', async () => {
     const { root, config } = await fixture()
-    for (const evidence of [null, { files: [] }, { files: ['registry/auth.yaml'], include: 'other.yaml' },
-      { files: ['../outside.yaml'] }, { files: ['/outside.yaml'] }, { files: ['!registry/*.yaml'] },
-      { files: ['registry\\auth.yaml'] }, { files: ['{../outside,registry/auth}.yaml'] }]) {
-      await put(root, '.focused-spec/config.yaml', JSON.stringify({ ...config, evidence }))
+    await put(root, 'registry/auth.yaml', registry({}))
+    await put(root, '.focused-spec/evidence.yaml', registry({}))
+    expect((await discoverDocuments(root, config)).violations).toEqual([])
+    const parser = { package: '@focused-spec/format-markdown' }
+    for (const options of [null, {}, { parser, files: [] }, { parser, files: ['registry/auth.yaml'], include: 'other.yaml' },
+      { parser, files: ['../outside.yaml'] }, { parser, files: ['/outside.yaml'] }, { parser, files: ['!registry/*.yaml'] },
+      { parser, files: ['registry\\auth.yaml'] }, { parser, files: ['{../outside,registry/auth}.yaml'] }]) {
+      const configured = { ...config, specifications: { ...config.specifications,
+        formats: { markdown: { package: '@focused-spec/format-registry', options } } } }
+      await put(root, '.focused-spec/config.yaml', JSON.stringify(configured))
       const loaded = await loadConfig(root)
-      expect(loaded.config, JSON.stringify(evidence)).toBeUndefined()
-      expect(loaded.violations.some(item => /evidence/u.test(item.message)), JSON.stringify(evidence)).toBe(true)
+      expect(loaded.config, JSON.stringify(options)).toBeDefined()
+      const discovered = await discoverDocuments(root, loaded.config!)
+      expect(discovered.violations.some(item => /option|parser|file|source|path|pattern/iu.test(item.message)), JSON.stringify(options)).toBe(true)
     }
     await put(root, '.focused-spec/config.yaml', JSON.stringify(config))
-    expect((await loadConfig(root)).config?.evidence?.files).toEqual(['registry/*.yaml'])
+    expect((await loadConfig(root)).violations).toEqual([])
   })
 
   it('rejects missing overlapping unsupported and escaping sources', async () => {

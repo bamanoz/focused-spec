@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { cp, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import type { SpawnSyncReturns } from 'node:child_process'
+import { cp, lstat, mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -56,11 +57,17 @@ function configYaml(
     ]),
   ])
   return [
-    'version: 4',
+    'version: 5',
     'specifications:',
     '  formats:',
-    '    markdown: { package: "@focused-spec/format-markdown" }',
-    '    gherkin: { package: "@focused-spec/format-gherkin" }',
+    '    markdown:',
+    '      package: "@focused-spec/format-registry"',
+    '      options:',
+    '        parser: { package: "@focused-spec/format-markdown" }',
+    '    gherkin:',
+    '      package: "@focused-spec/format-registry"',
+    '      options:',
+    '        parser: { package: "@focused-spec/format-gherkin" }',
     '  documents:',
     ...documents,
     ...runners,
@@ -73,6 +80,16 @@ function nativeScenario(id: string, name = id): string {
     `#### Scenario: ${name}`,
     '',
     'The configured behavior has its observable result.',
+  ].join('\n')
+}
+
+function inlineScenario(id: string, evidence: readonly string[], name = id): string {
+  return [
+    `#### Scenario: ${name}`,
+    `- **ID**: \`${id}\``,
+    ...evidence.map(reference => `- **EVIDENCE**: \`${reference}\``),
+    '- **WHEN** the configured input is supplied',
+    '- **THEN** the configured result is observed',
   ].join('\n')
 }
 
@@ -100,6 +117,30 @@ async function configure(root: string, layouts: readonly Layout[] = openSpecLayo
   try { await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir') }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
   await put(root, '.focused-spec/config.yaml', configYaml(layouts, runners))
+}
+
+async function configureInline(root: string, layouts: readonly Layout[] = [{ match: 'specs/**/*.md', scope: 'current' }], runners: readonly string[] = [
+  'runners:',
+  '  fixture:',
+  '    module: ./runner.ts',
+]): Promise<void> {
+  try { await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir') }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
+  const documents = layouts.flatMap(layout => [
+    `    - match: ${JSON.stringify(layout.match)}`,
+    '      format: inline',
+    ...(layout.scope === undefined ? [] : [`      scope: ${layout.scope}`]),
+    ...(layout.exclude === undefined ? [] : ['      exclude:', ...layout.exclude.map(pattern => `        - ${JSON.stringify(pattern)}`)]),
+  ])
+  await put(root, '.focused-spec/config.yaml', [
+    'version: 5',
+    'specifications:',
+    '  formats:',
+    '    inline: { package: "@focused-spec/format-inline" }',
+    '  documents:',
+    ...documents,
+    ...runners,
+  ].join('\n'))
 }
 
 async function writeRegistry(root: string, entries: readonly RegistryEntry[]): Promise<void> {
@@ -133,6 +174,68 @@ async function emptyFixture(): Promise<string> {
 
 function json(stdout: string): Record<string, unknown> {
   return JSON.parse(stdout) as Record<string, unknown>
+}
+
+interface PtyStep { when: string; send: string }
+
+async function interactiveInit(root: string, home: string, steps: readonly PtyStep[], options: { args?: string[]; rows?: number; columns?: number; env?: Record<string, string>; welcome?: boolean } = {}): Promise<{ code: number | null; output: string }> {
+  return await new Promise((resolve, reject) => {
+    // The child uses a real terminal; control bytes are delivered over Python's PTY.
+    const terminal = `import fcntl, os, pty, select, signal, struct, sys, termios
+pid, master = pty.fork()
+if pid == 0:
+    os.execv(sys.argv[1], [sys.argv[1], *sys.argv[2:]])
+fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', int(os.environ['PTY_ROWS']), int(os.environ['PTY_COLUMNS']), 0, 0))
+inputs = [master, 0]
+while True:
+    ready, _, _ = select.select(inputs, [], [])
+    done = False
+    for descriptor in ready:
+        try:
+            data = os.read(descriptor, 65536)
+        except OSError:
+            done = True
+            break
+        if descriptor == master:
+            if not data:
+                done = True
+                break
+            os.write(1, data)
+        elif data == b'__SIGINT__':
+            os.kill(pid, signal.SIGINT)
+        elif data:
+            os.write(master, data)
+        else:
+            inputs.remove(0)
+            os.write(master, b'\\x04')
+    if done:
+        break
+_, status = os.waitpid(pid, 0)
+code = os.waitstatus_to_exitcode(status)
+sys.exit(code if code >= 0 else 128 - code)
+`
+    const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, USERPROFILE: home, TERM: 'xterm-256color', PTY_ROWS: String(options.rows ?? 24), PTY_COLUMNS: String(options.columns ?? 80), ...options.env }
+    if (options.env?.CI === undefined) delete env.CI
+    if (options.env?.NO_COLOR === undefined) delete env.NO_COLOR
+    delete env.FORCE_COLOR
+    delete env.REDUCED_MOTION
+    const child = spawn('python3', ['-c', terminal, process.execPath, cli, 'init', root, ...(options.args ?? [])], { cwd: root, env })
+    let output = ''
+    const sequence = options.welcome === false ? steps : [{ when: (options.columns ?? 80) < 35 ? 'Enter · Esc cancel' : ' to continue...', send: '\r' }, ...steps]
+    let next = 0
+    let consumed = 0
+    const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error(`interactive init timed out at step ${next}: ${output}`)) }, 15_000)
+    child.stdout.on('data', chunk => {
+      output += String(chunk)
+      while (next < sequence.length && output.slice(consumed).includes(sequence[next]!.when)) {
+        consumed = output.length
+        child.stdin.write(sequence[next++]!.send)
+      }
+    })
+    child.stderr.on('data', chunk => { output += String(chunk) })
+    child.once('error', error => { clearTimeout(timer); reject(error) })
+    child.once('close', code => { clearTimeout(timer); if (next !== sequence.length) reject(new Error(`interaction stopped at step ${next}: ${output}`)); else resolve({ code, output }) })
+  })
 }
 
 interface OperationTiming {
@@ -223,7 +326,7 @@ describe('focused-spec CLI', () => {
         expect(result.stderr).toBe('')
         const options = [...result.stdout.matchAll(/^\s+(--[a-z-]+)/gmu)].map(match => match[1])
         expect(options.sort()).toEqual((command === 'validate'
-          ? ['--root', '--config', '--scope', '--strict', '--syntax-only', '--json', '--timings']
+          ? ['--root', '--config', '--scope', '--scenario', '--strict', '--syntax-only', '--json', '--timings']
           : ['--root', '--config', '--scope', '--scenario', '--allow-skip', '--json', '--timings']).sort())
       }
     }
@@ -296,6 +399,8 @@ describe('focused-spec CLI', () => {
       expect(result.stderr).toBe('')
       expect(result.stdout).toContain('--replace')
       expect(result.stdout).toContain('--dry-run')
+      expect(result.stdout).toContain('--no-animation')
+      expect(result.stdout).toContain('Space to toggle')
       for (const target of initTargets) {
         expect(result.stdout).toContain(target.id)
         expect(result.stdout).toContain(`${target.home ? '~/' : ''}${target.skill}`)
@@ -308,70 +413,176 @@ describe('focused-spec CLI', () => {
     }
   })
 
-  it.skipIf(process.platform === 'win32')('installs only confirmed interactive init targets', async () => {
+  it.skipIf(process.platform === 'win32')('keeps scripted and CI init outside the terminal screen', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-init-scripted-'))
+    const home = await mkdtemp(join(tmpdir(), 'focused-init-scripted-home-'))
+    roots.push(root, home)
+    const ci = await interactiveInit(root, home, [], { env: { CI: 'true' }, welcome: false })
+    expect(ci.code, ci.output).toBe(1)
+    expect(ci.output).toContain('--tools')
+    expect(ci.output).not.toContain('\x1b[?1049h')
+    const scripted = await interactiveInit(root, home, [], { args: ['--tools', 'claude', '--no-animation', '--json'], welcome: false })
+    expect(scripted.code, scripted.output).toBe(0)
+    expect(scripted.output).not.toContain('\x1b[?1049h')
+    expect(json(scripted.output)).toMatchObject({ tools: ['claude'], files: expect.arrayContaining([expect.objectContaining({ action: 'install', applied: true })]) })
+    expect(await readdir(home)).toEqual([])
+  }, 30_000)
+
+  it.skipIf(process.platform === 'win32')('presents a compact welcome beside the glyph before selecting integrations', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-init-welcome-'))
+    const home = await mkdtemp(join(tmpdir(), 'focused-init-welcome-home-'))
+    roots.push(root, home)
+    const welcome = await interactiveInit(root, home, [
+      { when: ' to continue...', send: '\r' },
+      { when: 'Choose agent integrations', send: '\x03' },
+    ], { args: ['--no-animation'], welcome: false })
+    expect(welcome.code, welcome.output).toBe(1)
+    const plainText = welcome.output.replace(/\x1b\[[0-9;?]*[A-Za-z]/gu, '')
+    const pickerAt = plainText.indexOf('Choose agent integrations')
+    expect(pickerAt).toBeGreaterThan(plainText.indexOf('Press Enter to continue'))
+    const headingAt = plainText.slice(0, pickerAt).split(/\r?\n/u).findIndex(line => line.includes('Welcome to focused-spec'))
+    const welcomeLines = plainText.slice(0, pickerAt).split(/\r?\n/u)
+    expect(welcomeLines[headingAt]).toMatch(/^ {25}Welcome to focused-spec$/u)
+    expect(welcomeLines[headingAt + 1]).toContain('██████')
+    const promptAt = welcomeLines.findIndex(line => line.includes('Press Enter to continue...'))
+    expect(welcomeLines[promptAt - 1]).toContain('██')
+    expect(welcomeLines[promptAt]).toMatch(/^ {25}Press Enter to continue\.\.\.$/u)
+    expect(welcome.output).toContain('\x1b[38;2;249;197;108mPress Enter\x1b[0m\x1b[38;2;162;173;181m to continue...')
+    expect(plainText.slice(0, pickerAt)).toContain('██████')
+    expect(plainText.slice(pickerAt)).not.toContain('██████')
+    expect(welcome.output).toContain('\x1b[48;2;59;43;31m')
+    expect(welcome.output).toContain('\x1b[1;38;2;246;242;235mWelcome to \x1b[0m\x1b[1;38;2;249;197;108mfocused-spec')
+    expect(welcome.output).toContain('\x1b[38;2;162;173;181mBehavioral promises, backed by test results.')
+    expect(welcome.output).toContain('\x1b[38;2;162;173;181mThis setup installs:')
+    expect(welcome.output).toContain('\x1b[38;2;162;173;181mYour agent handles the workflow.')
+    expect(plainText).toContain('This setup installs:')
+    expect(plainText).toContain('A skill for the agents you choose')
+    expect(plainText).toContain('Native commands where supported')
+    expect(plainText).toContain('Your agent handles the workflow.')
+    expect(plainText).not.toContain('Quick start after setup:')
+    expect(plainText).not.toContain('No specs, tests, or config are created.')
+    expect(welcome.output).not.toContain('\x1b[?1049h')
+    expect(welcome.output).not.toContain('\x1b[2J')
+    expect(welcome.output).not.toContain('focused-spec  /  agent setup')
+    expect(await readdir(root)).toEqual([])
+    expect(await readdir(home)).toEqual([])
+  }, 30_000)
+
+  it.skipIf(process.platform === 'win32')('installs only selected targets after separate review confirmation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-init-terminal-'))
-    roots.push(root)
-    await mkdir(join(root, '.omp'))
     const home = await mkdtemp(join(tmpdir(), 'focused-init-terminal-home-'))
-    roots.push(home)
-    const interact = async (answer: string): Promise<{ code: number | null; output: string }> => {
-      return await new Promise((resolve, reject) => {
-        // Python's standard-library PTY avoids Darwin script's rejection of pipe descriptors.
-        const terminal = `import os, pty, select, sys
-pid, master = pty.fork()
-if pid == 0:
-    os.execv(sys.argv[1], sys.argv[1:])
-inputs = [master, 0]
-while True:
-    ready, _, _ = select.select(inputs, [], [])
-    done = False
-    for descriptor in ready:
-        try:
-            data = os.read(descriptor, 65536)
-        except OSError:
-            done = True
-            break
-        if descriptor == master:
-            if not data:
-                done = True
-                break
-            os.write(1, data)
-        elif data:
-            os.write(master, data)
-        else:
-            inputs.remove(0)
-            os.write(master, b'\\x04')
-    if done:
-        break
-_, status = os.waitpid(pid, 0)
-code = os.waitstatus_to_exitcode(status)
-sys.exit(code if code >= 0 else 128 - code)
-`
-        const child = spawn('python3', ['-c', terminal, process.execPath, cli, 'init', root], { cwd: root, env: { ...process.env, HOME: home, USERPROFILE: home } })
-        let output = ''
-        let sent = false
-        const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error(`interactive init timed out: ${output}`)) }, 10000)
-        child.stdout.on('data', chunk => {
-          output += String(chunk)
-          if (!sent && output.includes('empty cancels):')) { sent = true; child.stdin.write(answer) }
-        })
-        child.stderr.on('data', chunk => { output += String(chunk) })
-        child.once('error', error => { clearTimeout(timer); reject(error) })
-        child.once('close', code => { clearTimeout(timer); resolve({ code, output }) })
-      })
-    }
-    for (const answer of ['\n', '\u0003', '\u0004']) {
-      const cancelled = await interact(answer)
-      expect(cancelled.code, cancelled.output).toBe(1)
-      expect(await readdir(root, { recursive: true })).toEqual(['.omp'])
-    }
-    const installed = await interact('claude\n')
-    expect(installed.output).toContain(`GLOBAL: ${join(home, '.minimax/skills/focused-spec/SKILL.md')}`)
+    roots.push(root, home)
+    await mkdir(join(root, '.omp'))
+    const installed = await interactiveInit(root, home, [
+      { when: 'Search:', send: 'claude' },
+      { when: 'Search: claude', send: ' ' },
+      { when: 'Selected: 1', send: '\r' },
+      { when: 'Install these files? Y / N', send: 'y' },
+    ], { args: ['--no-animation'] })
     expect(installed.code, installed.output).toBe(0)
+    expect(installed.output).toContain('Selected agents:')
+    expect(installed.output).toContain('New files:')
+    expect(installed.output).toContain('\x1b[38;2;162;173;181m  .claude/skills/focused-spec/SKILL.md')
+    expect(installed.output.split('.claude/skills/focused-spec/SKILL.md')).toHaveLength(2)
+    expect(installed.output).not.toContain('INSTALL  ')
+    expect(installed.output).toContain('focused-spec\x1b[0m \x1b[1;38;2;246;242;235mSetup Complete')
+    expect(installed.output).toContain('Files: 2 written · 0 unchanged.')
+    expect(installed.output).toContain('\x1b[?25h')
     expect(await readFile(join(root, '.claude/skills/focused-spec/SKILL.md'), 'utf8')).toContain('name: focused-spec')
     expect(await readdir(join(root, '.omp'))).toEqual([])
     expect(await readdir(home)).toEqual([])
-  }, 30000)
+  }, 30_000)
+
+  it.skipIf(process.platform === 'win32')('keeps project and home unchanged on cancel, preview and mixed-root conflict', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-init-review-'))
+    const home = await mkdtemp(join(tmpdir(), 'focused-init-review-home-'))
+    roots.push(root, home)
+    await put(root, '.claude/skills/focused-spec/SKILL.md', 'custom loader')
+    const snapshot = async (directory: string): Promise<string> => JSON.stringify(await Promise.all(
+      (await readdir(directory, { recursive: true })).sort().map(async entry => {
+        const absolute = join(directory, entry)
+        return [entry, (await lstat(absolute)).isFile() ? (await readFile(absolute)).toString('base64') : 'directory']
+      }),
+    ))
+    const before = [await snapshot(root), await snapshot(home)]
+    const chooseClaude = [
+      { when: 'Search:', send: 'claude' },
+      { when: 'Search: claude', send: ' ' },
+      { when: 'Selected: 1', send: '\r' },
+    ]
+    for (const key of ['\x1b', '\x03', '__SIGINT__']) {
+      const cancelled = await interactiveInit(root, home, [{ when: 'Search:', send: key }], { args: ['--no-animation'] })
+      expect(cancelled.code, cancelled.output).toBe(1)
+      expect(cancelled.output).toContain('\x1b[?25h')
+      expect([await snapshot(root), await snapshot(home)]).toEqual(before)
+    }
+    const declined = await interactiveInit(root, home, [...chooseClaude, { when: 'Install these files? Y / N', send: 'n' }], { args: ['--no-animation', '--replace'] })
+    expect(declined.code, declined.output).toBe(1)
+    expect([await snapshot(root), await snapshot(home)]).toEqual(before)
+    const preview = await interactiveInit(root, home, [...chooseClaude, { when: 'Preview only · Enter to close', send: '\r' }], { args: ['--no-animation', '--replace', '--dry-run'] })
+    expect(preview.code, preview.output).toBe(0)
+    expect(preview.output).toContain('Files to replace:')
+    expect(preview.output).toContain('Setup Preview Complete')
+    expect([await snapshot(root), await snapshot(home)]).toEqual(before)
+    const mixed = await interactiveInit(root, home, [
+      { when: 'Search:', send: 'claude' },
+      { when: 'Search: claude', send: ' ' },
+      { when: 'Selected: 1', send: '\x1b' },
+      { when: 'Search: (type to filter)', send: 'minimax-code' },
+      { when: 'Search: minimax-code', send: ' ' },
+      { when: 'Selected: 2', send: '\r' },
+      { when: 'Setup blocked · Enter to close', send: '\r' },
+    ], { args: ['--no-animation'] })
+    expect(mixed.code, mixed.output).toBe(1)
+    expect(mixed.output).toContain('\x1b[38;2;249;197;108m[x] claude')
+    expect(mixed.output).not.toContain('\x1b[38;2;111;217;211m[x] claude')
+    const text = mixed.output.replace(/\x1b\[[0-9;?]*[A-Za-z]/gu, '')
+    expect(text).toContain('minimax-code [GLOBAL home]')
+    const review = text.split('setup review')[1]!.split('Setup blocked · Enter to close')[0]!
+    expect(review.replace(/\r?\n  /gu, '')).toContain(join(await realpath(home), '.minimax/skills/focused-spec/SKILL.md'))
+    expect(text).toContain('Conflicts:')
+    expect(text).toContain('.claude/skills/focused-spec/SKILL.md')
+    expect(text).toContain('Setup blocked · Enter to close')
+    expect([await snapshot(root), await snapshot(home)]).toEqual(before)
+  }, 90_000)
+
+  it.skipIf(process.platform === 'win32')('shows the approved focus glyph and usable static fallback on a real terminal', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-init-focus-'))
+    const home = await mkdtemp(join(tmpdir(), 'focused-init-focus-home-'))
+    roots.push(root, home)
+    const animated = await interactiveInit(root, home, [{ when: '░', send: ' ' }, { when: ' to continue...', send: '\r' }, { when: 'Search:', send: '\x03' }], { welcome: false })
+    expect(animated.code, animated.output).toBe(1)
+    expect(animated.output.replace(/\x1b\[[0-9;?]*[A-Za-z]/gu, '')).toContain('██████')
+    const full = await interactiveInit(root, home, [{ when: ' to continue...', send: '\r' }, { when: 'Search:', send: '\x03' }], { welcome: false, args: ['--no-animation'] })
+    expect(full.code, full.output).toBe(1)
+    expect(full.output.replace(/\x1b\[[0-9;?]*[A-Za-z]/gu, '')).toContain('██████')
+    expect(full.output).toContain('\x1b[?25h')
+    const plain = await interactiveInit(root, home, [{ when: 'Esc Clear/Cancel', send: '\x03' }], { columns: 36, rows: 12, env: { NO_COLOR: '1' } })
+    expect(plain.output).toContain('This setup installs:')
+    expect(plain.output).toContain('Skill for selected agents')
+    expect(plain.output).toContain('Commands where supported')
+    expect(plain.code, plain.output).toBe(1)
+    expect(plain.output).toContain('Space Select')
+    expect(plain.output).not.toContain('\x1b[38;2;')
+    const tiny = await interactiveInit(root, home, [
+      { when: 'Enter · Esc cancel', send: '\r' },
+      { when: 'Search: (type to filter)', send: 'claude \r' },
+      { when: 'Setup review', send: '\x1b' },
+    ], { columns: 20, rows: 8, args: ['--no-animation'], welcome: false, env: { NO_COLOR: '1' } })
+    expect(tiny.code, tiny.output).toBe(1)
+    expect(tiny.output).toContain('↓ Scroll to end')
+    expect(tiny.output).toContain('Setup cancelled')
+    const tinyWelcome = tiny.output.split('Choose agent integrations')[0]!.replace(/\x1b\[[0-9;?]*[A-Za-z]/gu, '')
+    expect(tinyWelcome).toContain('Agent skill')
+    expect(tinyWelcome).toContain('Optional commands')
+    expect(tinyWelcome).not.toContain('Quick start')
+    expect(tinyWelcome.split(/\r?\n/u).every(line => line.length <= 20)).toBe(true)
+    const dumb = await interactiveInit(root, home, [{ when: 'Esc Clear/Cancel', send: '\x03' }], { env: { TERM: 'dumb' } })
+    expect(dumb.output).toContain('██████')
+    expect(dumb.output).not.toContain('\x1b[')
+    expect(await readdir(root)).toEqual([])
+    expect(await readdir(home)).toEqual([])
+  }, 40_000)
 
   it('serves workflow guidance without project setup', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-guide-offline-'))
@@ -396,6 +607,50 @@ sys.exit(code if code >= 0 else 128 - code)
     expect(text.status, text.stderr).toBe(0)
     expect(text.stdout).toContain(String(response.content))
     expect(text.stdout).toContain(metadata.version)
+  })
+
+  it('serves format guidance without loading project configuration or plugins', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-formats-offline-'))
+    roots.push(root)
+    await put(root, '.focused-spec/config.yaml', 'invalid: [')
+    await put(root, '.focused-spec/evidence.yaml', 'invalid: [')
+    await put(root, 'guidance/formats.md', 'UNTRUSTED PROJECT FORMAT INSTRUCTIONS')
+    await put(root, 'format.mjs', 'throw new Error("project format must not load")')
+    const before = await readdir(root, { recursive: true })
+    const metadata = JSON.parse(await readFile(new URL('../packages/core/package.json', import.meta.url), 'utf8'))
+    const result = spawnSync(process.execPath, [cli, 'instructions', '--protocol', '1', '--topic', 'formats', '--json'], {
+      cwd: root, encoding: 'utf8',
+      env: { ...process.env, npm_config_offline: 'true', HTTPS_PROXY: 'http://127.0.0.1:1' },
+    })
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stderr).toBe('')
+    const response = json(result.stdout)
+    expect(response).toEqual({ protocolVersion: 1, package: { name: 'focused-spec', version: metadata.version }, topic: 'formats',
+      content: await readFile(new URL('../guidance/formats.md', import.meta.url), 'utf8') })
+    expect(response.content).not.toContain('UNTRUSTED PROJECT FORMAT INSTRUCTIONS')
+    const text = spawnSync(process.execPath, [cli, 'instructions', '--topic', 'formats'], { cwd: root, encoding: 'utf8' })
+    expect(text.status, text.stderr).toBe(0)
+    expect(text.stdout).toContain(String(response.content))
+    expect(text.stdout).toContain(metadata.version)
+    expect(await readdir(root, { recursive: true })).toEqual(before)
+  })
+
+  it('rejects missing format guidance without falling back to other topics', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-formats-incomplete-'))
+    roots.push(root)
+    const installation = join(root, 'installation')
+    await cp(new URL('../packages/core/dist/', import.meta.url), join(installation, 'dist'), { recursive: true })
+    await cp(new URL('../packages/core/package.json', import.meta.url), join(installation, 'package.json'))
+    await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(installation, 'node_modules'), 'dir')
+    await put(installation, 'guidance/workflow.md', '# Workflow fallback must not be used')
+    await put(installation, 'guidance/runners.md', '# Runner fallback must not be used')
+    await put(root, 'guidance/formats.md', '# Project fallback must not be used')
+    const result = spawnSync(process.execPath, [join(installation, 'dist/cli.js'), 'instructions', '--topic', 'formats', '--json'], {
+      cwd: root, encoding: 'utf8',
+    })
+    expect(result.status).toBe(1)
+    expect(result.stdout).toBe('')
+    expect(result.stderr).toMatch(/incomplete installed focused-spec package.*formats/iu)
   })
 
   it('rejects unsupported guide protocols without returning instructions', async () => {
@@ -428,7 +683,7 @@ sys.exit(code if code >= 0 else 128 - code)
       expect(result.status, result.stderr).toBe(0)
       expect(result.stderr).toBe('')
       expect(result.stdout).toMatch(/--protocol.*default: 1/u)
-      expect(result.stdout).toMatch(/--topic.*workflow.*runners/u)
+      expect(result.stdout).toMatch(/--topic.*workflow.*formats.*runners/u)
       expect(result.stdout).toContain('--json')
       expect(result.stdout).not.toMatch(/^\{/u)
     }
@@ -436,7 +691,7 @@ sys.exit(code if code >= 0 else 128 - code)
 
   it('rejects invalid invocations without treating them as successful help', async () => {
     const root = await emptyFixture()
-    for (const args of [[], ['unknown'], ['help', 'unknown'], ['agent-guide'], ['agent-guide', '--help'], ['help', 'agent-guide'], ['transition'], ['transition', '--help'], ['help', 'transition'], ['transition', 'prepare', '--help'], ['transition', 'verify', '--help'], ['transition', 'prepare', 'plan.yaml', '--snapshot', 'snapshot.json'], ['transition', 'verify', 'snapshot.json', '--final'], ['run', '--unknown'], ['run', '--scope'], ['validate', '--scenario', 'fixture.current.passes']]) {
+    for (const args of [[], ['unknown'], ['help', 'unknown'], ['agent-guide'], ['agent-guide', '--help'], ['help', 'agent-guide'], ['transition'], ['transition', '--help'], ['help', 'transition'], ['transition', 'prepare', '--help'], ['transition', 'verify', '--help'], ['transition', 'prepare', 'plan.yaml', '--snapshot', 'snapshot.json'], ['transition', 'verify', 'snapshot.json', '--final'], ['run', '--unknown'], ['run', '--scope']]) {
       const result = spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: 'utf8' })
       expect(result.status).toBe(1)
       expect(result.stdout).toBe('')
@@ -451,6 +706,219 @@ sys.exit(code if code >= 0 else 128 - code)
     expect(result.status).toBe(1)
     expect(json(result.stdout)).toMatchObject({ valid: false, executionStarted: false,
       violations: expect.arrayContaining([expect.objectContaining({ scenarioId: 'fixture.current.passes', message: expect.stringContaining('invalid-reference') })]) })
+  })
+
+  it('runs inline ID and EVIDENCE without any registry file', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-spec-inline-run-'))
+    roots.push(root)
+    await configureInline(root)
+    await put(root, 'specs/inline.md', inlineScenario('inline.execution', ['fixture::first::suffix', 'fixture::second'], 'Inline evidence executes'))
+    await put(root, 'runner.ts', [
+      "import { appendFile } from 'node:fs/promises'",
+      "import { existsSync } from 'node:fs'",
+      "import { join } from 'node:path'",
+      'export default { apiVersion: 1,',
+      '  async resolve({ projectRoot, selectors }) { await appendFile(join(projectRoot, "observed"), selectors.join("|") + "\\n"); return { targets: selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] } },',
+      '  async run({ projectRoot, targets }) { return { results: targets.map(target => ({ targetId: target.targetId, status: target.targetId === "second" && existsSync(join(projectRoot, "fail-second")) ? "fail" : "pass" })) } },',
+      '}',
+    ].join('\n'))
+
+    const result = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scope', 'current', '--scenario', 'inline.execution', '--json'], { encoding: 'utf8' })
+    expect(result.status, result.stderr || result.stdout).toBe(0)
+    expect(json(result.stdout)).toMatchObject({ success: true, targetCount: 2, scenarios: [{
+      id: 'inline.execution', scope: 'current', status: 'PASS', evidence: [
+        { reference: 'fixture::first::suffix', status: 'PASS' },
+        { reference: 'fixture::second', status: 'PASS' },
+      ],
+    }] })
+    expect(await readFile(join(root, 'observed'), 'utf8')).toBe('first::suffix|second\n')
+    await expect(readFile(join(root, '.focused-spec/evidence.yaml'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    await put(root, 'fail-second', 'controlled regression')
+    const failed = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scope', 'current', '--scenario', 'inline.execution', '--json'], { encoding: 'utf8' })
+    expect(failed.status).toBe(1)
+    expect(json(failed.stdout)).toMatchObject({ success: false, targetCount: 2, scenarios: [{
+      id: 'inline.execution', status: 'FAIL', evidence: [
+        { reference: 'fixture::first::suffix', status: 'PASS' },
+        { reference: 'fixture::second', status: 'FAIL' },
+      ],
+    }] })
+  })
+
+  it('preserves opaque IDs through selection and results', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-spec-opaque-ids-'))
+    roots.push(root)
+    await configureInline(root)
+    const ids = ['auth-login', '123', 'INVALID', 'Case', 'case', 'Вход разрешён', 'path/looking id']
+    await put(root, 'specs/opaque.md', ids.map((id, index) => inlineScenario(id, [`fixture::opaque-${index}`])).join('\n\n'))
+    await put(root, 'runner.ts', [
+      'export default { apiVersion: 1,',
+      '  async resolve({ selectors }) { return { targets: selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] } },',
+      '  async run({ targets }) { return { results: targets.map(target => ({ targetId: target.targetId, status: "pass" })) } },',
+      '}',
+    ].join('\n'))
+
+    for (const id of ids) {
+      const result = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scope', 'current', '--scenario', id, '--json'], { encoding: 'utf8' })
+      expect(result.status, `${id}: ${result.stderr || result.stdout}`).toBe(0)
+      expect(json(result.stdout)).toMatchObject({ scenarios: [{ id, scope: 'current', status: 'PASS' }] })
+    }
+  })
+
+  it('isolates selected inline errors without inheriting evidence', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-spec-inline-selection-'))
+    roots.push(root)
+    await configureInline(root, [{ match: 'specs/{scope}.md' }])
+    await put(root, 'specs/good.md', inlineScenario('inline.shared', ['fixture::good']))
+    await put(root, 'specs/broken.md', [
+      '#### Scenario: Invalid unrelated occurrence',
+      '- **ID**: `inline.shared`',
+      '- **EVIDENCE**: invalid-reference',
+      '- **WHEN** broken input arrives',
+      '- **THEN** no execution begins',
+    ].join('\n'))
+    await put(root, 'specs/missing.md', [
+      '#### Scenario: Missing local evidence',
+      '- **ID**: `inline.shared`',
+      '- **WHEN** evidence is absent',
+      '- **THEN** evidence is not inherited',
+    ].join('\n'))
+    await put(root, 'runner.ts', 'export default { apiVersion: 1, async resolve({ selectors }) { return { targets: selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] } }, async run({ targets }) { return { results: targets.map(target => ({ targetId: target.targetId, status: "pass" })) } } }')
+
+    const selected = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scope', 'good', '--scenario', 'inline.shared', '--json'], { encoding: 'utf8' })
+    expect(selected.status, selected.stderr || selected.stdout).toBe(0)
+    expect(json(selected.stdout)).toMatchObject({ scenarios: [{ id: 'inline.shared', scope: 'good', status: 'PASS' }], targetCount: 1 })
+    const missing = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'missing', '--json'], { encoding: 'utf8' })
+    expect(missing.status).toBe(1)
+    expect(json(missing.stdout)).toMatchObject({ valid: false, violations: expect.arrayContaining([expect.objectContaining({ scenarioId: 'inline.shared' })]) })
+    const full = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(full.status).toBe(1)
+    expect(json(full.stdout)).toMatchObject({ valid: false })
+  })
+
+  it('rejects competing inline and external enrollments', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-spec-competing-enrollment-'))
+    roots.push(root)
+    await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir')
+    await put(root, '.focused-spec/config.yaml', [
+      'version: 5',
+      'specifications:',
+      '  formats:',
+      '    inline: { package: "@focused-spec/format-inline" }',
+      '    external:',
+      '      package: "@focused-spec/format-registry"',
+      '      options:',
+      '        parser: { package: "@focused-spec/format-markdown" }',
+      '        files: [".focused-spec/evidence.yaml"]',
+      '  documents:',
+      '    - { match: specs/inline.md, scope: current, format: inline }',
+      '    - { match: registry-layout/**/*.md, scope: current, format: external }',
+      'runners:',
+      '  fixture: { module: ./runner.ts }',
+    ].join('\n'))
+    await put(root, 'specs/inline.md', inlineScenario('inline.competing', ['fixture::protected']))
+    await writeRegistry(root, [{ scope: 'current', id: 'inline.competing', evidence: ['fixture::protected'] }])
+    await put(root, 'runner.ts', 'export default { apiVersion: 1, async resolve({ selectors }) { return { targets: selectors.map(selector => ({ selector, targetId: selector, displayName: selector })), errors: [] } }, async run() { throw new Error("must not execute") } }')
+
+    const result = spawnSync(process.execPath, [cli, 'run', '--root', root, '--json'], { encoding: 'utf8' })
+    expect(result.status).toBe(1)
+    expect(json(result.stdout)).toMatchObject({ valid: false, executionStarted: false,
+      violations: expect.arrayContaining([expect.objectContaining({ scenarioId: 'inline.competing', message: expect.stringMatching(/enroll|bound|more than once|competing/iu) })]) })
+  })
+
+  it('validates inline planned evidence without loading runners', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-spec-inline-planned-'))
+    roots.push(root)
+    await configureInline(root, undefined, ['runners:', '  unavailable: { module: ./missing-runner.ts }'])
+    await put(root, 'specs/planned.md', inlineScenario('inline.planned', ['planned:unavailable::future']))
+
+    const syntax = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'current', '--syntax-only', '--json'], { encoding: 'utf8' })
+    expect(syntax.status, syntax.stderr || syntax.stdout).toBe(0)
+    expect(json(syntax.stdout)).toMatchObject({ valid: true, mode: 'syntax-only' })
+    const ordinary = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--scope', 'current', '--json'], { encoding: 'utf8' })
+    expect(ordinary.status, ordinary.stderr || ordinary.stdout).toBe(0)
+    expect(json(ordinary.stdout)).toMatchObject({ valid: true, scenarios: 1, plannedEvidence: 1, targets: 0 })
+    for (const args of [['validate', '--strict'], ['run']] as const) {
+      const rejected = spawnSync(process.execPath, [cli, ...args, '--root', root, '--scope', 'current', '--json'], { encoding: 'utf8' })
+      expect(rejected.status).toBe(1)
+      expect(json(rejected.stdout)).toMatchObject({ valid: false,
+        violations: expect.arrayContaining([expect.objectContaining({ scenarioId: 'inline.planned', message: expect.stringMatching(/planned evidence is not allowed/iu) })]) })
+    }
+  })
+
+  it('rejects old config and format APIs without fallback', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-spec-api-cutover-'))
+    roots.push(root)
+    await configureInline(root, undefined, ['runners:', '  missing: { module: ./missing-runner.mjs }'])
+    const current = await readFile(join(root, '.focused-spec/config.yaml'), 'utf8')
+    await put(root, 'specs/cutover.md', inlineScenario('cutover.evidence', ['planned:missing::future']))
+    const supported = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--syntax-only', '--json'], { encoding: 'utf8' })
+    expect(supported.status, supported.stdout).toBe(0)
+    for (const version of [1, 2, 3, 4]) {
+      await put(root, '.focused-spec/config.yaml', current.replace('version: 5', `version: ${version}`))
+      const obsolete = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--syntax-only', '--json'], { encoding: 'utf8' })
+      expect(obsolete.status, obsolete.stdout).toBe(1)
+      expect(json(obsolete.stdout)).toMatchObject({ valid: false,
+        violations: expect.arrayContaining([expect.objectContaining({ path: join(root, '.focused-spec/config.yaml') })]) })
+    }
+    await put(root, '.focused-spec/config.yaml', `${current}\nevidence:\n  files: [.focused-spec/evidence.yaml]\n`)
+    await put(root, '.focused-spec/evidence.yaml', 'scopes: {}\n')
+    const obsoleteEvidence = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--syntax-only', '--json'], { encoding: 'utf8' })
+    expect(obsoleteEvidence.status).toBe(1)
+    expect(json(obsoleteEvidence.stdout)).toMatchObject({ valid: false,
+      violations: expect.arrayContaining([expect.objectContaining({
+        path: join(root, '.focused-spec/config.yaml'),
+        message: expect.stringMatching(/evidence|format.*options/iu),
+      })]) })
+
+    await put(root, '.focused-spec/config.yaml', [
+      'version: 5',
+      'specifications:',
+      '  formats: { legacy: { module: ./legacy-format.mjs } }',
+      '  documents: [{ match: specs/legacy.md, scope: current, format: legacy }]',
+      'runners: {}',
+    ].join('\n'))
+    await put(root, 'legacy-format.mjs', 'export default { apiVersion: 1, parse() { throw new Error("API 1 parser must not run") } }')
+    await put(root, 'specs/legacy.md', 'legacy input')
+    const obsoleteApi = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--syntax-only', '--json'], { encoding: 'utf8' })
+    expect(obsoleteApi.status).toBe(1)
+    expect(json(obsoleteApi.stdout)).toMatchObject({ valid: false,
+      violations: expect.arrayContaining([expect.objectContaining({ message: expect.stringMatching(/Format API 1|apiVersion.*2|instructions --protocol 1/iu) })]) })
+    expect(obsoleteApi.stdout).not.toContain('API 1 parser must not run')
+    const apiMessages = (json(obsoleteApi.stdout).violations as { message: string }[]).map(item => item.message)
+    const guidanceCommand = apiMessages.map(message => message.match(/`\.\/node_modules\/\.bin\/focused-spec (instructions [^`]+)`/u)?.[1]).find(value => value !== undefined)
+    expect(guidanceCommand).toBeDefined()
+    const guidance = spawnSync(process.execPath, [cli, ...guidanceCommand!.split(' ')], { cwd: root, encoding: 'utf8' })
+    expect(guidance.status, guidance.stderr).toBe(0)
+    expect(json(guidance.stdout)).toMatchObject({ protocolVersion: 1, topic: 'workflow', package: { name: 'focused-spec' } })
+  })
+
+  it('runs registry-backed native formats without core evidence configuration', async () => {
+    const root = await fixture()
+    const result = spawnSync(process.execPath, [cli, 'run', '--root', root, '--scope', 'current', '--json'], { encoding: 'utf8' })
+    expect(result.status, result.stderr || result.stdout).toBe(0)
+    expect(json(result.stdout)).toMatchObject({ scenarios: [{ id: 'fixture.current.passes', scope: 'current', status: 'PASS' }] })
+  })
+
+  it('reports inline binding failures at their metadata lines', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-spec-inline-provenance-'))
+    roots.push(root)
+    await configureInline(root, undefined, ['runners:', '  fixture:', '    module: ./missing-runner.mjs'])
+    await put(root, 'specs/provenance.md', [
+      '#### Scenario: Malformed second reference',
+      '- **ID**: `inline.provenance`',
+      '- **EVIDENCE**: `fixture::valid`',
+      '- **EVIDENCE**: malformed-reference',
+      '- **WHEN** both rows are validated',
+      '- **THEN** the malformed row reports its own line',
+    ].join('\n'))
+
+    const result = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--syntax-only', '--json'], { encoding: 'utf8' })
+    expect(result.status).toBe(1)
+    expect(json(result.stdout)).toMatchObject({ valid: false, violations: expect.arrayContaining([
+      expect.objectContaining({ path: 'specs/provenance.md', line: 4, scenarioId: 'inline.provenance' }),
+    ]) })
+    expect((json(result.stdout).violations as { line?: number; scenarioId?: string }[])
+      .some(violation => violation.scenarioId === 'inline.provenance' && violation.line === 3)).toBe(false)
   })
 
   it('reports reached timings on unresolved evidence without starting execution', async () => {
@@ -734,21 +1202,29 @@ sys.exit(code if code >= 0 else 128 - code)
 
   it('advertises executable workflow guidance for obsolete configuration and inline metadata', async () => {
     const root = await emptyFixture()
-    const config = configYaml([{ match: 'specs/**/*.md', scope: 'current' }], ['runners: {}'])
+    const config = configYaml([{ match: 'specs/**/*.md', scope: 'current' }], ['runners:', '  unit: { module: ./missing-runner.mjs }'])
     const metadata = JSON.parse(await readFile(new URL('../packages/core/package.json', import.meta.url), 'utf8')) as { version: string }
-    const workflow = await readFile(new URL('../guidance/workflow.md', import.meta.url), 'utf8')
-    for (const version of [2, 3, 4]) {
-      await put(root, '.focused-spec/config.yaml', config.replace('version: 4', `version: ${version}`))
-      await put(root, 'specs/auth.md', '#### Scenario: Blocked account\n- **ID**: `auth.blocked`\n- **EVIDENCE**: `unit::blocked`\n- **REVISES**: previous\n- **WHEN** a blocked account authenticates\n- **THEN** it is rejected\n')
-      const result = spawnSync(process.execPath, [cli, 'validate', '--root', root, '--syntax-only', '--json'], { encoding: 'utf8' })
+    const assertAdvertised = (result: SpawnSyncReturns<string>): void => {
       expect(result.status).toBe(1)
       const messages = (json(result.stdout).violations as { message: string }[]).map(item => item.message)
       const command = messages.map(message => message.match(/`\.\/node_modules\/\.bin\/focused-spec (instructions [^`]+)`/u)?.[1]).find(value => value !== undefined)
       expect(command).toBeDefined()
       const guidance = spawnSync(process.execPath, [cli, ...command!.split(' ')], { cwd: root, encoding: 'utf8' })
       expect(guidance.status, guidance.stderr).toBe(0)
-      expect(json(guidance.stdout)).toEqual({ protocolVersion: 1, package: { name: 'focused-spec', version: metadata.version }, topic: 'workflow', content: workflow })
+      expect(json(guidance.stdout)).toMatchObject({ protocolVersion: 1, package: { name: 'focused-spec', version: metadata.version }, topic: 'workflow', content: expect.any(String) })
     }
+    const legacySource = '#### Scenario: Blocked account\n- **ID**: `auth.blocked`\n- **EVIDENCE**: `unit::blocked`\n- **REVISES**: `auth.previous`\n- **WHEN** a blocked account authenticates\n- **THEN** it is rejected\n'
+    await put(root, 'specs/auth.md', nativeScenario('auth.blocked'))
+    await writeRegistry(root, [{ scope: 'current', id: 'auth.blocked', evidence: ['planned:unit::blocked'] }])
+    for (const version of [1, 2, 3, 4]) {
+      await put(root, '.focused-spec/config.yaml', config.replace('version: 5', `version: ${version}`))
+      assertAdvertised(spawnSync(process.execPath, [cli, 'validate', '--root', root, '--syntax-only', '--json'], { encoding: 'utf8' }))
+    }
+    await put(root, '.focused-spec/config.yaml', config)
+    await put(root, 'specs/auth.md', legacySource)
+    assertAdvertised(spawnSync(process.execPath, [cli, 'validate', '--root', root, '--syntax-only', '--json'], { encoding: 'utf8' }))
+    await configureInline(root, undefined, ['runners: {}'])
+    assertAdvertised(spawnSync(process.execPath, [cli, 'validate', '--root', root, '--syntax-only', '--json'], { encoding: 'utf8' }))
   })
 
   it('reports missing and malformed configuration', async () => {
@@ -1124,10 +1600,12 @@ sys.exit(code if code >= 0 else 128 - code)
   it('attributes document parsing to configured formats and reused hosts', async () => {
     const root = await emptyFixture()
     await put(root, '.focused-spec/config.yaml', [
-      'version: 4',
+      'version: 5',
       'specifications:',
       '  formats:',
-      '    alpha: { module: ./alpha-format.ts }',
+      '    alpha:',
+      '      package: "@focused-spec/format-registry"',
+      '      options: { parser: { module: ./alpha-format.ts } }',
       '    beta: { module: ./beta-format.ts }',
       '  documents:',
       '    - match: "docs/*.md"',
@@ -1142,12 +1620,12 @@ sys.exit(code if code >= 0 else 128 - code)
       'runners: {}',
     ].join('\n'))
     await put(root, 'alpha-format.ts', [
-      'export default { apiVersion: 1, parse({ source }) {',
+      'export default { apiVersion: 2, parse({ source }) {',
       '  const markerId = source.trim()',
       '  return { items: [{ line: 1, name: markerId, nativeIds: [markerId], markerId }], diagnostics: [] }',
       '} }',
     ].join('\n'))
-    await put(root, 'beta-format.ts', 'export default { apiVersion: 1, parse() { return { items: [], diagnostics: [{ message: "fixture native diagnostic" }] } } }')
+    await put(root, 'beta-format.ts', 'export default { apiVersion: 2, parse() { return { items: [], diagnostics: [{ message: "fixture native diagnostic" }] } } }')
     await put(root, 'docs/first.md', 'format.current.first')
     await put(root, 'docs/second.md', 'format.current.second')
     await put(root, 'docs/excluded.md', 'format.current.excluded')
@@ -1183,17 +1661,19 @@ sys.exit(code if code >= 0 else 128 - code)
   it('retains attempted plugin timings across errors and negative results', async () => {
     const parseRoot = await emptyFixture()
     await put(parseRoot, '.focused-spec/config.yaml', [
-      'version: 4',
+      'version: 5',
       'specifications:',
       '  formats:',
-      '    broken: { module: ./broken-format.ts }',
+      '    broken:',
+      '      package: "@focused-spec/format-registry"',
+      '      options: { parser: { module: ./broken-format.ts } }',
       '  documents:',
       '    - match: "specs/*.md"',
       '      format: broken',
       '      scope: current',
       'runners: {}',
     ].join('\n'))
-    await put(parseRoot, 'broken-format.ts', 'export default { apiVersion: 1, parse() { return { items: "malformed", diagnostics: [] } } }')
+    await put(parseRoot, 'broken-format.ts', 'export default { apiVersion: 2, parse() { return { items: "malformed", diagnostics: [] } } }')
     await put(parseRoot, 'specs/broken.md', 'malformed parse response')
     const parseFailure = spawnSync(process.execPath, [cli, 'validate', '--root', parseRoot, '--syntax-only', '--json', '--timings'], { encoding: 'utf8' })
     expect(parseFailure.status).toBe(1)

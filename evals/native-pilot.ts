@@ -5,8 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { glob } from 'glob'
-import { loadConfig, loadEvidenceRegistry } from '../packages/core/dist/index.js'
-import type { NativeItem } from '../packages/core/dist/index.js'
+import { discoverDocuments, loadConfig } from '../packages/core/dist/index.js'
 import { OmpAgentDriver } from './omp-agent.ts'
 import { runProcess } from './process.ts'
 import { guidanceActivationGate, skillActivationGate, inspectsImplementation } from './judge.ts'
@@ -15,10 +14,12 @@ import type { DialogueResult } from './dialogue.ts'
 import { runPlanningDialogue } from './acp-agent.ts'
 import type { PlanningResult } from './acp-agent.ts'
 import { interviewFailedAgent } from './diagnostic.ts'
-import { parseTrustedNativeDocument } from './native-parse.ts'
+import { nativeItemText, parseTrustedNativeDocument } from './native-parse.ts'
+import type { TrustedFormat } from './native-parse.ts'
 import { runAgentTurn, saveEvalResult } from './result.ts'
 import type { AgentDriver, AgentRequest } from './types.ts'
 import type { EvalDiagnostic } from './types.ts'
+import { loadConfiguredRegistries } from './evidence.ts'
 
 export const nativePilotRoot = fileURLToPath(new URL('..', import.meta.url))
 const root = nativePilotRoot
@@ -26,11 +27,6 @@ export function selectedKind(reference: string): 'go' | 'python' | undefined {
   if (/^go::(?:\.\/auth|auth\/auth_test\.go)::TestBlockedAccount$/u.test(reference)) return 'go'
   if (/^pytest::tests\/functional\/test_auth\.py::test_blocked_account$/u.test(reference)) return 'python'
   return undefined
-}
-function markers(source: string, name: NativeCase): { text: string; id: string }[] {
-  const pattern = name === 'gherkin' ? /@focused\.([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)/gu
-    : /<!-- focused-spec:id=([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+) -->/gu
-  return [...source.matchAll(pattern)].map(match => ({ text: match[0], id: match[1] ?? '' }))
 }
 export const nativeCases = {
   openspec: {
@@ -116,6 +112,8 @@ async function installPackedFocusedSpec(workspace: string, includeGherkin: boole
     'core',
     'format-markdown',
     ...(includeGherkin ? ['format-gherkin'] : []),
+    'format-inline',
+    'format-registry',
     'runner-go',
     'runner-pytest',
   ]
@@ -130,15 +128,18 @@ export async function prepareNativeWorkspace(workspace: string, name: NativeCase
   await cp(join(root, 'evals/fixtures/polyglot'), workspace, { recursive: true })
   await installPackedFocusedSpec(workspace, name === 'gherkin')
   await put(workspace, '.focused-spec/config.yaml', [
-    'version: 4',
+    'version: 5',
     'specifications:',
     '  formats:',
-    `    ${name === 'gherkin' ? 'gherkin' : 'markdown'}:`,
-    `      package: '@focused-spec/format-${name === 'gherkin' ? 'gherkin' : 'markdown'}'`,
+    '    native:',
+    "      package: '@focused-spec/format-registry'",
+    '      options:',
+    '        parser:',
+    `          package: '@focused-spec/format-${name === 'gherkin' ? 'gherkin' : 'markdown'}'`,
     '  documents:',
     name === 'openspec' ? '    - match: openspec/changes/{scope}/specs/**/*.md'
       : `    - match: ${cases[name].path}`,
-    `      format: ${name === 'gherkin' ? 'gherkin' : 'markdown'}`,
+    '      format: native',
     ...(name === 'openspec' ? ['      exclude: [openspec/changes/archive/**]'] : ['      scope: current']),
     'runners:',
     '  go:',
@@ -275,78 +276,59 @@ function atomicBlockedOutcome(source: string): boolean {
   return /block/iu.test(intent) && /valid/iu.test(success) && deniesAuthentication(success)
     && !/\b(active|unblocked|accepted)\b/iu.test(success)
 }
-export function nativeSingleSourceGate(name: NativeCase, source: string): Gate {
-  const parsed = parseTrustedNativeDocument(name === 'gherkin' ? 'gherkin' : 'markdown', cases[name].path, source, 'pilot')
-  if (name === 'bmad') {
-    const preserved = atomicBlockedOutcome(source)
-    const nativeClaims = parsed.items.filter(item => item.nativeIds.includes('CAP-1'))
-    const unmarked = parsed.items.every(item => item.markerId === undefined)
-    const passed = parsed.violations.length === 0 && preserved && nativeClaims.length === 1 && unmarked
-    return gate('native-item-single-source', passed,
-      `native success criterion retained=${preserved}; native CAP-1 claims=${nativeClaims.length}; generated source unmarked=${unmarked}; parser violations=${parsed.violations.length}`)
-  }
-  const found = markers(source, name)
-  const occurrences = found.length
-  const boundItems = found[0] === undefined ? [] : parsed.items.filter(value => value.markerId === found[0]!.id)
-  const outcomeText = boundItems[0] === undefined ? '' : boundNativeText(name, source, boundItems[0])
-  const preserved = /block/iu.test(outcomeText) && /valid/iu.test(outcomeText) && deniesAuthentication(outcomeText)
-  const attached = parsed.violations.length === 0 && boundItems.length === 1
-  const noDuplicate = (name !== 'openspec' || (source.match(/^#### Scenario:/gmu) ?? []).length === 1)
-    && (name !== 'spec-kit' || (source.match(/^\d+\. \*\*Given\*\*/gmu) ?? []).length === 1)
-  const passed = parsed.violations.length === 0 && occurrences === 1 && boundItems.length === 1 && preserved && attached && noDuplicate
-  return gate('native-item-single-source', passed,
-    `markers=${occurrences} bound native items=${boundItems.length} native text preserved=${preserved} marker attached=${attached} extra scenario=${!noDuplicate} parser violations=${parsed.violations.length}`)
-}
-function boundNativeText(name: NativeCase, source: string, item: NativeItem): string {
-  const lines = source.split('\n')
-  const start = item.line - 1
-  if (name === 'gherkin') {
-    let end = item.line
-    while (end < lines.length && !/^\s*(?:Feature|Rule|Background|Scenario(?: Outline)?):/u.test(lines[end]!)) end += 1
-    return lines.slice(start, end).join('\n')
-  }
-  const heading = lines[start]?.match(/^(#{1,6})\s/u)?.[1]
-  if (heading === undefined) return item.name
-  let end = start + 1
-  while (end < lines.length) {
-    const nextHeading = lines[end]?.match(/^(#{1,6})\s/u)?.[1]
-    if (nextHeading !== undefined && nextHeading.length <= heading.length) break
-    end++
-  }
-  return lines.slice(start, end).join('\n')
+export interface NativeBinding {
+  readonly id: string
+  readonly nativeId?: string
+  readonly format?: TrustedFormat
 }
 
-export function creationGate(name: NativeCase, source: string): Gate {
-  const parsed = parseTrustedNativeDocument(name === 'gherkin' ? 'gherkin' : 'markdown', cases[name].path, source, 'pilot')
-  const found = markers(source, name)
+function nativeIdentity(name: NativeCase, source: string, binding?: NativeBinding) {
+  const format = binding?.format ?? (name === 'gherkin' ? 'gherkin' : 'markdown')
+  const parsed = parseTrustedNativeDocument(format, cases[name].path, source, 'pilot')
+  const marked = parsed.items.filter(item => item.markerId !== undefined)
+  const nativeId = binding?.nativeId ?? (name === 'bmad' ? 'CAP-1' : undefined)
+  const bound = nativeId !== undefined
+    ? parsed.items.filter(item => item.nativeIds.includes(nativeId) && item.markerId === undefined)
+    : binding === undefined ? marked : marked.filter(item => item.markerId === binding.id)
+  const valid = parsed.violations.length === 0 && bound.length === 1
+    && marked.length === (nativeId === undefined ? 1 : 0)
+  const text = bound[0] === undefined ? '' : nativeItemText(format, source, bound[0])
+  return { parsed, marked, bound, valid, text }
+}
+
+export function nativeSingleSourceGate(name: NativeCase, source: string, binding?: NativeBinding): Gate {
+  const identity = nativeIdentity(name, source, binding)
+  const preserved = name === 'bmad' ? atomicBlockedOutcome(source)
+    : /block/iu.test(identity.text) && /valid/iu.test(identity.text) && deniesAuthentication(identity.text)
+  const noDuplicate = (name !== 'openspec' || (source.match(/^#### Scenario:/gmu) ?? []).length === 1)
+    && (name !== 'spec-kit' || (source.match(/^\d+\. \*\*Given\*\*/gmu) ?? []).length === 1)
+  return gate('native-item-single-source', identity.valid && preserved && noDuplicate,
+    `bound native items=${identity.bound.length} native text preserved=${preserved} identity valid=${identity.valid} extra scenario=${!noDuplicate} parser violations=${identity.parsed.violations.length}`)
+}
+
+export function creationGate(name: NativeCase, source: string, binding?: NativeBinding): Gate {
+  const identity = nativeIdentity(name, source, binding)
   const forms: Record<NativeCase, boolean> = {
     openspec: /^## ADDED Requirements$/mu.test(source) && /^### Requirement:/mu.test(source)
       && /^#### Scenario:/mu.test(source) && /^- \*\*WHEN\*\* /mu.test(source) && /^- \*\*THEN\*\* /mu.test(source),
     'spec-kit': /^### User Story /mu.test(source) && /\*\*Acceptance Scenarios\*\*/u.test(source)
       && /^\d+\. \*\*Given\*\* .*\*\*When\*\* .*\*\*Then\*\* /mu.test(source),
-    kiro: /^ *(?:\d+\. )?WHEN [^\n]*?\s+THE [^\r\n]+? SHALL [^\r\n]+/imu.test(source),
+    kiro: /^(?:\d+\.\s+)?(?:[A-Za-z0-9][\w.-]*:\s*)?WHEN [^\n]*?\s+THE [^\r\n]+? SHALL [^\r\n]+/imu.test(identity.text),
     bmad: /^- \*\*CAP-1\*\*$/mu.test(source) && atomicBlockedOutcome(source)
       && ['## Why', '## Capabilities', '## Constraints', '## Non-goals', '## Success signal'].every(section => source.includes(section))
-      && found.length === 0,
+      && identity.marked.length === 0,
     gsd: /^- \[.\] \*\*AUTH-01\*\*:/mu.test(source),
     'agent-os': /^# [^\n]+$/mu.test(source) && /^## [^\n]+$/mu.test(source),
     gherkin: /^ *Scenario: [^\n]+/mu.test(source) && /^ *Given /mu.test(source)
       && /^ *When /mu.test(source) && /^ *Then /mu.test(source),
   }
-  const identityCount = found.length
-  const boundItems = name === 'bmad' ? parsed.items.filter(value => value.nativeIds.includes('CAP-1'))
-    : found[0] === undefined ? [] : parsed.items.filter(value => value.markerId === found[0]!.id)
-  const nativeIdentityValid = parsed.violations.length === 0 && boundItems.length === 1
-  const attached = name === 'bmad' ? found.length === 0 && nativeIdentityValid : nativeIdentityValid
-  const outcomeText = boundItems[0] === undefined ? '' : boundNativeText(name, source, boundItems[0])
   const semanticOutcome = name === 'bmad' ? atomicBlockedOutcome(source)
-    : /block/iu.test(outcomeText) && /valid/iu.test(outcomeText) && deniesAuthentication(outcomeText)
+    : /block/iu.test(identity.text) && /valid/iu.test(identity.text) && deniesAuthentication(identity.text)
   const noDuplicate = (name !== 'openspec' || (source.match(/^#### Scenario:/gmu) ?? []).length === 1)
     && (name !== 'spec-kit' || (source.match(/^\d+\. \*\*Given\*\*/gmu) ?? []).length === 1)
-  const passed = forms[name] && semanticOutcome && attached && nativeIdentityValid && noDuplicate
-    && (name === 'bmad' ? identityCount === 0 : identityCount === 1)
+  const passed = forms[name] && semanticOutcome && identity.valid && noDuplicate
   return gate('native-item-created', passed,
-    `native form=${forms[name]} blocked/valid/rejected outcome=${semanticOutcome} identity count=${identityCount} bound native items=${boundItems.length} marker attached=${attached} extra scenario=${!noDuplicate} parser violations=${parsed.violations.length}`)
+    `native form=${forms[name]} blocked/valid/rejected outcome=${semanticOutcome} bound native items=${identity.bound.length} identity valid=${identity.valid} extra scenario=${!noDuplicate} parser violations=${identity.parsed.violations.length}`)
 }
 export function hostWorkflowGate(name: NativeCase, transcript: string, create = false): Gate {
   const skill = name === 'openspec' ? create ? 'openspec-propose' : 'openspec-update-change'
@@ -435,7 +417,7 @@ async function bmadLifecycleGate(workspace: string, transcript: string, create: 
 export async function registrySnapshot(workspace: string): Promise<Readonly<Record<string, string>>> {
   const loaded = await loadConfig(workspace)
   if (loaded.config === undefined) throw new Error(loaded.violations.map(item => item.message).join('; '))
-  const registry = await loadEvidenceRegistry(workspace, loaded.config.evidence?.files)
+  const registry = await loadConfiguredRegistries(workspace, loaded.config)
   if (registry.violations.length > 0) throw new Error(registry.violations.map(item => `${item.path}: ${item.message}`).join('; '))
   return Object.fromEntries(await Promise.all(registry.files.map(async path => [path, await readFile(join(workspace, path), 'utf8')])))
 }
@@ -521,7 +503,7 @@ export async function evaluateBmadLifecycle(workspace: string, model: string, dr
   return { ...phase, request, diagnostic }
 }
 
-export async function companionGate(workspace: string, name: NativeCase): Promise<Gate> {
+export async function companionGate(workspace: string, name: NativeCase, binding?: NativeBinding): Promise<Gate> {
   const paths = await glob(['**/*.md', '**/*.feature'], {
     cwd: workspace, nodir: true, dot: true, follow: true, nocase: false,
     ignore: ['node_modules/**', '.omp/**', '.omp-*-sessions/**', '.agents/**', '.specify/**', '.pi/gsd-core/**', '.home/.npm/**'],
@@ -532,10 +514,11 @@ export async function companionGate(workspace: string, name: NativeCase): Promis
   let occurrences = 0
   for (const path of paths) {
     const content = await readFile(join(workspace, path), 'utf8')
-    const document = parseTrustedNativeDocument(path.endsWith('.feature') ? 'gherkin' : 'markdown', path, content, 'current')
+    const format = path.endsWith('.feature') ? 'gherkin' : binding?.format === 'inline' ? 'inline' : 'markdown'
+    const document = parseTrustedNativeDocument(format, path, content, 'current', workspace)
     let count = 0
     for (const item of document.items) {
-      if (name === 'bmad' ? item.nativeIds.includes('CAP-1') : item.markerId !== undefined) count += 1
+      if (item.markerId !== undefined || item.nativeIds.includes(binding?.nativeId ?? (name === 'bmad' ? 'CAP-1' : ''))) count += 1
     }
     for (const violation of document.violations) violations.push(`${path}:${violation.line ?? 1}: ${violation.message}`)
     occurrences += count
@@ -554,7 +537,7 @@ function testCommand(reference: string): { command: string; args: string[]; asse
 }
 export function agentEvidenceGate(transcript: string, references: string[]): Gate {
   if (references.length === 0) return { name: 'agent-executed-selected-evidence', passed: null,
-    blockedBy: 'evidence-only-registry', detail: 'not judged: no valid registry selection; this does not mean no test ran' }
+    blockedBy: 'normalized-evidence', detail: 'not judged: no valid normalized evidence selection; this does not mean no test ran' }
   const starts = new Map<string, string>()
   const completed: { command: string; output: string }[] = []
   for (const line of transcript.split('\n')) {
@@ -604,7 +587,7 @@ export function agentEvidenceGate(transcript: string, references: string[]): Gat
 }
 export async function sensitivityGate(workspace: string, references: string[]): Promise<Gate> {
   if (references.length === 0) return { name: 'selected-test-sensitivity', passed: null,
-    blockedBy: 'evidence-only-registry', detail: 'not run: no valid registry selection for a sensitivity probe' }
+    blockedBy: 'normalized-evidence', detail: 'not run: no valid normalized evidence selection for a sensitivity probe' }
   const results = []
   for (const reference of references) {
     const file = join(workspace, selectedKind(reference) === 'go' ? 'auth/auth.go' : 'app/auth.py')
@@ -627,51 +610,68 @@ export async function evidenceGate(workspace: string, name: NativeCase, sourceTe
   references: string[]
   scope?: string
   id?: string
+  binding?: NativeBinding
 }> {
   try {
     const loaded = await loadConfig(workspace)
     if (loaded.config === undefined) throw new Error(loaded.violations.map(item => item.message).join('; '))
-    const registry = await loadEvidenceRegistry(workspace, loaded.config.evidence?.files, expectedScope)
+    const discovery = await discoverDocuments(workspace, loaded.config, expectedScope)
+    if (discovery.violations.length > 0) throw new Error(discovery.violations.map(item => `${item.path}${item.line === undefined ? '' : `:${item.line}`}: ${item.message}`).join('; '))
+    const candidates = [...discovery.scopes.values()].flat().flatMap(document => document.scenarios)
+      .filter(item => expectedScope === undefined || item.scope === expectedScope)
+    if (candidates.length !== 1) throw new Error(`expected one${expectedScope === undefined ? '' : ` ${expectedScope}`} normalized occurrence; found ${candidates.length}`)
+    const scenario = candidates[0]!
+    const registry = await loadConfiguredRegistries(workspace, loaded.config, scenario.scope, scenario.id)
     if (registry.violations.length > 0) throw new Error(registry.violations.map(item => `${item.path}${item.line === undefined ? '' : `:${item.line}`}: ${item.message}`).join('; '))
-    const candidates = expectedScope === undefined ? registry.entries : registry.entries.filter(item => item.scope === expectedScope)
-    if (candidates.length !== 1 || expectedScope === undefined && registry.entries.length !== 1) {
-      throw new Error(`expected one${expectedScope === undefined ? '' : ` ${expectedScope}`} registry entry; found ${candidates.length}`)
-    }
-    const entry = candidates[0]!
-    const parsed = parseTrustedNativeDocument(name === 'gherkin' ? 'gherkin' : 'markdown', cases[name].path, sourceText, entry.scope)
-    if (/^\s*- \*\*(?:ID|EVIDENCE)\*\*:/mu.test(sourceText)) throw new Error('native source contains legacy ID or EVIDENCE rows')
-    if (parsed.violations.length > 0) throw new Error(parsed.violations.map(item => item.message).join('; '))
-    if (name === 'bmad') {
-      if (entry.source?.path !== cases.bmad.path || entry.source.nativeId !== 'CAP-1') {
-        throw new Error('source binding must name the generated specification path and nativeId CAP-1')
-      }
-      const claims = parsed.items.filter(item => item.nativeIds.includes(entry.source!.nativeId))
-      if (claims.length !== 1 || parsed.items.some(item => item.markerId !== undefined)) {
-        throw new Error(`source binding requires one explicit native CAP-1 declaration and no focused marker; found ${claims.length}`)
+    const entries = registry.entries.filter(entry => entry.scope === scenario.scope && entry.id === scenario.id)
+    if (entries.length > 1) throw new Error('normalized occurrence has competing registry entries')
+    const entry = entries[0]
+    const format = entry === undefined ? 'inline' : name === 'gherkin' ? 'gherkin' : 'markdown'
+    const parsed = parseTrustedNativeDocument(format, scenario.path, sourceText, scenario.scope, workspace)
+    if (entry !== undefined) {
+      if (/^\s*- \*\*(?:ID|EVIDENCE)\*\*:/mu.test(sourceText)) throw new Error('registry-backed native source contains inline ID or EVIDENCE rows')
+      if (parsed.violations.length > 0) throw new Error(parsed.violations.map(item => item.message).join('; '))
+      if (name === 'bmad') {
+        if (entry.source?.path !== cases.bmad.path || entry.source.nativeId !== 'CAP-1') {
+          throw new Error('source binding must name the generated specification path and nativeId CAP-1')
+        }
+        const claims = parsed.items.filter(item => item.nativeIds.includes(entry.source!.nativeId))
+        if (claims.length !== 1 || parsed.items.some(item => item.markerId !== undefined)) {
+          throw new Error(`source binding requires one explicit native CAP-1 declaration and no focused marker; found ${claims.length}`)
+        }
+      } else {
+        const bound = entry.source === undefined
+          ? parsed.items.filter(item => item.markerId === scenario.id)
+          : parsed.items.filter(item => item.nativeIds.includes(entry.source!.nativeId) && item.markerId === undefined)
+        if (entry.source !== undefined && entry.source.path !== scenario.path) throw new Error('external binding must name the selected native source path')
+        if (bound.length !== 1) throw new Error(`registry ID ${scenario.id} must bind one native item; found ${bound.length}`)
       }
     } else {
-      if (entry.source !== undefined) throw new Error('marked native items must not use an external source binding')
-      const bound = parsed.items.filter(item => item.markerId === entry.id)
-      if (bound.length !== 1) throw new Error(`registry ID ${entry.id} must bind one native item; found ${bound.length}`)
+      const lines = sourceText.split(/\r?\n/u)
+      if (name === 'gherkin' || lines.filter(line => line === `- **ID**: \`${scenario.id}\``).length !== 1
+        || scenario.evidence.some(reference => !lines.includes(`- **EVIDENCE**: \`${reference}\``))) {
+        throw new Error('inline occurrence does not preserve its exact ID and EVIDENCE rows')
+      }
     }
-    const references = [...entry.evidence]
+    const references = [...scenario.evidence]
     if (references.length === 0 || references.length > 2) throw new Error('evidence must contain one or two exact test references')
     if (!references.every(value => selectedKind(value) !== undefined)) {
       throw new Error('evidence selector must identify TestBlockedAccount or test_blocked_account with a valid runner ID')
     }
     if (new Set(references.map(value => selectedKind(value))).size !== references.length) throw new Error('evidence repeats the same selected test')
-    return { gate: gate('evidence-only-registry', true, `${entry.scope}/${entry.id}: ${references.join(', ')}`), references, scope: entry.scope, id: entry.id }
+    const representation = entry === undefined ? 'inline' : 'registry'
+    const binding: NativeBinding = { id: scenario.id, format, ...(entry?.source === undefined ? {} : { nativeId: entry.source.nativeId }) }
+    return { gate: gate('normalized-evidence', true, `${scenario.scope}/${scenario.id} (${representation}): ${references.join(', ')}`), references, scope: scenario.scope, id: scenario.id, binding }
   } catch (error) {
-    return { gate: gate('evidence-only-registry', false, `registry rejected: ${String(error)}`), references: [] }
+    return { gate: gate('normalized-evidence', false, `evidence rejected: ${String(error)}`), references: [] }
   }
 }
 
 export async function focusedCliGates(workspace: string, selection: { scope?: string; id?: string; references: string[] }): Promise<Gate[]> {
   if (selection.scope === undefined || selection.id === undefined || selection.references.length === 0) {
-    return [
-      gate('focused-cli-validation', false, 'registry selection unavailable'),
-      gate('focused-cli-execution', false, 'registry selection unavailable'),
-    ]
+    return ['focused-cli-validation', 'focused-cli-execution'].map(name => ({
+      name, passed: null, blockedBy: 'normalized-evidence', detail: 'not run: normalized evidence selection unavailable',
+    }))
   }
   const cli = join(workspace, 'node_modules', 'focused-spec', 'dist', 'cli.js')
   const validation = await runProcess(process.execPath,
@@ -710,7 +710,7 @@ export async function nativeGate(workspace: string, name: NativeCase): Promise<{
 }
 export async function behaviorGate(workspace: string, references: string[]): Promise<Gate> {
   if (references.length === 0) return { name: 'selected-test-executes', passed: null,
-    blockedBy: 'evidence-only-registry', detail: 'not run: no valid registry selection for evidence execution' }
+    blockedBy: 'normalized-evidence', detail: 'not run: no valid normalized evidence selection for evidence execution' }
   const results = []
   for (const reference of references) {
     const spec = testCommand(reference)
@@ -771,7 +771,7 @@ export async function evaluateNativePilot(name: NativeCase, model: string, keep:
       if (prerequisite === null || prerequisite.passed === true) {
         const source = await readFile(join(workspace, fixture.path), 'utf8').catch(() => '')
         const evidence = await evidenceGate(workspace, name, source)
-        gates.push(create ? creationGate(name, source) : nativeSingleSourceGate(name, source), evidence.gate, await companionGate(workspace, name))
+        gates.push(create ? creationGate(name, source, evidence.binding) : nativeSingleSourceGate(name, source, evidence.binding), evidence.gate, await companionGate(workspace, name, evidence.binding))
         gates.push(...await focusedCliGates(workspace, evidence))
         const native = await nativeGate(workspace, name)
         validation = native.verdict
@@ -780,7 +780,7 @@ export async function evaluateNativePilot(name: NativeCase, model: string, keep:
         if (name === 'bmad' && (create || source !== initialSpecification(name))) gates.push(await bmadLifecycleGate(workspace, agent.output, create))
       } else {
         for (const check of [create ? 'native-item-created' : 'native-item-single-source', 'one-behavior-source',
-          'evidence-only-registry', 'focused-cli-validation', 'focused-cli-execution', 'agent-executed-selected-evidence', 'selected-test-executes', 'selected-test-sensitivity']) {
+          'normalized-evidence', 'focused-cli-validation', 'focused-cli-execution', 'agent-executed-selected-evidence', 'selected-test-executes', 'selected-test-sensitivity']) {
           gates.push({ name: check, passed: null, blockedBy: prerequisite.name, detail: `not judged: ${prerequisite.detail}` })
         }
         validation = outcome('unverified', `not run: ${prerequisite.detail}`)
@@ -813,7 +813,7 @@ export async function evaluateNativePilot(name: NativeCase, model: string, keep:
       gates.push(gate('evaluation-error', false, failed.output))
     }
     const authoring = judged(gates, ['agent-turn', 'authoring-dialogue', 'focused-skill-loaded', 'focused-workflow-acquired', 'host-workflow-loaded', 'host-authoring-prerequisites', 'host-write-constraints', 'native-item-created', 'native-item-single-source', 'one-behavior-source', 'product-and-tests-preserved', 'pilot-infrastructure-integrity', 'bmad-memlog-workflow', 'evaluation-error'])
-    const evidence = gates.find(item => item.name === 'agent-turn')?.passed === true ? judged(gates, ['evidence-only-registry', 'focused-cli-validation', 'focused-cli-execution', 'agent-executed-selected-evidence', 'selected-test-executes', 'selected-test-sensitivity', 'evaluation-error'])
+    const evidence = gates.find(item => item.name === 'agent-turn')?.passed === true ? judged(gates, ['normalized-evidence', 'focused-cli-validation', 'focused-cli-execution', 'agent-executed-selected-evidence', 'selected-test-executes', 'selected-test-sensitivity', 'evaluation-error'])
       : outcome('unverified', 'agent turn failed; downstream evidence was not judged')
     const certified = [authoring, evidence, validation, lifecycle].every(item => item.status === 'passed')
     const diagnostic = lifecycleDiagnostic ?? (gates.some(item => item.passed === false)

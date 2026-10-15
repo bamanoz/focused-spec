@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import { glob } from 'glob'
 import { parse } from 'yaml'
 import { discoverDocuments, loadConfig } from '../packages/core/dist/index.js'
+import type { Scenario } from '../packages/core/dist/index.js'
+import { parseTrustedNativeDocument } from './native-parse.ts'
 import { runProcess } from './process.ts'
 import type { EvalGate } from './types.ts'
 
@@ -13,18 +15,15 @@ const PACKAGE = 'node_modules/focused-spec/'
 const ADAPTER_PACKAGE_ROOT = 'node_modules/@focused-spec/'
 const CANDIDATE_PACKAGES = [
   ['node_modules/focused-spec/', 'focused-spec'],
-  [`${ADAPTER_PACKAGE_ROOT}format-markdown/`, '@focused-spec/format-markdown'],
+  [`${ADAPTER_PACKAGE_ROOT}format-inline/`, '@focused-spec/format-inline'],
   [`${ADAPTER_PACKAGE_ROOT}runner-go/`, '@focused-spec/runner-go'],
   [`${ADAPTER_PACKAGE_ROOT}runner-pytest/`, '@focused-spec/runner-pytest'],
 ] as const
 const INTEGRATION = '.omp/skills/focused-spec/'
 const COMMAND = '.omp/commands/focused-spec.md'
-const BLOCKED = ['go::./auth::TestBlockedAccount', 'pytest::tests/functional/test_auth.py::test_blocked_account']
-const ACTIVE = ['go::./auth::TestValidActiveAccount', 'pytest::tests/functional/test_auth.py::test_valid_active_account']
-const OCCURRENCES = [
-  { scope: 'current', id: 'auth.login.blocked-account', path: 'specs/account-authentication.md', name: 'Scenario: Blocked account submits valid credentials', evidence: BLOCKED },
-  { scope: 'current', id: 'auth.login.active-account', path: 'specs/account-authentication.md', name: 'Scenario: Active account submits valid credentials', evidence: ACTIVE },
-  { scope: 'refresh', id: 'auth.login.blocked-account', path: 'changes/refresh/spec.md', name: 'Scenario: Blocked account submits valid credentials', evidence: BLOCKED },
+const LEGACY_DOCUMENTS = [
+  { scope: 'current', path: 'specs/account-authentication.md' },
+  { scope: 'refresh', path: 'changes/refresh/spec.md' },
 ] as const
 
 export interface UpgradeBaseline {
@@ -32,6 +31,7 @@ export interface UpgradeBaseline {
   readonly config: unknown
   readonly manifest: unknown
   readonly documents: ReadonlyMap<string, string>
+  readonly occurrences: readonly Scenario[]
 }
 
 const hash = (source: Buffer | string): string => createHash('sha256').update(source).digest('hex')
@@ -53,12 +53,23 @@ export async function captureUpgradeBaseline(workspace: string, candidateRoot: s
   artifacts.set(INTEGRATION + 'SKILL.md', hash(await readFile(join(candidateRoot, 'skills/focused-spec/SKILL.md'))))
   artifacts.set(COMMAND, hash(await readFile(join(candidateRoot, 'skills/commands/oh-my-pi/focused-spec.md'))))
   const documents = new Map<string, string>()
-  for (const path of new Set(OCCURRENCES.map(item => item.path))) documents.set(path, await readFile(join(workspace, path), 'utf8'))
+  const occurrences: Scenario[] = []
+  for (const { scope, path } of LEGACY_DOCUMENTS) {
+    const source = await readFile(join(workspace, path), 'utf8')
+    documents.set(path, source)
+    const parsed = parseTrustedNativeDocument('inline', path, source.replace(/^- \*\*REVISES\*\*:.*\n/gmu, ''), scope, workspace)
+    if (parsed.violations.length > 0) throw new Error(`invalid legacy inventory: ${JSON.stringify(parsed.violations)}`)
+    for (const item of parsed.items) {
+      if (item.markerId === undefined || item.evidence === undefined) throw new Error('legacy item lacks explicit identity or evidence')
+      occurrences.push({ scope, path, line: item.line, name: item.name, id: item.markerId, evidence: [...item.evidence] })
+    }
+  }
   return {
     artifacts,
     config: parse(await readFile(join(workspace, '.focused-spec/config.yaml'), 'utf8')) as unknown,
     manifest: JSON.parse(await readFile(join(workspace, 'package.json'), 'utf8')) as unknown,
     documents,
+    occurrences,
   }
 }
 
@@ -124,9 +135,17 @@ function nativeText(source: string): string {
 }
 
 export async function upgradeArtifactsGate(workspace: string, baseline: UpgradeBaseline): Promise<EvalGate> {
-  const paths = await glob(['node_modules/focused-spec/**/*', 'node_modules/@focused-spec/**/*', '.omp/skills/focused-spec/**/*', COMMAND], { cwd: workspace, nodir: true, dot: true, follow: true, nocase: false })
+  const loaded = await loadConfig(workspace)
+  const required = new Set(['focused-spec', '@focused-spec/format-inline',
+    ...Object.values(loaded.config?.runners ?? {}).flatMap(runner => runner.package === undefined ? [] : [runner.package])])
+  const selected: string[] = []
+  for (const [prefix, name] of CANDIDATE_PACKAGES) {
+    if (required.has(name) || await lstat(join(workspace, prefix)).then(() => true, () => false)) selected.push(prefix)
+  }
+  const paths = await glob([...selected.map(prefix => `${prefix}**/*`), '.omp/skills/focused-spec/**/*', COMMAND], { cwd: workspace, nodir: true, dot: true, follow: true, nocase: false })
   const changed: string[] = paths.filter(path => !baseline.artifacts.has(path))
   for (const [path, expected] of baseline.artifacts) {
+    if (CANDIDATE_PACKAGES.some(([prefix]) => path.startsWith(prefix) && !selected.includes(prefix))) continue
     try {
       if (!(await lstat(join(workspace, path))).isFile() || hash(await readFile(join(workspace, path))) !== expected) changed.push(path)
     } catch { changed.push(path) }
@@ -136,41 +155,58 @@ export async function upgradeArtifactsGate(workspace: string, baseline: UpgradeB
     : `missing, altered or extra upgrade artifacts: ${changed.join(', ')}`)
 }
 
+function retainedRunners(legacy: Record<string, unknown>, current: Record<string, unknown>): Map<string, string> {
+  const mapping = new Map<string, string>()
+  for (const [id, value] of Object.entries(legacy)) {
+    const registration = object(value)
+    const { module, documentation: _documentation, ...options } = registration
+    const replacement = module === './.focused-spec/runners/go-test.ts'
+      ? { ...options, package: '@focused-spec/runner-go' }
+      : module === './.focused-spec/runners/pytest.ts'
+        ? { ...options, package: '@focused-spec/runner-pytest', options: { command: 'uv', commandArgs: ['run', '--with', 'pytest', 'python'] } }
+        : undefined
+    const matches = Object.entries(current).filter(([name, actual]) => name === id && same(actual, registration)
+      || replacement !== undefined && same(actual, replacement))
+    if (matches.length !== 1 || [...mapping.values()].includes(matches[0]![0])) throw new Error(`runner ${id} was lost, changed incompatibly, or mapped ambiguously`)
+    mapping.set(id, matches[0]![0])
+  }
+  if (Object.keys(current).length !== mapping.size) throw new Error('unrelated runner registrations changed')
+  return mapping
+}
+
 export async function upgradePreservationGate(workspace: string, baseline: UpgradeBaseline): Promise<EvalGate> {
   const problems: string[] = []
   try {
     const legacyConfig = object(baseline.config)
     const specifications = object(legacyConfig.specifications)
-    const documents = (specifications.documents as Record<string, unknown>[]).map(layout => ({ ...layout, format: 'markdown' }))
+    const documents = (specifications.documents as Record<string, unknown>[]).map(layout => ({ ...layout, format: 'inline' }))
+    const finalConfig = object(parse(await readFile(join(workspace, '.focused-spec/config.yaml'), 'utf8')))
+    const finalRunners = object(finalConfig.runners)
+    const runners = retainedRunners(object(legacyConfig.runners), finalRunners)
+    const migratedEvidence = (references: readonly string[]) => references.map(reference => {
+      const separator = reference.indexOf('::')
+      return `${runners.get(reference.slice(0, separator)) ?? reference.slice(0, separator)}${reference.slice(separator)}`
+    })
     const expectedConfig = {
       ...legacyConfig,
-      version: 4,
+      version: 5,
       specifications: {
-        formats: { markdown: { package: '@focused-spec/format-markdown' } },
+        formats: { inline: { package: '@focused-spec/format-inline' } },
         documents,
       },
-      runners: {
-        go: { package: '@focused-spec/runner-go', timeoutMs: 120000 },
-        pytest: {
-          package: '@focused-spec/runner-pytest',
-          timeoutMs: 120000,
-          options: { command: 'uv', commandArgs: ['run', '--with', 'pytest', 'python'] },
-        },
-      },
+      runners: finalRunners,
     }
-    const finalConfig = object(parse(await readFile(join(workspace, '.focused-spec/config.yaml'), 'utf8')))
-    delete finalConfig.evidence
-    if (!same(expectedConfig, finalConfig)) problems.push('configuration did not perform the required version-4 format and official-runner migration')
+    if (!same(expectedConfig, finalConfig)) problems.push('configuration did not preserve layouts and execution settings through the version-5 inline migration')
     const manifest = object(JSON.parse(await readFile(join(workspace, 'package.json'), 'utf8')))
-    const focusedPackages = [
-      'focused-spec',
-      '@focused-spec/format-markdown',
-      '@focused-spec/runner-go',
-      '@focused-spec/runner-pytest',
-    ]
+    const focusedPackages = CANDIDATE_PACKAGES.map(([, name]) => name)
+    const requiredPackages = ['focused-spec', '@focused-spec/format-inline',
+      ...Object.values(finalRunners).flatMap(value => {
+        const runner = object(value)
+        return typeof runner.package === 'string' ? [runner.package] : []
+      })]
     const dependencies = ['dependencies', 'devDependencies', 'optionalDependencies']
       .flatMap(key => manifest[key] === undefined ? [] : Object.keys(object(manifest[key])))
-    if (!focusedPackages.every(name => dependencies.includes(name))) problems.push('manifest does not install core plus required format and runner packages')
+    if (!requiredPackages.every(name => dependencies.includes(name))) problems.push('manifest does not install core plus selected format and runner packages')
     const withoutFocused = (value: Record<string, unknown>) => {
       const result = { ...value }
       for (const key of ['dependencies', 'devDependencies', 'optionalDependencies']) {
@@ -186,46 +222,65 @@ export async function upgradePreservationGate(workspace: string, baseline: Upgra
     for (const [path, before] of baseline.documents) {
       const after = await readFile(join(workspace, path), 'utf8')
       if (nativeText(before) !== nativeText(after)) problems.push(`native behavior/content changed: ${path}`)
+      if (after.includes('focused-spec:id=') || /^- \*\*REVISES\*\*:/mu.test(after)) problems.push(`inline representation was replaced or retained unsupported ancestry: ${path}`)
+      for (const expected of baseline.occurrences.filter(item => item.path === path)) {
+        const idRows = after.split(/\r?\n/u).filter(line => line === `- **ID**: \`${expected.id}\``)
+        if (idRows.length !== 1 || migratedEvidence(expected.evidence).some(reference => !after.includes(`- **EVIDENCE**: \`${reference}\``))) {
+          problems.push(`inline ID or exact evidence changed: ${expected.scope}/${expected.id}`)
+        }
+      }
     }
+    const registryFiles = await glob(['.focused-spec/evidence.yaml', '.focused-spec/evidence.yml', '.focused-spec/evidence/**/*.{yaml,yml}'], { cwd: workspace, nodir: true, dot: true, follow: false, nocase: false })
+    if (registryFiles.length > 0) problems.push(`inline upgrade was forced into YAML evidence: ${registryFiles.join(', ')}`)
     const loaded = await loadConfig(workspace)
     if (loaded.config === undefined) problems.push('current configuration invalid')
     else {
       const discovery = await discoverDocuments(workspace, loaded.config)
       problems.push(...discovery.violations.map(item => item.message))
       const scenarios = [...discovery.scopes.values()].flat().flatMap(document => document.scenarios)
-      if (scenarios.length !== OCCURRENCES.length) problems.push(`expected ${OCCURRENCES.length} occurrences, found ${scenarios.length}`)
-      for (const expected of OCCURRENCES) {
+      if (scenarios.length !== baseline.occurrences.length) problems.push(`expected ${baseline.occurrences.length} occurrences, found ${scenarios.length}`)
+      for (const expected of baseline.occurrences) {
         const matches = scenarios.filter(item => item.scope === expected.scope && item.id === expected.id)
         const actual = matches[0]
         if (matches.length !== 1 || actual?.path !== expected.path || actual.name !== expected.name
-          || !same([...actual.evidence].sort(), [...expected.evidence].sort())) problems.push(`lost or redirected occurrence: ${expected.scope}/${expected.id}`)
+          || !same(actual.evidence, migratedEvidence(expected.evidence))) problems.push(`lost or redirected occurrence: ${expected.scope}/${expected.id}`)
       }
     }
   } catch (error) { problems.push(String(error)) }
   return gate('upgrade-preservation', problems.length === 0, problems.length === 0
-    ? 'all original scope-local IDs, native behavior, exact selectors and AND contracts preserved through the required format/runner migration'
+    ? 'all original scope-local IDs, native behavior, exact selectors and AND contracts preserved through the format migration'
     : problems.join('; '))
 }
 
 export async function upgradeSensitivityGate(workspace: string): Promise<EvalGate> {
   const cli = join(workspace, 'node_modules/focused-spec/dist/cli.js')
+  const loaded = await loadConfig(workspace)
+  if (loaded.config === undefined) return gate('mutation-sensitivity', false, 'migrated configuration is invalid')
+  const discovery = await discoverDocuments(workspace, loaded.config, 'current', 'auth.login.blocked-account')
+  const selected = [...discovery.scopes.values()].flat().flatMap(document => document.scenarios)
+  const references = selected.length === 1 ? selected[0]!.evidence : []
+  const go = references.find(reference => reference.endsWith('::./auth::TestBlockedAccount'))
+  const python = references.find(reference => reference.endsWith('::tests/functional/test_auth.py::test_blocked_account'))
+  if (discovery.violations.length > 0 || references.length !== 2 || go === undefined || python === undefined) {
+    return gate('mutation-sensitivity', false, 'migrated occurrence must retain its exact Go and Python selectors')
+  }
   const run = () => runProcess(process.execPath, [cli, 'run', '--scope', 'current', '--scenario', 'auth.login.blocked-account', '--json'], { cwd: workspace, timeoutMs: 240_000 })
   const resultMatches = (output: string, status: string, reference?: string): boolean => {
     try {
       const value = JSON.parse(output) as { executionStarted?: boolean; scenarios?: { scope: string; id: string; status: string; evidence: { reference: string; status: string; diagnostic?: string }[] }[] }
       const selected = value.scenarios?.find(item => item.scope === 'current' && item.id === 'auth.login.blocked-account')
-      return value.executionStarted === true && selected?.status === status && selected.evidence.length === BLOCKED.length
+      return value.executionStarted === true && selected?.status === status && selected.evidence.length === references.length
         && (reference === undefined ? selected.evidence.every(item => item.status === 'PASS')
           : selected.evidence.some(item => item.reference === reference && item.status === 'FAIL'
-            && (reference.startsWith('go::') ? item.diagnostic?.includes('blocked account authenticated') : item.diagnostic?.includes('assert True is False'))))
+            && (reference === go ? item.diagnostic?.includes('blocked account authenticated') : item.diagnostic?.includes('assert True is False'))))
     } catch { return false }
   }
   const before = await run()
   if (before.code !== 0 || !resultMatches(before.stdout, 'PASS')) return gate('mutation-sensitivity', false, 'migrated selected evidence did not pass before regression')
   const probes: string[] = []
   for (const [path, originalExpression, replacement, reference] of [
-    ['auth/auth.go', 'return credentialsValid && !blocked', 'return credentialsValid', BLOCKED[0]!],
-    ['app/auth.py', 'return credentials_valid and not blocked', 'return credentials_valid', BLOCKED[1]!],
+    ['auth/auth.go', 'return credentialsValid && !blocked', 'return credentialsValid', go],
+    ['app/auth.py', 'return credentials_valid and not blocked', 'return credentials_valid', python],
   ]) {
     const source = await readFile(join(workspace, path!), 'utf8')
     if (!source.includes(originalExpression!)) return gate('mutation-sensitivity', false, `regression target absent: ${path}`)

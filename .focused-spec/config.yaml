@@ -1,17 +1,19 @@
-version: 4
+version: 5
 specifications:
   formats:
     markdown:
-      package: "@focused-spec/format-markdown"
+      package: "@focused-spec/format-registry"
+      options:
+        parser:
+          package: "@focused-spec/format-markdown"
+        files:
+          - .focused-spec/evidence/**/*.{yaml,yml}
   documents:
     - match: openspec/specs/**/spec.md
       format: markdown
       scope: current
     - match: openspec/changes/{scope}/specs/**/spec.md
       format: markdown
-evidence:
-  files:
-    - .focused-spec/evidence/**/*.{yaml,yml}
 runners:
   vitest:
     package: "@focused-spec/runner-vitest"

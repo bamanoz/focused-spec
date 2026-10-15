@@ -1,8 +1,6 @@
 export { loadConfig } from './config.js'
 export { executePlan } from './executor.js'
 export { parseEvidenceReference, parseNativeDocument } from './parser.js'
-export { loadEvidenceRegistry, parseEvidenceRegistry } from './registry.js'
-export type { EvidenceRegistry } from './registry.js'
 export { discoverDocuments } from './sources.js'
 export { planEvidence } from './planner.js'
 export type {
@@ -13,7 +11,6 @@ export type {
   ExecutionPlan,
   ExecutionResult,
   FocusedSpecConfig,
-  EvidenceEntry,
   NativeDocument,
   NativeItem,
   Scenario,
@@ -30,4 +27,17 @@ export type {
   TargetResult,
 } from './runner-api.js'
 export { validateDocuments, validateFocusedSpecs } from './validate.js'
-export type { FormatPlugin, ParseRequest, ParseResult, ParsedItem, FormatDiagnostic } from './format-api.js'
+export type {
+  BindDiagnostic,
+  BindRequest,
+  BindResult,
+  CatalogDocument,
+  Enrollment,
+  FormatDiagnostic,
+  FormatPlugin,
+  ParsedItem,
+  ParseRequest,
+  ParseResult,
+  SourceClaim,
+  SourceLocation,
+} from './format-api.js'

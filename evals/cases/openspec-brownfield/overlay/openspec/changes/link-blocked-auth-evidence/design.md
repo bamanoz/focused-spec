@@ -4,7 +4,7 @@ The main OpenSpec spec contains historical native scenarios without focused-spec
 
 ## Decisions
 
-- Use version-4 configuration and register the installed Markdown adapter explicitly.
+- Use version-5 configuration and explicitly compose the installed Markdown parser through the registry adapter.
 - Register the installed official runner packages under IDs `go` and `pytest`.
 - Configure pytest to execute through `uv run --with pytest python`.
 - Require both evidence targets to execute for the blocked-account valid-credential outcome.

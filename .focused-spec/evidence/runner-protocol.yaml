@@ -70,3 +70,7 @@ scopes:
           preserves split UTF-8 stdout and stderr in the pytest process helper
         - vitest::test/official-runners.spec.ts::official framework runners >
           preserves split UTF-8 stdout and stderr in the Go process helper
+  fix-node-runtime-compatibility:
+    runner.official.source-runtime:
+      evidence:
+        - vitest::test/runner.spec.ts::project Vitest evidence runner > selects an exact listed test and rejects a controlled failing test

@@ -38,10 +38,11 @@ export async function planEvidence(
       if (options.scenarioId !== undefined && scenarioId !== options.scenarioId) continue
       selectedScenarioFound = true
       const selected: EvidenceUse[] = []
-      for (const raw of scenario.evidence) {
+      for (const [index, raw] of scenario.evidence.entries()) {
         const reference = parseEvidenceReference(raw)
         if ('error' in reference || reference.planned) continue
-        const use = { scope: document.scope, raw, runnerId: reference.runnerId, selector: reference.selector, path: scenario.path, line: scenario.line, scenarioId }
+        const location = scenario.evidenceLocations?.[index] ?? scenario.evidenceLocation
+        const use = { scope: document.scope, raw, runnerId: reference.runnerId, selector: reference.selector, path: location?.path ?? scenario.path, line: location?.line ?? scenario.line, scenarioId }
         let selectors = byRunner.get(use.runnerId)
         if (selectors === undefined) byRunner.set(use.runnerId, selectors = new Map())
         let selectorUses = selectors.get(use.selector)

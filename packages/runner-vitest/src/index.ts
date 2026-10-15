@@ -85,9 +85,11 @@ function parseJson<T>(output: string, operation: string): T {
   }
 }
 
-function collectorPath(): string {
+function collectorArguments(): string[] {
   const compiled = fileURLToPath(new URL('./collect.js', import.meta.url))
-  return existsSync(compiled) ? compiled : fileURLToPath(new URL('./collect.ts', import.meta.url))
+  if (existsSync(compiled)) return [compiled]
+  const source = fileURLToPath(new URL('./collect.ts', import.meta.url))
+  return process.features.typescript ? [source] : ['--experimental-strip-types', source]
 }
 
 function diagnostic(process: ProcessResult): string {
@@ -104,7 +106,7 @@ async function executeWithReport(
   const directory = await mkdtemp(join(tmpdir(), 'focused-spec-vitest-report-'))
   const reportPath = join(directory, 'report.json')
   try {
-    const processResult = await runProcess(command.command, [...command.commandArgs, collectorPath(), api, reportPath, JSON.stringify(selected.map(selection => selection.file)), JSON.stringify(selected)], cwd, signal)
+    const processResult = await runProcess(command.command, [...command.commandArgs, ...collectorArguments(), api, reportPath, JSON.stringify(selected.map(selection => selection.file)), JSON.stringify(selected)], cwd, signal)
     let size: number
     try {
       size = (await stat(reportPath)).size
@@ -126,7 +128,7 @@ export default {
     const command = commandOptions(request.options)
     const directory = await mkdtemp(join(tmpdir(), 'focused-spec-vitest-collection-'))
     const output = join(directory, 'tests.json')
-    const collector = collectorPath()
+    const collector = collectorArguments()
     const api = createRequire(resolve(request.projectRoot, 'package.json')).resolve('vitest/node')
     const filters = [...new Set(request.selectors.flatMap(selector => {
       const parsed = parseSelector(selector)
@@ -134,7 +136,7 @@ export default {
     }))]
     let tests: ListedTest[]
     try {
-      const listed = await runProcess(command.command, [...command.commandArgs, collector, api, output, JSON.stringify(filters)], request.cwd, request.signal)
+      const listed = await runProcess(command.command, [...command.commandArgs, ...collector, api, output, JSON.stringify(filters)], request.cwd, request.signal)
       if (listed.code !== 0) throw new Error(`Vitest discovery failed${diagnostic(listed) === '' ? '' : `: ${diagnostic(listed)}`}`)
       if ((await stat(output)).size > REPORT_LIMIT) throw new Error('Vitest collection exceeded the report limit')
       tests = parseJson<ListedTest[]>(await readFile(output, 'utf8'), 'discovery')

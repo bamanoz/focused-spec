@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { argumentError } from './cli-error.js'
 
 export const INSTRUCTIONS_HELP = `Read authoritative agent guidance from the installed focused-spec package.
 
@@ -7,51 +8,48 @@ Usage:
 
 Options:
   --protocol <version>  Loader protocol, independent of package/config/runner versions (default: 1)
-  --topic <topic>       workflow or runners (default: workflow)
+  --topic <topic>       workflow, formats or runners (default: workflow)
   --json                Print protocol, package identity, topic and complete Markdown as JSON
   -h, --help            Show this help
 
-Works offline without project configuration, evidence or runners; changes no project files.
+Works offline without project configuration, evidence or plugins; changes no project files.
 Unsupported protocols fail without returning instructions. Use the project's installed CLI.
 Guidance is not validation or executable evidence.
 
 Examples:
   focused-spec instructions --protocol 1 --json
+  focused-spec instructions --protocol 1 --topic formats --json
   focused-spec instructions --protocol 1 --topic runners --json
 `
 
-function argumentError(message: string): Error {
-  return new Error(`${message}\nRun 'focused-spec instructions --help' for usage.`)
-}
-
 export async function instructions(argumentsList: readonly string[]): Promise<string> {
   let protocol = 1
-  let topic: 'workflow' | 'runners' = 'workflow'
+  let topic: 'workflow' | 'formats' | 'runners' = 'workflow'
   let json = false
   const seen = new Set<string>()
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index]
     if (argument !== undefined && argument.startsWith('-')) {
-      if (seen.has(argument)) throw argumentError(`duplicate option ${argument}`)
+      if (seen.has(argument)) throw argumentError(`duplicate option ${argument}`, 'instructions')
       seen.add(argument)
     }
     if (argument === '--json') json = true
     else if (argument === '--protocol' || argument === '--topic') {
       const value = argumentsList[index + 1]
-      if (value === undefined || value.startsWith('--')) throw argumentError(`missing value for ${argument}`)
+      if (value === undefined || value.startsWith('-')) throw argumentError(`missing value for ${argument}`, 'instructions')
       index += 1
       if (argument === '--protocol') {
         if (!/^\d+$/u.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) < 1) {
-          throw argumentError('--protocol must be a positive decimal integer')
+          throw argumentError('--protocol must be a positive decimal integer', 'instructions')
         }
         protocol = Number(value)
       } else {
-        if (value !== 'workflow' && value !== 'runners') throw argumentError(`unknown guidance topic ${value}; choose workflow or runners`)
+        if (value !== 'workflow' && value !== 'formats' && value !== 'runners') throw argumentError(`unknown guidance topic ${value}; choose workflow, formats or runners`, 'instructions')
         topic = value
       }
-    } else throw argumentError(`unknown argument ${String(argument)}`)
+    } else throw argumentError(`unknown argument ${String(argument)}`, 'instructions')
   }
-  if (protocol !== 1) throw argumentError(`unsupported loader protocol ${protocol}; supported protocols: 1. Install a compatible CLI or loader.`)
+  if (protocol !== 1) throw argumentError(`unsupported loader protocol ${protocol}; supported protocols: 1. Install a compatible CLI or loader.`, 'instructions')
 
   let metadata: unknown
   let content: string

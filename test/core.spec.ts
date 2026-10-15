@@ -3,16 +3,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import gherkinFormat from '../packages/format-gherkin/src/index.js'
+import inlineFormat from '../packages/format-inline/src/index.js'
 import markdownFormat from '../packages/format-markdown/src/index.js'
+import { loadEvidenceRegistry, parseEvidenceRegistry } from '@focused-spec/format-registry'
 import type { NativeDocument } from '../packages/core/src/model.js'
 import { parseEvidenceReference } from '../packages/core/src/parser.js'
-import { loadEvidenceRegistry, parseEvidenceRegistry } from '../packages/core/src/registry.js'
 
 const roots: string[] = []
 
 function parseNativeDocument(path: string, source: string, scope: string): NativeDocument {
   const format = path.endsWith('.feature') ? gherkinFormat : markdownFormat
-  const parsed = format.parse({ path, source, options: null, signal: new AbortController().signal })
+  const parsed = format.parse({ projectRoot: '/project', path, source, options: null, signal: new AbortController().signal })
   return {
     path,
     scope,
@@ -206,7 +207,115 @@ describe('native specification parsing', () => {
     ].join('\n'), 'current')
 
     expect(document.items.some(item => item.markerId === 'auth.login.legacy')).toBe(false)
-    expect(document.violations.map(value => value.message).join('\n')).toMatch(/(?:obsolete|legacy|migrat)/iu)
+    const messages = document.violations.map(value => value.message).join('\n')
+    expect(messages).toContain('@focused-spec/format-inline')
+    expect(messages).toContain('instructions --protocol 1 --topic workflow --json')
+  })
+})
+
+describe('inline specification parsing', () => {
+  function parse(source: string) {
+    return inlineFormat.parse({
+      projectRoot: '/project',
+      path: 'specs/inline.md',
+      source,
+      options: null,
+      signal: new AbortController().signal,
+    })
+  }
+
+  it('rejects missing duplicate and malformed inline metadata', () => {
+    const invalidSources = [
+      [
+        '#### Scenario: Missing evidence',
+        '- **ID**: `inline.missing-evidence`',
+        '- **WHEN** input arrives',
+        '- **THEN** output is observed',
+      ],
+      [
+        '#### Scenario: Duplicate identity',
+        '- **ID**: `inline.first`',
+        '- **ID**: `inline.second`',
+        '- **EVIDENCE**: `unit::duplicate`',
+        '- **WHEN** input arrives',
+        '- **THEN** output is observed',
+      ],
+      [
+        '#### Scenario: Missing outcome',
+        '- **ID**: `inline.missing-then`',
+        '- **EVIDENCE**: `unit::missing`',
+        '- **WHEN** input arrives',
+      ],
+      [
+        '- **ID**: `inline.detached`',
+        '- **EVIDENCE**: `unit::detached`',
+        '#### Scenario: Metadata cannot be borrowed',
+        '- **WHEN** input arrives',
+        '- **THEN** output is observed',
+      ],
+      [
+        '#### Scenario: Malformed reference',
+        '- **ID**: `inline.malformed`',
+        '- **EVIDENCE**: unit::missing-backticks',
+        '- **WHEN** input arrives',
+        '- **THEN** output is observed',
+      ],
+    ]
+    for (const source of invalidSources) {
+      const parsed = parse(source.join('\n'))
+      expect(parsed.diagnostics, source.join('\n')).not.toEqual([])
+    }
+  })
+
+  it('ignores literal inline scenario examples', () => {
+    const parsed = parse([
+      '```md',
+      '#### Scenario: Fenced example',
+      '- **ID**: `literal.fenced`',
+      '- **EVIDENCE**: `unit::fenced`',
+      '- **WHEN** example input arrives',
+      '- **THEN** example output appears',
+      '```',
+      '',
+      '    #### Scenario: Indented example',
+      '    - **ID**: `literal.indented`',
+      '    - **EVIDENCE**: `unit::indented`',
+      '    - **WHEN** example input arrives',
+      '    - **THEN** example output appears',
+      '',
+      '> #### Scenario: Quoted example',
+      '> - **ID**: `literal.quoted`',
+      '> - **EVIDENCE**: `unit::quoted`',
+      '> - **WHEN** example input arrives',
+      '> - **THEN** example output appears',
+      '',
+      '#### Scenario: Real inline outcome',
+      '- **ID**: `inline.real`',
+      '- **EVIDENCE**: `unit::real`',
+      '- **WHEN** real input arrives',
+      '- **THEN** real output is observed',
+    ].join('\n'))
+
+    expect(parsed.diagnostics).toEqual([])
+    expect(parsed.items.filter(item => item.evidence !== undefined)).toEqual([
+      expect.objectContaining({ markerId: 'inline.real', evidence: ['unit::real'] }),
+    ])
+  })
+
+  it('rejects REVISES without inventing ancestry', () => {
+    const parsed = parse([
+      '#### Scenario: No ancestry',
+      '- **ID**: `inline.no-ancestry`',
+      '- **EVIDENCE**: `unit::current`',
+      '- **REVISES**: `inline.previous`',
+      '- **WHEN** the current outcome is read',
+      '- **THEN** only its own evidence applies',
+    ].join('\n'))
+
+    expect(parsed.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ focusedId: 'inline.no-ancestry', message: expect.stringMatching(/REVISES.*(?:unsupported|not supported)/iu) }),
+    ]))
+    expect(parsed.items).toEqual([expect.objectContaining({ markerId: 'inline.no-ancestry', evidence: ['unit::current'] })])
   })
 })
 

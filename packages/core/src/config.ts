@@ -2,9 +2,9 @@ import { readFile } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
 import { parse } from 'yaml'
 import type { DocumentLayout, FocusedSpecConfig, PluginConfig, RunnerConfig, Violation } from './model.js'
+import { isScopeName } from './model.js'
 import type { JsonValue } from './runner-api.js'
-import { isScopeName } from './sources.js'
-import { isPackageSpecifier } from './plugin-module.js'
+import { isDocumentationPath, isPackageSpecifier } from './plugin-module.js'
 
 const RUNNER_ID = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u
 const PARENT_SEGMENT = /(?:^|[\\/])\.\.(?:[\\/]|$)/u
@@ -66,30 +66,14 @@ function validatePattern(value: unknown, context: string, path: string, violatio
   return true
 }
 
-export function parseEvidenceConfig(value: unknown, path: string, violations: Violation[]): FocusedSpecConfig['evidence'] {
-  if (value === undefined) return undefined
-  const evidence = object(value)
-  if (evidence === undefined) {
-    violations.push({ path, message: 'evidence must be an object containing files' })
-    return undefined
+function validateDocumentationPath(value: unknown, context: string, path: string, violations: Violation[]): value is string {
+  if (!isDocumentationPath(value)) {
+    violations.push({ path, message: `${context} must be a safe project-relative .md or .markdown file` })
+    return false
   }
-  rejectUnknownKeys(evidence, { files: true }, 'evidence', path, violations)
-  if (!Array.isArray(evidence.files) || evidence.files.length === 0) {
-    violations.push({ path, message: 'evidence.files must be a non-empty array of project-relative YAML paths or patterns' })
-    return undefined
-  }
-  const files: string[] = []
-  for (const [index, pattern] of evidence.files.entries()) {
-    const context = `evidence.files[${index}]`
-    if (!validatePattern(pattern, context, path, violations)) continue
-    if (pattern.trim() === '' || /^[A-Za-z]:/u.test(pattern) || /(?:^|[/{,])\.\.(?:[/},]|$)/u.test(pattern)) {
-      violations.push({ path, message: `${context} must be a safe non-empty project-relative path pattern` })
-      continue
-    }
-    files.push(pattern)
-  }
-  return { files }
+  return true
 }
+
 
 
 function parseDocumentLayout(value: unknown, index: number, path: string, violations: Violation[]): DocumentLayout | undefined {
@@ -171,7 +155,7 @@ function parsePlugin(kind: 'format' | 'runner', id: string, value: unknown, path
     violations.push({ path, message: `${kind} ${id} must define exactly one package or module` })
     return undefined
   }
-  rejectUnknownKeys(record, kind === 'runner' ? { package: true, module: true, cwd: true, timeoutMs: true, options: true } : { package: true, module: true, timeoutMs: true, options: true }, `${kind} ${id}`, path, violations)
+  rejectUnknownKeys(record, kind === 'runner' ? { package: true, module: true, documentation: true, cwd: true, timeoutMs: true, options: true } : { package: true, module: true, documentation: true, timeoutMs: true, options: true }, `${kind} ${id}`, path, violations)
   if ((record.package === undefined) === (record.module === undefined)) {
     violations.push({ path, message: `${kind} ${id} must define exactly one package or module` })
   } else if (record.package !== undefined) {
@@ -179,11 +163,17 @@ function parsePlugin(kind: 'format' | 'runner', id: string, value: unknown, path
   } else if (typeof record.module !== 'string' || record.module.trim() === '') {
     violations.push({ path, message: `${kind} ${id} must define a non-empty module path` })
   }
+  if (record.documentation !== undefined) {
+    if (record.package !== undefined) violations.push({ path, message: `${kind} ${id} documentation is valid only with module` })
+    else validateDocumentationPath(record.documentation, `${kind} ${id} documentation`, path, violations)
+  }
   if (record.cwd !== undefined && (typeof record.cwd !== 'string' || record.cwd.length === 0)) violations.push({ path, message: `${kind} ${id} cwd must be a non-empty relative path` })
   if (record.timeoutMs !== undefined && (!Number.isInteger(record.timeoutMs) || (record.timeoutMs as number) <= 0 || (record.timeoutMs as number) > MAX_RUNNER_TIMEOUT_MS)) violations.push({ path, message: `${kind} ${id} timeoutMs must be an integer from 1 to ${MAX_RUNNER_TIMEOUT_MS}` })
   if (record.options !== undefined && !isJsonValue(record.options)) violations.push({ path, message: `${kind} ${id} options must be JSON-compatible` })
   if (violations.length !== count) return undefined
-  const reference: PluginConfig = typeof record.package === 'string' ? { package: record.package } : { module: record.module as string }
+  const reference: PluginConfig = typeof record.package === 'string'
+    ? { package: record.package }
+    : { module: record.module as string, ...(record.documentation === undefined ? {} : { documentation: record.documentation as string }) }
   return { ...reference,
     ...(record.cwd === undefined ? {} : { cwd: record.cwd as string }),
     ...(record.timeoutMs === undefined ? {} : { timeoutMs: record.timeoutMs as number }),
@@ -219,7 +209,8 @@ export async function loadConfig(projectRoot: string, explicitPath?: string): Pr
     return { path, violations: [{ path, message: 'configuration must be an object' }] }
   }
   rejectUnknownKeys(root, CONFIG_KEYS, 'configuration', path, violations)
-  if (root.version !== 4) violations.push({ path, message: 'configuration version must be 4; register installed format adapters and set format on every document layout; migrate obsolete inline ID/EVIDENCE rows to native bindings and the registry; obtain upgrade guidance from the installed CLI: `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json`' })
+  if (root.version !== 5) violations.push({ path, message: 'configuration version must be 5 and evidence storage must be configured through an explicit Format API 2 adapter; migrate with the installed CLI: `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json`' })
+  if (root.evidence !== undefined) violations.push({ path, message: 'top-level evidence is not supported in configuration version 5; configure storage in the selected format adapter options and migrate with `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json`' })
 
   const specifications = object(root.specifications)
   let specificationConfig: FocusedSpecConfig['specifications'] | undefined
@@ -249,7 +240,6 @@ export async function loadConfig(projectRoot: string, explicitPath?: string): Pr
     }
   }
 
-  const evidence = parseEvidenceConfig(root.evidence, path, violations)
 
   const runnerValues = object(root.runners)
   if (runnerValues === undefined) violations.push({ path, message: 'runners must be an object' })
@@ -278,6 +268,6 @@ export async function loadConfig(projectRoot: string, explicitPath?: string): Pr
   return {
     path,
     violations,
-    config: { version: 4, specifications: specificationConfig, runners, ...(evidence === undefined ? {} : { evidence }), ...(execution === undefined ? {} : { execution }) },
+    config: { version: 5, specifications: specificationConfig, runners, ...(execution === undefined ? {} : { execution }) },
   }
 }

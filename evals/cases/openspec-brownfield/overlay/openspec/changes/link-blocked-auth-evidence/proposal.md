@@ -4,7 +4,7 @@ The project already has OpenSpec specifications and Go/Python tests but no exact
 
 ## What Changes
 
-- Link one previously unverified outcome to the existing Go and Python tests through version-4 focused-spec configuration and explicitly installed adapters.
+- Link one previously unverified outcome to the existing Go and Python tests through version-5 focused-spec configuration and explicitly installed registry/Markdown adapters.
 - Keep historical OpenSpec scenarios intact while using the normal delta sync workflow.
 
 ## Capabilities

@@ -27,3 +27,20 @@ scopes:
     validation.enrollment.selected-coverage:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > runs a selected scenario despite unrelated entry binding and evidence failures
+  make-format-evidence-storage-agnostic:
+    "validation.mode.syntax-only":
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > validates binding without importing runner modules in syntax only mode"
+    "validation.mode.counts":
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > reports all scenarios, planned evidence, and unique resolved targets"
+    "validation.planned.strict-policy":
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > allows planned evidence only during non-strict validation"
+  improve-cli-discovery-and-inspection:
+    validation.selection.scenario:
+      evidence:
+        - "vitest::test/cli-discovery.spec.ts::CLI discovery and transport > validates selected scenarios without resolving unrelated evidence or executing tests"
+    validation.selection.modes:
+      evidence:
+        - "vitest::test/cli-discovery.spec.ts::CLI discovery and transport > preserves selected validation modes and structural boundaries"

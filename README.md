@@ -4,87 +4,79 @@
 
 **Make each behavioral promise answerable by a test result.**
 
-`focused-spec` binds a stable ID on a framework's native checkable item to exact executable evidence. The native item remains the only copy of the behavior; an explicitly selected format adapter normalizes it, a configured YAML registry records identity and tests, and runner plugins execute those tests. The registry may be one file or explicit domain shards. OpenSpec, Spec Kit, BMad, Gherkin, and other authoring systems keep ownership of their document rules and validation.
+`focused-spec` connects the behavior in your specs to the exact tests that prove it. Keep your existing specification workflow and test frameworks; add stable IDs, explicit evidence references, and a CLI that resolves and runs those tests.
 
-## See the contract
+## See what gets verified
 
-An editable Markdown item carries an adjacent marker:
+One small scenario can require evidence from more than one test framework. With the optional inline format:
 
 ```markdown
-<!-- focused-spec:id=auth.login.blocked-account -->
 #### Scenario: Blocked account submits valid credentials
+- **ID**: `auth-login`
+- **EVIDENCE**: `go::./go/auth::TestBlockedAccount`
+- **EVIDENCE**: `pytest::tests/functional/test_auth.py::test_blocked_account`
 - **WHEN** a blocked account submits otherwise valid credentials
 - **THEN** authentication is rejected
 ```
 
-Its evidence lives in the required registry rather than in the specification:
-
-```yaml
-# .focused-spec/evidence.yaml
-scopes:
-  current:
-    auth.login.blocked-account:
-      evidence:
-        - go::./go/auth::TestBlockedAccount
-        - pytest::tests/functional/test_auth.py::test_blocked_account
-```
-
-Every evidence selector must resolve to one real target. Multiple entries form an AND contract: the scenario passes only when every selected target runs and passes.
+Every reference must resolve to exactly one real test. This scenario passes only when **both tests execute and pass**. `validate --strict` checks resolution; `run` executes the evidence. A test result proves the selected evidence passed, not that arbitrary prose is correct or every requirement is covered.
 
 ## Where it fits
 
+OpenSpec, Spec Kit, BMad, and other authoring systems organize what to build. focused-spec adds an executable evidence contract to their native checkable items, without copying the behavior into a second specification or taking over approvals, validation, or lifecycle operations.
+
 ```text
-Native checkable item + stable focused ID
-                    ↓
-Required evidence registry
-                    ↓
-Selected runner plugin → exact test → observed result
+Native scenario or acceptance item → stable ID → exact tests → observed results
 ```
 
-The core is language-, format-, and framework-neutral. It ships no Markdown/Gherkin parser or test-framework runner, does not infer an adapter from a filename, derive behavior from prose, impose a source framework, or create a second scenario merely to make evidence executable. Separately installed adapters and runners supply only the integrations a project selects.
+- **Already use a specification framework?** Bind its native items through an explicitly selected parser and external evidence registry. See the [runnable examples](#shipped-examples).
+- **Starting with plain Markdown?** Use the inline format shown above; no registry is needed.
+- **Different language or test framework?** Core is format- and language-neutral; independently installed [format adapters](docs/guides/configuration.md#public-format-contracts) and [runner plugins](docs/guides/runners.md) supply the integrations.
 
-## Get started
+## Install with your agent
 
-Requires **Node.js 22.16.0+**. In the project you want to verify:
+Paste this into your coding agent's chat:
+
+```text
+Install focused-spec in this project by following:
+https://raw.githubusercontent.com/bamanoz/focused-spec/main/docs/guides/agent-install.md
+Use this project's package manager, initialize only the agent integration I use,
+and report what you verified and what still needs configuration.
+```
+
+### For AI agents
+
+Read the [agent installation guide](docs/guides/agent-install.md). It covers project inspection, local package installation, explicit target selection, safe initialization, and verification before handing off to the installed skill. Installing the CLI or loader alone is not evidence that a specification passes.
+
+## Manual quick start
+
+Requires **Node.js 22.16.0+**. Run in the consuming project, not a clone of this repository:
 
 ```sh
 npm install --save-dev focused-spec
-npm install --save-dev @focused-spec/format-markdown @focused-spec/format-gherkin
-npm install --save-dev @focused-spec/runner-vitest @focused-spec/runner-pytest @focused-spec/runner-go
+npx focused-spec init --tools claude
 ```
 
-For agent-led specification authoring, explicitly initialize the agent integration from the project's installed package. The CLI works without it; the bundled [loader skill](skills/focused-spec/SKILL.md) obtains workflow guidance from that same local CLI.
+Replace `claude` with your [agent target ID](docs/reference/cli.md#agent-initialization), such as `codex` or `oh-my-pi`; use comma-separated IDs for multiple agents. Preview with `--dry-run`. The CLI also works without an agent integration.
+
+Install only the formats and runners you need. For **standalone inline Markdown with existing Vitest tests**:
 
 ```sh
-npx focused-spec init --tools oh-my-pi,claude
+npm install --save-dev @focused-spec/format-inline @focused-spec/runner-vitest
 ```
 
-Choose only the agents you use; for Codex, use `--tools codex`. Init supports [50 targets](docs/reference/cli.md#agent-initialization), installs native wrappers where supported, and preserves customized files unless `--replace` is explicit. Use `--dry-run` to preview. It does not create format/runner registration, evidence configuration, or registries. See the [installation guide](docs/guides/install.md#bundled-agent-integration) for destinations, the explicit global-only MiniMax target, and the alternative external skills installer.
+For existing native Markdown or Gherkin, choose the registry adapter plus its native parser instead. Go and pytest runners are available separately; test frameworks remain project prerequisites. See [installation options](docs/guides/install.md).
 
-1. Create a [version-4 configuration](docs/guides/configuration.md) that registers the installed format adapters, selects a format for every document layout, and registers each selected runner package or project module.
-2. Attach one focused ID to each in-scope native item and add the matching `(scope, ID)` entry to a configured registry file (default `.focused-spec/evidence.yaml`).
-3. Validate and run the completed selection:
+In your agent's chat, load focused-spec alongside your host specification workflow: `/focused-spec <task>` on native command hosts, `$focused-spec` in Codex, or the host's skill selector. Ask it to configure the selected plugins and bind one native outcome to real evidence. **Initialization does not create that configuration or evidence.** The installed loader obtains current workflow guidance from the project-local CLI.
 
-   ```sh
-   npx focused-spec validate --strict
-   npx focused-spec run
-   ```
+For manual setup, follow the [configuration guide](docs/guides/configuration.md). Once configuration and evidence are in place:
 
-While a test is not yet available, prefix its registry reference with `planned:` and use non-strict validation. Strict validation and `run` reject planned evidence.
+```sh
+npx focused-spec validate --strict
+npx focused-spec run
+```
 
-## Identity bindings
-
-- **`@focused-spec/format-markdown`:** place `<!-- focused-spec:id=<lowercase.dotted.id> -->` immediately before a heading, paragraph, or list item, or inline after a paragraph or list item.
-- **`@focused-spec/format-gherkin`:** place `@focused.<lowercase.dotted.id>` on a `Scenario` or `Scenario Outline`, never on `Feature`, `Rule`, `Background`, or `Examples`.
-- **Generated or metadata-hostile documents:** do not edit generated output. Add `source: { path, nativeId }` to the registry entry; `nativeId` must be an explicit host-owned ID returned by the selected adapter and resolve uniquely in that document. Never guess from a heading, line number, or behavior wording.
-
-A missing, detached, duplicate, ambiguous, or multiply bound ID is a validation error. Marked native content without a registry entry fails, as does a registry entry that does not bind one native item. Unmarked native content remains owned by its host framework; focused-spec neither counts it nor claims coverage for it.
-
-## Scopes and selection
-
-Every document layout assigns exactly one ordinary, path-safe scope, either explicitly with `scope: <name>` or by capturing one `{scope}` fragment. Identity is the pair `(scope, ID)`. The same ID may appear in different scopes, but every occurrence needs its own binding and evidence; evidence never inherits.
-
-Without `--scope`, validation and execution select all discovered scopes. `run --scenario <id>` narrows binding, evidence resolution, and execution to matching entries in the selected scope or scopes, so unrelated registry or evidence failures do not block that selected run.
+Need planned evidence before tests exist? See [evidence semantics](docs/concepts/README.md#identity-and-evidence-semantics). For identity, scopes, and selection, see [concepts](docs/concepts/README.md) and the [CLI reference](docs/reference/cli.md).
 
 ## Shipped examples
 
@@ -100,7 +92,7 @@ Each example retains real tests and explicitly installed format and runner packa
 ## Learn more
 
 - [Concepts and evidence semantics](docs/concepts/README.md)
-- [Installation and agent skill](docs/guides/install.md) · [Configuration, authoring, and migration](docs/guides/configuration.md)
+- [Installation options](docs/guides/install.md) · [Agent installation guide](docs/guides/agent-install.md) · [Configuration and migration](docs/guides/configuration.md)
 - [Runner packages and custom plugins](docs/guides/runners.md) · [Plugin API reference](docs/reference/runner-api.md) · [CLI reference](docs/reference/cli.md)
 - [Documentation map](docs/README.md) · [Development workflow](docs/development/README.md)
 

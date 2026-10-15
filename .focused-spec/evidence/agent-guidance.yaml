@@ -24,3 +24,45 @@ scopes:
     guidance.upgrade.obsolete-format:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > advertises executable workflow guidance for obsolete configuration and inline metadata
+  make-format-evidence-storage-agnostic:
+    "guidance.upgrade.obsolete-format":
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > advertises executable workflow guidance for obsolete configuration and inline metadata"
+  add-formats-guidance-topic:
+    guidance.delivery.offline:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > serves workflow guidance without project setup
+    guidance.delivery.runners:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > serves complete runner guidance from the installed package
+    guidance.delivery.formats:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > serves format guidance without loading project configuration or plugins
+    guidance.delivery.command-name:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid invocations without treating them as successful help
+    guidance.delivery.compatible-update:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > refreshes guidance after a compatible package replacement
+    guidance.delivery.incomplete-package:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > rejects missing authoritative guidance without fallback
+    guidance.delivery.formats-incomplete:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects missing format guidance without falling back to other topics
+  expose-installed-plugin-docs:
+    guidance.plugins.public-contracts:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > reads composed plugin documentation through separate packed-consumer requests
+    guidance.delivery.offline:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > serves workflow guidance without project setup
+    guidance.delivery.runners:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > serves complete runner guidance from the installed package
+    guidance.delivery.formats:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > serves format guidance without loading project configuration or plugins
+    guidance.delivery.command-name:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid invocations without treating them as successful help

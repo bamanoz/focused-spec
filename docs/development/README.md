@@ -1,7 +1,7 @@
 # Development
 
 - [Repository workflow](workflow.md)
-- [Package-suite release process](releasing.md)
+- [Eight-package suite release process](releasing.md)
 - [Agent evaluations](agent-evals.md)
 
 Run the standard checks before handoff:

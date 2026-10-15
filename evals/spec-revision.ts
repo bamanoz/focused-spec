@@ -1,55 +1,56 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { loadConfig, loadEvidenceRegistry } from '../packages/core/dist/index.js'
-import { parseTrustedNativeDocument } from './native-parse.ts'
+import { discoverDocuments, loadConfig } from '../packages/core/dist/index.js'
+import { loadConfiguredRegistries } from './evidence.ts'
 import { evalRepositoryRoot } from './provision.ts'
 import type { EvalCase, EvalGate } from './types.ts'
+import { nativeItemText, parseTrustedNativeDocument } from './native-parse.ts'
 
 export async function specRevisionGate(workspace: string, evalCase: EvalCase): Promise<EvalGate> {
   const fail = (detail: string): EvalGate => ({ name: 'spec-evidence-reconciliation', passed: false, detail })
   const baseline = join(evalRepositoryRoot(), 'evals', evalCase.overlay ?? '')
   const [before, after] = await Promise.all([loadConfig(baseline), loadConfig(workspace)])
   if (before.config === undefined || after.config === undefined) return fail('valid original and revised configuration required')
-  const [original, registry] = await Promise.all([
-    loadEvidenceRegistry(baseline, before.config.evidence?.files),
-    loadEvidenceRegistry(workspace, after.config.evidence?.files),
+  const [originalDiscovery, revisedDiscovery, originalRegistry, revisedRegistry] = await Promise.all([
+    discoverDocuments(baseline, before.config),
+    discoverDocuments(workspace, after.config),
+    loadConfiguredRegistries(baseline, before.config),
+    loadConfiguredRegistries(workspace, after.config),
   ])
-  if (original.violations.length > 0 || registry.violations.length > 0) return fail('registry is invalid')
-  const selected = registry.entries.filter(entry => entry.scope === 'current' && entry.id === evalCase.prescribedScenarioId)
-  const target = selected.length === 1 ? selected[0] : undefined
-  const originalTarget = original.entries.find(entry => entry.scope === 'current' && entry.id === evalCase.prescribedScenarioId)
-  const retained = original.entries.filter(entry => entry !== originalTarget).every(entry => registry.entries.some(actual =>
-    actual.scope === entry.scope && actual.id === entry.id && actual.registryPath === entry.registryPath
-    && JSON.stringify(actual.evidence) === JSON.stringify(entry.evidence)
-    && JSON.stringify(actual.source) === JSON.stringify(entry.source)))
-  const ownership = target !== undefined && originalTarget !== undefined
-    && target.registryPath === originalTarget.registryPath
-    && JSON.stringify(target.source) === JSON.stringify(originalTarget.source)
-    && JSON.stringify(original.files) === JSON.stringify(registry.files)
-    && registry.entries.length === original.entries.length
-  const path = 'specs/account-authentication.md'
-  const source = await readFile(join(workspace, path), 'utf8')
-  const parsed = parseTrustedNativeDocument('markdown', path, source, 'current')
-  const bound = parsed.items.filter(item => item.markerId !== undefined)
-  const item = bound.length === 1 && bound[0]?.markerId === evalCase.prescribedScenarioId ? bound[0] : undefined
-  let outcome = item?.name ?? ''
-  if (item !== undefined) {
-    const lines = source.split('\n')
-    const start = item.line - 1
-    const heading = lines[start]?.match(/^(#{1,6})\s/u)?.[1]
-    if (heading !== undefined) {
-      let end = start + 1
-      while (end < lines.length) {
-        const nextHeading = lines[end]?.match(/^(#{1,6})\s/u)?.[1]
-        if (nextHeading !== undefined && nextHeading.length <= heading.length) break
-        end += 1
-      }
-      outcome = lines.slice(start, end).join('\n').replace(/```[^]*?```/gu, '')
-    }
-  }
-  const revised = parsed.violations.length === 0 && item !== undefined
+  if (originalDiscovery.violations.length > 0 || revisedDiscovery.violations.length > 0
+    || originalRegistry.violations.length > 0 || revisedRegistry.violations.length > 0) return fail('normalized evidence is invalid')
+  const originalScenarios = [...originalDiscovery.scopes.values()].flat().flatMap(document => document.scenarios)
+  const revisedScenarios = [...revisedDiscovery.scopes.values()].flat().flatMap(document => document.scenarios)
+  const originalTarget = originalScenarios.find(item => item.scope === 'current' && item.id === evalCase.prescribedScenarioId)
+  const target = revisedScenarios.find(item => item.scope === 'current' && item.id === evalCase.prescribedScenarioId)
+  if (originalTarget === undefined || target === undefined) return fail('the exact scope-local identity was not preserved')
+  const retained = originalScenarios.filter(item => item !== originalTarget).every(item => revisedScenarios.some(actual =>
+    actual.scope === item.scope && actual.id === item.id && actual.path === item.path
+    && JSON.stringify(actual.evidence) === JSON.stringify(item.evidence)))
+  const originalEntry = originalRegistry.entries.find(entry => entry.scope === originalTarget.scope && entry.id === originalTarget.id)
+  const targetEntry = revisedRegistry.entries.find(entry => entry.scope === target.scope && entry.id === target.id)
+  const originalRepresentation = originalEntry === undefined ? 'inline' : 'registry'
+  const revisedRepresentation = targetEntry === undefined ? 'inline' : 'registry'
+  const ownership = originalRepresentation === revisedRepresentation
+    && (revisedRepresentation === 'inline'
+      ? originalTarget.path === target.path
+      : originalEntry !== undefined && targetEntry !== undefined
+        && originalEntry.registryPath === targetEntry.registryPath
+        && JSON.stringify(originalEntry.source) === JSON.stringify(targetEntry.source)
+        && JSON.stringify(originalRegistry.files) === JSON.stringify(revisedRegistry.files)
+        && originalRegistry.entries.length === revisedRegistry.entries.length)
+  const source = await readFile(join(workspace, target.path), 'utf8')
+  const lines = source.split(/\r?\n/u)
+  const format = revisedRepresentation === 'inline' ? 'inline' : target.path.endsWith('.feature') ? 'gherkin' : 'markdown'
+  const parsed = parseTrustedNativeDocument(format, target.path, source, target.scope, workspace)
+  const bound = parsed.items.filter(item => item.line === target.line
+    && (targetEntry?.source === undefined ? item.markerId === target.id : item.nativeIds.includes(targetEntry.source.nativeId)))
+  const outcome = bound.length === 1 ? nativeItemText(format, source, bound[0]!) : ''
+  const inlineIdentity = revisedRepresentation !== 'inline'
+    || lines.filter(line => line === `- **ID**: \`${target.id}\``).length === 1
+  const revised = parsed.violations.length === 0 && bound.length === 1 && inlineIdentity
     && /\bblocked\b/iu.test(outcome) && /\bvalid\s+credentials\b|\bcredentials\s+(?:are|remain)\s+valid\b/iu.test(outcome)
     && /reject|den(?:y|ies|ied|ial)|cannot|prevent|(?:must|is|are) not (?:log\s*in|authenticated?)/iu.test(outcome)
   return { name: 'spec-evidence-reconciliation', passed: revised && retained && ownership,
-    detail: `revised bound blocked/valid/rejected outcome=${revised}; owning registry preserved=${ownership}; unrelated registrations retained=${retained}` }
+    detail: `revised bound blocked/valid/rejected outcome=${revised}; ${revisedRepresentation} ownership preserved=${ownership}; unrelated registrations retained=${retained}` }
 }

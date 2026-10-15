@@ -84,10 +84,13 @@ try {
 
 async function configure(root: string): Promise<void> {
   await mkdir(join(root, '.focused-spec'))
-  await writeFile(join(root, '.focused-spec/config.yaml'), `version: 4
+  await writeFile(join(root, '.focused-spec/config.yaml'), `version: 5
 specifications:
   formats:
-    fixture: { module: ./format.mjs }
+    fixture:
+      package: "@focused-spec/format-registry"
+      options:
+        parser: { module: ./format.mjs }
   documents:
     - match: spec.md
       format: fixture
@@ -99,7 +102,7 @@ runners:
   await writeFile(join(root, 'spec.md'), 'Selected native item\n')
   await writeFile(join(root, 'format.mjs'), `import { writeFile } from 'node:fs/promises'
 await writeFile(new URL('./format-loaded', import.meta.url), 'loaded')
-export default { apiVersion: 1, parse() { return { items: [{ line: 1, name: 'Selected', nativeIds: [], markerId: 'audit.selected' }], diagnostics: [] } } }
+export default { apiVersion: 2, parse() { return { items: [{ line: 1, name: 'Selected', nativeIds: [], markerId: 'audit.selected' }], diagnostics: [] } } }
 `)
   await writeFile(join(root, 'healthy.mjs'), `import { appendFile } from 'node:fs/promises'
 const mark = operation => appendFile(new URL('./runner-loaded', import.meta.url), operation + '\\n')

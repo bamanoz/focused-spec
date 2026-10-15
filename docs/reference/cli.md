@@ -1,25 +1,104 @@
 # CLI reference
 
-The binary is `focused-spec`.
+The binary is `focused-spec`; after installing it locally, run the shell examples with `npx focused-spec`. The command grammar below omits the launcher. The installed skill resolves the explicit local CLI itself rather than using npx for workflow guidance.
 
 ## Commands
 
 ```text
-focused-spec validate [--root <path>] [--config <path>] [--scope <name>] [--strict] [--syntax-only] [--json] [--timings]
+focused-spec version [--json]
+focused-spec --version
+focused-spec -V
+focused-spec validate [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--strict] [--syntax-only] [--json] [--timings]
 focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--json] [--timings]
-focused-spec instructions [--protocol <version>] [--topic workflow|runners] [--json]
-focused-spec init [path] [--tools <comma-separated IDs>] [--dry-run] [--json] [--replace]
+focused-spec list [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--json]
+focused-spec show <id> [--root <path>] [--config <path>] [--scope <name>] [--json]
+focused-spec plugin-docs (--format <id> | --runner <id> | --package <specifier>) [--root <path>] [--config <path>] [--json]
+focused-spec instructions [--protocol <version>] [--topic workflow|formats|runners] [--json]
+focused-spec init [path] [--tools <comma-separated IDs>] [--dry-run] [--json] [--replace] [--no-animation]
 ```
 
 Scope names are path-safe single fragments. The CLI preserves the selected name exactly; it never treats it as a glob or path.
 
-## Help and argument errors
+## Executable version identity
 
-Use `focused-spec --help`, `<command> --help`, and `focused-spec help <command>` for the installed command's options, defaults, selection rules, and examples. Explicit help exits zero without reading project configuration, the evidence registry, plugins, or guidance assets. For a known command, help takes precedence over other options, including `--json`. The retired `transition` command and its help forms are unknown commands, not aliases.
+`version`, `--version`, and `-V` identify the invoked `focused-spec` installation without reading project configuration, importing plugins, accessing the network, or writing files. They read the package manifest beside the invoked core distribution rather than resolving another package from the consumer project. Text output is exactly `focused-spec <version>`.
 
-No command, an unknown command or option, an extra positional argument, a duplicate option, a missing value, or an unknown `help` target exits nonzero with a diagnostic and the relevant help pointer.
+`focused-spec version --json` writes exactly this shape to stdout:
 
-Repeated value and boolean options are rejected even if their values agree or a later value is valid. For example, neither `run --scope first --scope second` nor `instructions --protocol 2 --protocol 1` uses the last value. Explicit help on a known command still takes precedence and performs no project work.
+```json
+{
+  "package": { "name": "focused-spec", "version": "<installed version>" },
+  "executable": "<canonical absolute path to the invoked core dist/cli.js>",
+  "runtime": { "node": "<Node.js version>" },
+  "contracts": { "guidance": 1, "configuration": 5, "format": 2, "runner": 1 }
+}
+```
+
+`--json` is available only on the `version` command. Unsupported, duplicate, or extra version arguments fail rather than being ignored.
+
+## Help and error transport
+
+Use `focused-spec --help`, `<command> --help`, and `focused-spec help <command>` for the installed command's options, defaults, selection rules, and examples. Explicit help exits zero without reading project configuration, documents, format-owned evidence sources, plugins, or guidance assets. `version`, `list`, `show`, `validate`, and `plugin-docs` help likewise work before project setup. For a known command, help takes precedence over other options, including `--json`. The retired `transition` command and its help forms are unknown commands, not aliases.
+
+`validate --help` distinguishes syntax-only, non-strict, and strict behavior and documents scenario selection. `list` and `show` help distinguish structural enrollment inspection from evidence resolution, test execution, and native coverage. `run --help` explains strict preflight, scope/scenario isolation, AND execution, skip policy, and result context. Validation and execution help distinguish focused evidence from host-format validity and unenrolled native history.
+
+No command, an unknown command or option, an extra positional argument, a duplicate option, a missing value, or an unknown `help` target exits nonzero with the relevant help pointer. Repeated value and boolean options are rejected even if their values agree or a later value is valid. For example, neither `run --scope first --scope second` nor `instructions --protocol 2 --protocol 1` uses the last value. Explicit help on a known command still takes precedence and performs no project work.
+
+With an actual `--json` option, invalid invocations exit 1 with empty stdout and exactly one stderr object:
+
+```ts
+{ error: { code: 'invalid_arguments', message: '<diagnostic>', help: 'focused-spec [command] --help' } }
+```
+
+An uncaught command failure uses the same empty-stdout, single-object stderr transport without inventing a business result:
+
+```ts
+{ error: { code: 'command_failed', message: '<actionable cause>' } }
+```
+
+The CLI recognizes transport options at their actual argument boundaries. A consumed scenario value such as `--scenario --json`, or a show ID after the positional delimiter in `show -- --json`, remains the exact opaque value and does not enable JSON transport. Conversely, a rejected flag-looking ordinary option value does not hide a later actual `--json` option.
+
+These envelopes are only for invalid invocation and uncaught failures. Command-specific validation, inspection, execution, initialization, plugin-documentation, and guidance results retain their documented stdout shapes. Human mode retains its diagnostic and pasteable help pointer; JSON mode renders a thrown error only once.
+
+## Installed plugin documentation
+
+`plugin-docs` returns the complete Markdown document owned by exactly one selected installed plugin, with provenance. Select a configured registration with `--format <id>` or `--runner <id>`; these forms load configuration from `--root` and optional `--config`. Select an installed package or public subpath independently with `--package <specifier>`; that form resolves from the selected consumer root and never reads project configuration, so `--config` is invalid with it. Exactly one selector is required.
+
+```sh
+npx focused-spec plugin-docs --format <id> --json
+npx focused-spec plugin-docs --runner <id> --root ../consumer --config config/focused.yaml --json
+npx focused-spec plugin-docs --package <specifier> --root ../consumer --json
+```
+
+Package lookup uses consumer-local ESM import conditions, finds the owning installed package manifest even when `package.json` is not exported, and never imports the plugin entry. The package manifest must contain nonempty `name` and `version`. Its document defaults to package-root `README.md`; optional manifest `focusedSpec.documentation` selects a relative `.md` or `.markdown` file. An explicit malformed, missing, unsafe, or unreadable declaration fails without falling back to README or another document. Packages need no metadata change when their public contract is already in root `README.md`.
+
+For a package whose public contract is separate from its README, its own `package.json` may contain:
+
+```json
+{ "focusedSpec": { "documentation": "docs/plugin.md" } }
+```
+
+A configured project module may declare `documentation: <project-relative Markdown file>` beside `module`. `documentation` is allowed only for module registrations; package documentation remains package-owned and cannot be overridden in project configuration. Missing module documentation makes that registration unavailable to `plugin-docs` but does not affect validation or execution of the plugin itself.
+
+Documentation paths must be nonempty relative Markdown paths without absolute/drive forms, backslashes, traversal, or NULs. The canonical regular file must remain within its canonical package or project root after symlink resolution and contain nonempty strict UTF-8. The CLI reads bytes without executing or interpreting Markdown; it preserves the complete content and authored links, whose base is the returned document path.
+
+JSON output is exactly:
+
+```ts
+{
+  selection: { kind: 'format' | 'runner' | 'package', name: '<requested value>' },
+  plugin:
+    | { package: '<specifier>', name: '<manifest name>', version: '<manifest version>', root: '<canonical absolute package root>' }
+    | { module: '<configured path>', root: '<canonical absolute project root>' },
+  document: { path: '<canonical absolute document path>', content: '<complete Markdown>' }
+}
+```
+
+Text output identifies the requested selection, package name/version or configured module, owning root, and document path before the complete Markdown. Documentation is dependency or project text with visible provenance, not a core-owned contract. Successful lookup does not assert compatibility.
+
+The command never enumerates packages, scans opaque plugin options, imports plugin code, downloads dependencies, writes project or agent files, validates evidence, or aggregates nested documents. A composing plugin documents its own nested configuration. After reading it, request a named nested package explicitly with a subsequent `plugin-docs --package <specifier> --root <path> --json` call.
+
+Unavailable packages, registrations or documents; invalid configuration required by registration lookup; malformed metadata; and unsafe paths exit 1 with actionable stderr and empty stdout. Unknown, duplicate, missing or conflicting options additionally include a `plugin-docs --help` pointer. Help succeeds without project setup and takes precedence over other options.
 
 ## Agent initialization
 
@@ -78,19 +157,21 @@ Repeated value and boolean options are rejected even if their values agree or a 
 | `zcode` | `.zcode/skills/focused-spec/SKILL.md` | `.zcode/commands/focused-spec.md` |
 | `agents` | `.agents/skills/focused-spec/SKILL.md` | skills only |
 
-`--tools` trims comma-separated IDs and deduplicates IDs and shared destinations. Empty/unknown IDs, missing values, duplicate/unknown options, and extra paths fail before writing. There are no `all` or `none` aliases. Omitting `--tools` prompts only when stdin and stdout are terminals and `--json` is absent. Existing directories suggest choices; only a nonempty confirmed selection authorizes installation. Empty input, Ctrl-C, and EOF cancel with exit 1 and no writes.
+`--tools` trims comma-separated IDs and deduplicates IDs and shared destinations. Empty/unknown IDs, missing values, duplicate/unknown options, and extra paths fail before writing. There are no `all` or `none` aliases. Omitting `--tools` opens a compact welcome in ordinary terminal scrollback only with TTY input/output, without `--json` or CI. Press Enter to move from the animated logo and installation summary to a separate picker. There, type to search target IDs, use arrows to move, Space to toggle, Backspace to edit the filter, Enter to review, then Y to authorize writes separately. Detected directories are unselected suggestions. Esc clears a nonempty filter, then cancels; Ctrl-C or EOF cancels immediately. Empty selection cannot proceed. Explicit `--tools` bypasses all interactive screens even on a terminal.
 
-`windsurf` normalizes to `devin` before deduplication/reporting and writes only `.devin`; existing `.windsurf` content is untouched. Amp, Antigravity, Codex, GSD, Zed and agents share one identical `.agents/skills` loader. Antigravity additionally receives its workflow; Codex gets no `.codex` prompt. Interactive choices identify MiniMax as a global home destination before confirmation.
+`windsurf` normalizes to `devin` before deduplication/reporting and writes only `.devin`; existing `.windsurf` content is untouched. Amp, Antigravity, Codex, GSD, Zed and agents share one identical `.agents/skills` loader. Antigravity additionally receives its workflow; Codex gets no `.codex` prompt. The interactive picker labels MiniMax as global-only. On selection, the picker collapses; a compact review groups exact canonical home and project paths under plain-language headings for new, already present, replacement and conflicting files, with muted paths rather than uppercase action codes. Scroll to the end of a longer review before confirming; conflicts block writes unless `--replace` was explicitly passed. After confirmation, the review collapses to a concise setup result and native agent entrypoints rather than repeating every file action. The scripted path retains its detailed per-file action output.
+
+The interactive installer alone reveals the eight-row golden `f` beside a short explanation over 2.2 seconds. Any key skips the reveal, but Enter is still needed to enter selection; `--no-animation` shows the final glyph immediately. No alternate terminal screen or whole-display clear is used. The logo does not repeat in the picker. `NO_COLOR`, `TERM=dumb`, reduced motion and narrow terminals show a usable static fallback; installer status never implies evidence success. Cancel, error and interruption restore terminal input and cursor. Other commands and explicit `--tools` never show this welcome.
 
 MiniMax installs only `~/.minimax/skills/focused-spec/SKILL.md`, never a project `.minimax`/`.mavis`, settings, commands or global package. Home resolution/inspection occurs only when it is selected. Missing or non-directory home roots fail without creating a home. The global loader still resolves the consuming project’s local CLI, not a global installation.
 
 All selected assets and destinations across both canonical roots are checked before any mutation. Missing files are installed; byte-identical files are unchanged. Any divergent selected file in either root blocks all writes in both unless `--replace` explicitly authorizes replacement. Extras and unselected targets are preserved. Missing/non-directory roots, symlinked components below either root, non-directory ancestors and non-regular destinations fail even with `--replace`. A symlink naming a root itself resolves to its canonical directory. Missing, unreadable or empty selected assets fail without fallback. Destination state is rechecked before writing; this is not an atomic transaction or a sandbox against hostile races.
 
-`--dry-run` performs the same checks without creating or modifying files; `--replace --dry-run` previews replacement, and conflicts still exit 1. Successful install/no-op/preview exits 0; failures and cancellation exit 1. Later I/O failures may leave completed or partially written files: results retain completed writes, with the failed path in `errors`; no rollback is promised.
+`--dry-run` performs the same checks without creating or modifying files; interactive mode shows the checked review but has no write confirmation. `--replace --dry-run` previews replacement, and conflicts still exit 1. Successful install/no-op/preview exits 0; failures and cancellation exit 1. Later I/O failures may leave completed or partially written files: results retain completed writes, with the failed path in `errors`; no rollback is promised.
 
 Human output distinguishes installation from evidence readiness, skill activation and execution. Native command-file hosts generally use `/focused-spec <task>`; Amazon Q uses `@focused-spec`, Codex `$focused-spec`, Kimi `/skill:focused-spec`, and Continue its prompt selector. Devin workflows apply to Desktop; Local uses the skill. Skills-only/universal hosts use their native skill invocation or a natural-language request. Hermes needs the project’s `.hermes/skills` directory in `skills.external_dirs`; init prints the hint but never edits configuration. Copilot prompt files target IDEs, not Copilot CLI/cloud setup. Host routing and permissions remain authoritative; init does not certify the loader’s later local-CLI resolution.
 
-`--json` emits one stdout document with no progress prose, plus stderr diagnostics on failure:
+After a valid invocation, `--json` emits one installation-result document on stdout with no progress prose. Installation conflicts and I/O failures remain business results in this shape; JSON mode omits redundant plaintext stderr:
 
 ```json
 {
@@ -104,20 +185,23 @@ Human output distinguishes installation from evidence readiness, skill activatio
 
 `root` is the canonical project root, or null if its resolution fails; `tools` contains normalized distinct canonical IDs. Project file/error paths are project-relative; MiniMax file/error paths are canonical absolute home paths (an unavailable home is reported using its requested absolute destination). Actions are `install`, `unchanged`, `replace`, or `conflict`. `applied` is true only for completed writes, never unchanged/previewed files, and remains truthful after later I/O failures. Errors are `{ "path"?: "<destination>", "message": "<diagnostic>" }`; unsafe destinations may lack a file action. Help stays human-readable with `--json` and does not probe project/home integrations.
 
+Argument parsing and required noninteractive target selection happen before installation starts. Invalid options, duplicate options, extra paths, or a JSON/noninteractive/CI invocation without `--tools` are invocation failures: they exit 1 with empty stdout and perform no integration write. In JSON mode, stderr is the shared `invalid_arguments` object pointing to `focused-spec init --help`; human mode prints the diagnostic and help pointer. They are not installation reports. Once invocation is valid, installation failures continue to return the stdout report above, including truthful completed writes and errors.
+
 ```sh
-focused-spec init --tools oh-my-pi,claude
-focused-spec init ../project --tools codex --dry-run --json
-focused-spec init --tools claude --replace
-focused-spec init --tools minimax-code --dry-run --json
+npx focused-spec init --no-animation
+npx focused-spec init --tools oh-my-pi,claude
+npx focused-spec init ../project --tools codex --dry-run --json
+npx focused-spec init --tools claude --replace
+npx focused-spec init --tools minimax-code --dry-run --json
 ```
 
 ## Package-owned agent guidance
 
-`instructions` reads the invoked package's authoritative workflow (default topic) or complete runner guidance (`--topic runners`). It works offline before project setup, creates no project or agent files, and does not perform validation or evidence execution. Invoke the consuming project's explicit installed CLI, not an unverified global binary or a downloading `npx` invocation.
+`instructions` reads static authoritative shared guidance from the invoked `focused-spec` package: the general workflow (default topic), format guidance (`--topic formats`), or runner guidance (`--topic runners`). The format and runner topics contain plugin-independent API obligations and consumer verification, not installed-plugin catalogs, dialects, selectors, or framework procedures. They work offline before project setup, create no project or agent files, and perform no validation or evidence execution. Invoke the consuming project's explicit installed CLI, not an unverified global binary or a downloading `npx` invocation.
 
-The previous `agent-guide` command is not an alias. Refresh the installed loader when moving to `instructions`; protocol 1, topic names and response fields are unchanged.
+The previous `agent-guide` command is not an alias. Refresh the installed loader when moving to `instructions`; protocol 1, existing topic names, and response fields remain compatible. `formats` is an additional on-demand topic, not a new protocol version.
 
-Loader protocol defaults to 1; it is independent of package versions, configuration version 4, and format/runner API version 1. The loader requests it explicitly. Protocol-1 JSON is:
+Loader protocol defaults to 1; it is independent of package versions, configuration version 5, Format API version 2, and Runner API version 1. The loader requests it explicitly. Protocol-1 JSON is:
 
 ```json
 {
@@ -128,42 +212,93 @@ Loader protocol defaults to 1; it is independent of package versions, configurat
 }
 ```
 
+The response's `topic` is exactly the requested `workflow`, `formats`, or `runners`; the default remains `workflow`. Every topic ships with core, independently of whether adapter packages are installed. The thin loader acquires shared format/runner guidance from the same project-local installation only when the workflow calls for that work, then acquires each selected plugin's document through a separate [`plugin-docs`](#installed-plugin-documentation) request.
+
 Acquire each response with a standalone tool command. Do not chain it with `init --json`, installation, help or another guidance request: combined stdout is not the single protocol object. If this happens, request guidance again by itself; extracting one object from concatenated output is not accepted acquisition.
 
 Text output identifies the installed package version, protocol, and topic before the Markdown. An unsupported protocol, invalid option/topic, missing value, or incomplete package exits nonzero with stderr diagnostics and no usable guidance on stdout. An explicit unsupported protocol is never silently replaced with the default. No legacy full-text skill or alternate installation is used as a fallback.
 
 ```sh
-focused-spec instructions --protocol 1 --json
-focused-spec instructions --protocol 1 --topic runners --json
+npx --no-install focused-spec instructions --protocol 1 --json
+npx --no-install focused-spec instructions --protocol 1 --topic formats --json
+npx --no-install focused-spec instructions --protocol 1 --topic runners --json
 ```
 
 ## Validation
 
-Validation reads version-4 configuration, its configured evidence-registry files (default `.focused-spec/evidence.yaml`), and documents selected by explicit layouts. Every layout names a registered format adapter; core does not infer one from the path or extension. Validation binds every selected registry entry to exactly one normalized native item and rejects marked items without entries. Missing, detached, duplicate, conflicting, unbound, ambiguous, malformed-adapter, or adapter-lifecycle results are violations.
+Validation reads version-5 configuration and documents selected by explicit layouts. Every layout names a registered API-2 format adapter; core does not infer one from a path or extension. The selected formats supply normalized item identity and evidence directly or through optional whole-catalog binding. Core does not load or default an evidence registry. Missing evidence, detached or duplicate identities, conflicting or forged enrollments, overlapping source claims, malformed adapter results, and adapter lifecycle failures are violations.
 
-`validate --syntax-only` checks configuration, registry syntax, adapter parsing, scope-local identity, and binding without loading runner plugins. Full `validate` additionally loads runners and resolves concrete evidence, but never executes tests. A successful full-validation JSON result retains:
+`validate --syntax-only` checks configuration, adapter parsing/binding, normalized references, scope-local identity, and source structure without loading runner plugins. Full `validate` additionally loads runners and resolves concrete evidence, but never executes tests. A successful full-validation JSON result retains:
 
 ```json
 {
   "valid": true,
   "validationScope": {
-    "scopes": { "mode": "all" }
+    "scopes": { "mode": "selected", "name": "add-search" },
+    "scenario": "search.results.empty"
   },
   "scenarios": 1,
-  "plannedEvidence": 1,
-  "targets": 0
+  "plannedEvidence": 0,
+  "targets": 1
 }
 ```
 
-- `scenarios` is the number of bound registry entries in the validation selection;
+- `scenarios` is the number of normalized enrollments in the validation selection;
 - `plannedEvidence` is the number of selected `planned:` references;
 - `targets` is the number of unique resolved executable targets. Planned evidence is not resolved and does not contribute.
 
 Unmarked native content is not focused coverage and is not reported as an arbitrary native-item count. Validation failures return `valid: false`, the actual `validationScope`, and machine-readable `violations`; successful counts are omitted.
 
-Non-strict validation permits planned evidence and skips its resolution. `--strict` rejects it. Use syntax-only or non-strict validation while planning, and strict validation after every selected target exists.
+Non-strict validation permits planned evidence and skips its resolution. `--strict` rejects it. Syntax-only validation does not load runners; non-strict and strict full validation may load runners and resolve the references selected by their mode, but never execute tests. `--strict` and `--syntax-only` are validate-only; `--allow-skip` is run-only.
 
-Without `--scope`, validation selects every discovered scope and registry entry. With `--scope <name>`, it selects only that scope and ignores failures elsewhere. A missing selected scope is an error. An all-scope project with a present registry containing `scopes: {}` and no discovered documents is valid and reports zero counts; a missing registry is always an error.
+Without `--scope`, validation selects every discovered scope; with `--scope <name>`, it selects only that scope. Adding `--scenario <id>` narrows either selection to the exact scope-local occurrences with that opaque ID, using the same selection boundary as `run --scenario`: without an explicit scope every matching same-ID occurrence is independently selected, while an explicit scope isolates the matching occurrence there. Unrelated entry, binding, and evidence failures do not block the selected scenario. The reported `validationScope` always includes the actual scope mode and, when selected, the exact scenario ID.
+
+Removing `--scenario` restores full selected-scope validation. A missing requested scope or scenario is an error. Structural source/parse failures still block because the format could not reliably produce its contract. An all-scope project with no discovered documents, enrollments, or structural source failures is valid and reports zero counts; an adapter-specific missing external source is an error only when that selected adapter requires it.
+
+## Enrollment inspection
+
+`list` inventories format-provided enrollments; `show <id>` looks up one exact opaque ID. Both use `--root <path>` and optional `--config <path>` explicitly, load the selected Format API 2 adapters, parse/bind their documents and evidence sources, and validate normalized structure with planned evidence permitted. They may execute trusted format code. They never load runner plugins, resolve executable targets, execute evidence, scan packages, interpret opaque plugin options, write project files, or claim `PASS`, host-format validity, or coverage of unenrolled native content.
+
+`list` accepts optional `--scope <name>` and `--scenario <id>` selectors. `show` takes exactly one positional ID and optional `--scope <name>`; use `focused-spec show -- <id>` when an opaque ID begins with `-`, with all options before `--`. IDs retain exact case, Unicode, spaces, and punctuation. Without `--scope`, `show` returns every independently enrolled occurrence with the exact ID across scopes; with it, only that scope can match. Missing, duplicate, unknown, or excess arguments fail rather than selecting or normalizing another value.
+
+Successful `--json` output is exactly this shape:
+
+```ts
+{
+  valid: true,
+  selection: {
+    scopes: { mode: 'all' } | { mode: 'selected', name: '<scope>' },
+    scenario?: '<exact opaque ID>'
+  },
+  scenarios: [{
+    scope: '<scope>',
+    id: '<exact opaque ID>',
+    name: '<native scenario name>',
+    source: { path: '<native source path>', line: 1 },
+    evidence: [{
+      reference: '<exact ordered evidence reference>',
+      source: { path: '<evidence source path>', line: 1 }
+    }]
+  }]
+}
+```
+
+Rows sort by raw scope and then raw ID, without case folding or locale normalization. References remain in supplied order. Each evidence source uses that reference's `evidenceLocations[index]` when present, otherwise the shared `evidenceLocation`, otherwise the native scenario source. These paths and lines are format-provided provenance; inspection reports them without opening the returned paths merely for display. Text mode exposes the same selection, enrollment, reference, and provenance information and never labels it `PASS`.
+
+Configuration failures, missing selected scopes or IDs, malformed selected references, duplicate enrollments, and required structural source failures exit 1 with no usable partial inventory:
+
+```ts
+{
+  valid: false,
+  selection: {
+    scopes: { mode: 'all' } | { mode: 'selected', name: '<scope>' },
+    scenario?: '<exact opaque ID>'
+  },
+  violations: [/* machine-readable validation violations */]
+}
+```
+
+Failed inspection omits `scenarios`. An empty all-scope project is a valid empty inventory. Explicit selection isolates unrelated semantic failures, but not failures required to read or structurally interpret the selected sources. Unexpected thrown failures use the shared CLI error transport instead of this business-result shape.
 
 ## Execution and result context
 
@@ -173,7 +308,7 @@ Without `--scope`, validation selects every discovered scope and registry entry.
 - with `--scope <name>`, they select only that scope;
 - `run --scenario <id>` selects only matching `(scope, ID)` entries, including their native bindings and evidence. Unrelated entry, binding, and evidence failures do not prevent that selected run.
 
-With no `--scope`, a repeated ID selects each matching scope independently and uses each entry's evidence. Shared resolved targets remain deduplicated; same-ID reuse does not merge scenario results or inherit evidence. Plain `validate`, including `validate --strict`, still checks its complete selected scope set and never executes tests.
+With no `--scope`, a repeated ID selects each matching scope independently and uses each entry's evidence. Shared resolved targets remain deduplicated; same-ID reuse does not merge scenario results or inherit evidence. Validation and execution use the same scenario-selection boundary, but validation never executes tests.
 
 Text output begins with validation and execution context lines such as:
 
@@ -193,9 +328,9 @@ Completed JSON retains `executionStarted`, `validationScope`, `executionSelectio
 
 Every scenario result includes its `scope`. Multi-scope text rows include `[<scope>]`; selected-scope rows omit that prefix. No execution output includes an unverified native-item count.
 
-If configuration, registry parsing, native binding, selected evidence resolution, or strict validation fails before execution, text says `execution did not start`. JSON reports `valid: false`, `executionStarted: false`, actual selection context, and `violations`, and omits execution result fields. A scenario ID absent from the selected scope or scopes follows this failure contract. Scope-wide validation is not implied by a successful scenario-only run.
+If configuration, format parsing or binding, selected evidence resolution, or strict validation fails before execution, text says `execution did not start`. JSON reports `valid: false`, `executionStarted: false`, actual selection context, and `violations`, and omits execution result fields. A scenario ID absent from the selected scope or scopes follows this failure contract. Scope-wide validation is not implied by a successful scenario-only run.
 
-`--allow-skip` applies only to `run`. It permits a skipped scenario to produce a successful process exit without relabelling it as passed. Scenario and target statuses are `PASS`, `FAIL`, `SKIP`, and `ERROR`; only `PASS` succeeds by default. The CLI exits nonzero on invalid configuration, missing or invalid registry, discovery or binding violations, unresolved evidence, failed execution, errors, or disallowed skips.
+`--allow-skip` applies only to `run`. It permits a skipped scenario to produce a successful process exit without relabelling it as passed. Scenario and target statuses are `PASS`, `FAIL`, `SKIP`, and `ERROR`; only `PASS` succeeds by default. The CLI exits nonzero on invalid configuration, discovery, format enrollment, unresolved evidence, failed execution, errors, or disallowed skips.
 
 ## Timing output
 
@@ -234,11 +369,11 @@ interface Timings {
 }
 ```
 
-All timing values are finite, nonnegative milliseconds of elapsed wall time. `startedMs` is an offset from the command's monotonic timing origin; `durationMs` measures the operation interval. The existing phase fields retain their meanings: `validationMs` covers registry loading, document discovery, parsing, and binding; `resolutionMs` covers runner resolution; `executionMs` covers execution and scheduling; and `totalMs` covers the command until output construction begins. A phase appears only when reached.
+All timing values are finite, nonnegative milliseconds of elapsed wall time. `startedMs` is an offset from the command's monotonic timing origin; `durationMs` measures the operation interval. The existing phase fields retain their meanings: `validationMs` covers document discovery, parsing, format-owned evidence acquisition and catalog binding; `resolutionMs` covers runner resolution; `executionMs` covers execution and scheduling; and `totalMs` covers the command until output construction begins. A phase appears only when reached.
 
 Each runner row represents one actual core-facing invocation. A `resolve` row's `selectorCount` is the number of unique selectors passed to that invocation, not the number of scenario references. A `partition` or `run` row's `targetCount` is the number of input targets passed to that invocation, not every test in the project. Partition rows appear only when partitioning is invoked, and each admitted execution group has its own run row; time waiting for scheduler admission is excluded from the run interval.
 
-Each format row represents one entered parse call and identifies its configured format, normalized project-relative document path, and scope. The first actual request to a newly created format client/host has `coldStart: true`; later requests through that client have `coldStart: false`. Its duration covers the whole core-facing call, including host startup when applicable, lazy module initialization, IPC, parsing, response validation, and normalization. It excludes document reading and registry binding, and is not a measurement of pure parser CPU time. A failure before the parse call, such as a source-read failure, produces no format row.
+Each format row represents one entered document `parse` call and identifies its configured format, normalized project-relative document path, and scope. The first actual request to a newly created format client/host has `coldStart: true`; later requests through that client have `coldStart: false`. Its duration covers the whole core-facing parse call, including host startup when applicable, lazy module initialization, IPC, parsing, response validation, and normalization. It excludes document reading and later catalog `bind` work, which remains part of validation without fabricating a document timing row. A failure before the parse call, such as a source-read failure, produces no format row.
 
 `outcome: 'completed'` means the plugin returned a valid response. Native diagnostics, missing selectors, and test `FAIL` or `SKIP` results are therefore completed operations; their normal violations and statuses remain authoritative. Thrown errors, malformed responses, timeouts, and host crashes use `outcome: 'error'`. Failed output retains rows for calls that started and omits calls that were never reached; it never fabricates later work.
 
@@ -287,6 +422,6 @@ timings: validation 18.00 ms, resolution 9.00 ms, execution 24.00 ms, total 53.0
 
 ## Configuration and migration
 
-The default config is `.focused-spec/config.yaml` under `--root`; a relative `--config` path resolves from that root. Configuration requires `version: 4`, a nonempty `specifications.formats` ID map, a nonempty `specifications.documents` list, and a `runners` map. Every document layout names one configured format. Formats and runners each declare exactly one installed `package` or project-contained `module`, plus JSON-compatible options and bounded timeouts; runners may additionally declare `cwd`. Package/subpath resolution uses ESM import conditions from the consuming project and never a global or downloaded fallback. Optional `evidence.files` selects explicit project-relative YAML paths or patterns. Omission uses `.focused-spec/evidence.yaml`; explicit sources never fall back to it. Registry paths resolve from `--root`, not the configuration file's directory. Missing matches, overlapping file claims, unsafe paths, and selected cross-file identity duplicates fail. See the [configuration and registry contract](../guides/configuration.md).
+The default config is `.focused-spec/config.yaml` under `--root`; a relative `--config` path resolves from that root. Configuration requires `version: 5`, a nonempty `specifications.formats` ID map, a nonempty `specifications.documents` list, and a `runners` map. Every document layout names one configured Format API 2 adapter. Formats and runners each declare exactly one installed `package` or project-contained `module`, plus JSON-compatible options and bounded timeouts; runners may additionally declare `cwd`. Package/subpath resolution uses ESM import conditions from the consuming project and never a global or downloaded fallback. Core rejects top-level `evidence`; inline and external storage are selected through format packages and opaque format options.
 
-Versions 2 and 3 have no compatibility alias. Obsolete configuration and inline ID/EVIDENCE/REVISES diagnostics advertise `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json` from the installation root; use the platform-appropriate local executable or explicit installed Node CLI in a hoisted workspace. That command serves the package-owned upgrade workflow without loading obsolete configuration. Version 3 migration explicitly installs/registers selected formats and assigns one to every existing layout while preserving scopes, exclusions, registry sources and evidence. Version 2 additionally migrates inline native identity/evidence before the same version-4 format cutover. The [configuration guide](../guides/configuration.md#migrate-older-configurations) owns both migration references; the [installation guide](../guides/install.md) distinguishes an explicitly authorized update from ordinary fail-closed guidance acquisition. Runner plugins remain on `apiVersion: 1`.
+Versions 1–4 and Format API 1 have no compatibility alias. Unsupported `REVISES` and inline ID/EVIDENCE selected through a non-inline format also fail. Diagnostics identify an explicit local CLI command for loading the upgrade workflow from the installation root; on a locally installed npm project, a human can use `npx --no-install focused-spec instructions --protocol 1 --topic workflow --json`. The installed loader uses its resolved executable, not npx. The workflow is served without loading obsolete configuration. A supported historical inline project may select the API-2 inline adapter and keep its ID/EVIDENCE rows while removing `REVISES`; external evidence moves into explicit registry-adapter options. The [configuration guide](../guides/configuration.md#migrate-older-configurations) preserves the full migration rules.

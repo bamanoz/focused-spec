@@ -1,9 +1,9 @@
-import { cp, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  agentEvidenceGate, canonicalMemlogReadGate, companionGate, creationGate, evidenceGate, hostPrerequisiteGate, hostWorkflowGate,
+  agentEvidenceGate, canonicalMemlogReadGate, companionGate, creationGate, evidenceGate, focusedCliGates, hostPrerequisiteGate, hostWorkflowGate,
   infrastructureIntegrityGate, infrastructureSnapshot,
   hostWriteConstraintGate, judged, nativeSingleSourceGate,
 } from '../evals/native-pilot.ts'
@@ -77,6 +77,26 @@ describe('native pilot evaluation boundaries', () => {
     expect(creationGate('kiro', source.replace('WHEN', 'GIVEN')).passed).toBe(false)
     expect(creationGate('kiro', source.replace('SHALL', 'MAY')).passed).toBe(false)
     expect(creationGate('kiro', source.replace('deny login', 'allow login')).passed).toBe(false)
+  })
+
+  it('judges opaque marker IDs through the native parser rather than a dotted naming convention', () => {
+    const source = '# Requirements\n\n<!-- focused-spec:id=Blocked-账户 -->\nWHEN a blocked account submits valid credentials\nTHE login service SHALL reject authentication\n'
+    expect(creationGate('kiro', source).passed).toBe(true)
+    expect(nativeSingleSourceGate('kiro', source).passed).toBe(true)
+    expect(creationGate('kiro', source.replace('-->\nWHEN', '-->\n\n\nWHEN')).passed).toBe(false)
+    expect(creationGate('kiro', `${source}\n${source}`).passed).toBe(false)
+    const feature = 'Feature: Login\n  @focused.Blocked-账户\n  Scenario: Blocked login\n    Given a blocked account with valid credentials\n    When it logs in\n    Then authentication is rejected\n'
+    expect(creationGate('gherkin', feature).passed).toBe(true)
+    expect(creationGate('gherkin', feature.replace('Then authentication is rejected', 'Then authentication succeeds')).passed).toBe(false)
+  })
+
+  it('blocks CLI judgment rather than inventing execution failures without a valid selection', async () => {
+    const gates = await focusedCliGates('/not-an-evaluation-workspace', { references: [] })
+    expect(gates).toEqual([
+      expect.objectContaining({ name: 'focused-cli-validation', passed: null, blockedBy: 'normalized-evidence' }),
+      expect.objectContaining({ name: 'focused-cli-execution', passed: null, blockedBy: 'normalized-evidence' }),
+    ])
+    expect(judged(gates, gates.map(item => item.name)).status).toBe('unverified')
   })
 
   it('separates installed GSD resources from project behavior without permitting infrastructure edits', async () => {
@@ -330,7 +350,7 @@ describe('native pilot evaluation boundaries', () => {
         result: { content: [{ type: 'text', text: '=== RUN   TestBlockedAccount\n--- PASS: TestBlockedAccount (0.00s)\nPASS\nok example.com/auth 0.2s' }] } }),
     ].join('\n')
     const blocked = agentEvidenceGate(transcript, [])
-    expect(blocked).toMatchObject({ passed: null, blockedBy: 'evidence-only-registry' })
+    expect(blocked).toMatchObject({ passed: null, blockedBy: 'normalized-evidence' })
     expect(judged([blocked], ['agent-executed-selected-evidence']).status).toBe('unverified')
     expect(agentEvidenceGate(transcript, ['go::./auth::TestBlockedAccount']).passed).toBe(true)
     expect(agentEvidenceGate(transcript, ['pytest::tests/functional/test_auth.py::test_blocked_account']).passed).toBe(false)
@@ -401,34 +421,65 @@ describe('native pilot evaluation boundaries', () => {
     expect((await hostWriteConstraintGate(root, 'openspec', before)).passed).toBe(false)
   })
 
-  it('accepts only production registry data bound to the actual native item', async () => {
+  it('accepts registry and inline production evidence bound to the actual native item', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-native-registry-'))
     roots.push(root)
     await mkdir(join(root, '.focused-spec'))
-    await writeFile(join(root, '.focused-spec/config.yaml'), "version: 4\nspecifications:\n  formats:\n    markdown:\n      package: '@focused-spec/format-markdown'\n  documents: [{ match: specs/*.md, scope: current, format: markdown }]\nrunners: {}\n")
+    await symlink(join(nativePilot.nativePilotRoot, 'node_modules'), join(root, 'node_modules'), 'junction')
+    const registryConfig = "version: 5\nspecifications:\n  formats:\n    markdown:\n      package: '@focused-spec/format-registry'\n      options:\n        parser:\n          package: '@focused-spec/format-markdown'\n  documents: [{ match: specs/*.md, scope: current, format: markdown }]\nrunners: {}\n"
+    await writeFile(join(root, '.focused-spec/config.yaml'), registryConfig)
     const source = '<!-- focused-spec:id=auth.login.blocked-account -->\n#### Scenario: Blocked login\n'
+    await mkdir(join(root, 'specs'))
+    await writeFile(join(root, 'specs/auth.md'), source)
     const path = join(root, '.focused-spec/evidence.yaml')
     await writeFile(path, 'scopes:\n  current:\n    auth.login.blocked-account:\n      evidence: [go::./auth::TestBlockedAccount]\n')
-    expect((await evidenceGate(root, 'openspec', source)).gate.passed).toBe(true)
-    expect((await evidenceGate(root, 'openspec', source.replace('auth.login.blocked-account', 'auth.login.other'))).gate.passed).toBe(false)
-    expect((await evidenceGate(root, 'openspec', `${source}- **EVIDENCE**: \`go::./auth::TestBlockedAccount\`\n`)).gate.passed).toBe(false)
+    const registryEvidence = await evidenceGate(root, 'openspec', source)
+    expect(registryEvidence.gate.passed, registryEvidence.gate.detail).toBe(true)
     await writeFile(path, 'scopes:\n  current:\n    auth.login.blocked-account:\n      evidence: [go::./auth::TestBlockedAccount]\n      unknown: true\n')
     expect((await evidenceGate(root, 'openspec', source)).gate.passed).toBe(false)
-    await writeFile(path, 'scopes: []\n')
-    const malformed = await evidenceGate(root, 'openspec', source)
-    expect(malformed.gate.passed).toBe(false)
-    expect(malformed.references).toEqual([])
     await rm(path)
-    const missing = await evidenceGate(root, 'openspec', source)
-    expect(missing.gate.passed).toBe(false)
-    expect(agentEvidenceGate('', missing.references).passed).toBeNull()
+    await writeFile(join(root, '.focused-spec/config.yaml'), "version: 5\nspecifications:\n  formats:\n    inline:\n      package: '@focused-spec/format-inline'\n  documents: [{ match: specs/*.md, scope: current, format: inline }]\nrunners: {}\n")
+    const inline = '#### Scenario: Blocked login\n- **ID**: `Opaque/Auth 账户`\n- **EVIDENCE**: `go::./auth::TestBlockedAccount`\n- **WHEN** a blocked account has valid credentials\n- **THEN** authentication is rejected\n'
+    await writeFile(join(root, 'specs/auth.md'), inline)
+    const inlineEvidence = await evidenceGate(root, 'openspec', inline)
+    expect(inlineEvidence.gate.passed, inlineEvidence.gate.detail).toBe(true)
+    expect(nativeSingleSourceGate('openspec', inline, inlineEvidence.binding).passed).toBe(true)
+    expect((await companionGate(root, 'openspec', inlineEvidence.binding)).passed).toBe(true)
+    const malformed = await evidenceGate(root, 'openspec', inline.replace('Opaque/Auth 账户', ''))
+    expect(malformed.gate.passed).toBe(false)
+    expect(agentEvidenceGate('', malformed.references).passed).toBeNull()
+  })
+
+  it('judges an external Kiro native-ID binding without requiring a second marker', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-kiro-binding-'))
+    roots.push(root)
+    await mkdir(join(root, '.focused-spec'))
+    await mkdir(join(root, '.kiro/specs/blocked-login'), { recursive: true })
+    await symlink(join(nativePilot.nativePilotRoot, 'node_modules'), join(root, 'node_modules'), 'junction')
+    const path = '.kiro/specs/blocked-login/requirements.md'
+    const source = '# Requirements\n\n## Acceptance Criteria\n\n1. **BLOCKED-LOGIN-1**: WHEN an administrator-blocked account logs in with valid credentials, THE authentication service SHALL reject login.\n'
+    await writeFile(join(root, path), source)
+    await writeFile(join(root, '.focused-spec/config.yaml'), `version: 5\nspecifications:\n  formats:\n    native:\n      package: '@focused-spec/format-registry'\n      options:\n        parser: { package: '@focused-spec/format-markdown' }\n  documents: [{ match: ${path}, scope: current, format: native }]\nrunners: {}\n`)
+    await writeFile(join(root, '.focused-spec/evidence.yaml'), `scopes:\n  current:\n    login-denied:\n      source: { path: ${path}, nativeId: BLOCKED-LOGIN-1 }\n      evidence: [go::./auth::TestBlockedAccount]\n`)
+    const evidence = await evidenceGate(root, 'kiro', source)
+    expect(evidence.gate.passed, evidence.gate.detail).toBe(true)
+    expect(creationGate('kiro', source, evidence.binding).passed).toBe(true)
+    expect(nativeSingleSourceGate('kiro', source, evidence.binding).passed).toBe(true)
+    expect((await companionGate(root, 'kiro', evidence.binding)).passed).toBe(true)
+    expect(creationGate('kiro', source.replace('SHALL reject', 'MAY reject'), evidence.binding).passed).toBe(false)
+    expect(creationGate('kiro', source.replace('SHALL reject', 'SHALL allow'), evidence.binding).passed).toBe(false)
+    await writeFile(join(root, '.kiro/specs/blocked-login/duplicate.md'), source)
+    expect((await companionGate(root, 'kiro', evidence.binding)).passed).toBe(false)
+    await writeFile(join(root, path), source + '\n' + source)
+    expect((await evidenceGate(root, 'kiro', source + '\n' + source)).gate.passed).toBe(false)
   })
 
   it('resolves generated BMad evidence only through an explicit native ID declaration', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-native-external-source-'))
     roots.push(root)
     await mkdir(join(root, '.focused-spec'))
-    await writeFile(join(root, '.focused-spec/config.yaml'), "version: 4\nspecifications:\n  formats:\n    markdown:\n      package: '@focused-spec/format-markdown'\n  documents: [{ match: specs/*.md, scope: current, format: markdown }]\nrunners: {}\n")
+    await symlink(join(nativePilot.nativePilotRoot, 'node_modules'), join(root, 'node_modules'), 'junction')
+    await writeFile(join(root, '.focused-spec/config.yaml'), "version: 5\nspecifications:\n  formats:\n    markdown:\n      package: '@focused-spec/format-registry'\n      options:\n        parser:\n          package: '@focused-spec/format-markdown'\n  documents: [{ match: _bmad-output/specs/**/*.md, scope: current, format: markdown }]\nrunners: {}\n")
     await writeFile(join(root, '.focused-spec/evidence.yaml'), [
       'scopes:',
       '  current:',
@@ -439,7 +490,10 @@ describe('native pilot evaluation boundaries', () => {
       '      evidence: [go::./auth::TestBlockedAccount]',
     ].join('\n'))
     const explicit = '# Blocked Login\n\n- **CAP-1**\n  - **success:** A blocked account with valid credentials is denied login.\n'
-    expect((await evidenceGate(root, 'bmad', explicit)).gate.passed).toBe(true)
+    await mkdir(join(root, '_bmad-output/specs/spec-blocked-login'), { recursive: true })
+    await writeFile(join(root, '_bmad-output/specs/spec-blocked-login/spec-blocked-login.md'), explicit)
+    const externalEvidence = await evidenceGate(root, 'bmad', explicit)
+    expect(externalEvidence.gate.passed, externalEvidence.gate.detail).toBe(true)
     expect((await evidenceGate(root, 'bmad', '# CAP-1\n\nA blocked account with valid credentials is denied login.\n')).gate.passed).toBe(false)
   })
 
@@ -470,7 +524,7 @@ describe('native pilot evaluation boundaries', () => {
     roots.push(root)
     await cp(join(nativePilot.nativePilotRoot, 'evals/fixtures/polyglot'), root, { recursive: true })
     await mkdir(join(root, '.focused-spec'))
-    await writeFile(join(root, '.focused-spec/config.yaml'), "version: 4\nspecifications:\n  formats:\n    markdown:\n      package: '@focused-spec/format-markdown'\n  documents: [{ match: _bmad-output/specs/**/*.md, scope: current, format: markdown }]\nrunners: {}\n")
+    await writeFile(join(root, '.focused-spec/config.yaml'), "version: 5\nspecifications:\n  formats:\n    markdown:\n      package: '@focused-spec/format-registry'\n      options:\n        parser:\n          package: '@focused-spec/format-markdown'\n  documents: [{ match: _bmad-output/specs/**/*.md, scope: current, format: markdown }]\nrunners: {}\n")
     const sourcePath = '_bmad-output/specs/spec-blocked-login/spec-blocked-login.md'
     await mkdir(join(root, '_bmad-output/specs/spec-blocked-login'), { recursive: true })
     await writeFile(join(root, sourcePath), '# Blocked Login\n\n- **CAP-1**\n  - **success:** A blocked account with valid credentials is denied login.\n')

@@ -27,6 +27,9 @@ export interface EvalCase {
   readonly expectedSelectorAlternatives?: readonly string[]
   readonly editablePaths?: readonly string[]
   readonly registryPlacement?: 'reuse' | 'new-boundary'
+  readonly evidenceStorage?: 'registry' | 'inline'
+  readonly lifecycle?: 'inline-publication'
+  readonly expectedRevisionTerms?: readonly string[]
 }
 
 export interface AgentRequest {

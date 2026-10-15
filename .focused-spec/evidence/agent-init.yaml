@@ -12,12 +12,37 @@ scopes:
     init.selection.explicit:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > requires explicit init targets without interactive input
+        - "vitest::test/cli.spec.ts::focused-spec CLI > keeps scripted and CI init outside the terminal screen"
     init.selection.interactive:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > installs only confirmed interactive init targets
+        - "vitest::test/cli.spec.ts::focused-spec CLI > installs only selected targets after separate review confirmation"
+        - "vitest::test/cli.spec.ts::focused-spec CLI > keeps project and home unchanged on cancel, preview and mixed-root conflict"
     init.selection.invalid:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid init arguments before writing files
+    init.welcome.inline:
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > presents a compact welcome beside the glyph before selecting integrations"
+    init.focus.silhouette:
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > shows the approved focus glyph and usable static fallback on a real terminal"
+    init.focus.fallback:
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > shows the approved focus glyph and usable static fallback on a real terminal"
+    init.focus.isolation:
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > keeps scripted and CI init outside the terminal screen"
+    init.session.restore:
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > keeps project and home unchanged on cancel, preview and mixed-root conflict"
+        - "vitest::test/cli.spec.ts::focused-spec CLI > shows the approved focus glyph and usable static fallback on a real terminal"
+    init.review.prewrite:
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > keeps project and home unchanged on cancel, preview and mixed-root conflict"
+        - "vitest::test/cli.spec.ts::focused-spec CLI > installs only selected targets after separate review confirmation"
+    init.review.preview:
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > keeps project and home unchanged on cancel, preview and mixed-root conflict"
     init.reinit.unchanged:
       evidence:
         - vitest::test/package.spec.ts::package distribution > leaves identical agent integrations unchanged on reinitialization
@@ -69,3 +94,10 @@ scopes:
     init.global.reporting:
       evidence:
         - vitest::test/package.spec.ts::package distribution > reports canonical home destinations and completed global writes
+  improve-cli-discovery-and-inspection:
+    init.output.json:
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > reports actual init actions and conflicts as one JSON document"
+    init.output.invalid-invocation:
+      evidence:
+        - "vitest::test/cli-discovery.spec.ts::CLI discovery and transport > separates invalid init invocation errors from valid installation reports"

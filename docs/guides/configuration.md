@@ -1,150 +1,124 @@
 # Configure and author
 
+## Public format contracts
+
+The portable workflow owns identity/evidence invariants and verification, not a fixed plugin catalog. Acquire the selected installed plugin's complete public document and provenance with the project-local CLI before choosing syntax or options: use `plugin-docs --format <id> --json` for a configured adapter, or `plugin-docs --package <specifier> --root <path> --json` before registration. Compatible third-party packages and project-contained modules follow the same workflow; official packages below are human-facing examples, not an allowlist.
+
+| Official package | Public contract |
+| --- | --- |
+| `@focused-spec/format-inline` | [Scenario-local Markdown identity and evidence](../../packages/format-inline/README.md) |
+| `@focused-spec/format-registry` | [External YAML evidence, parser composition, binding, and source ownership](../../packages/format-registry/README.md) |
+| `@focused-spec/format-markdown` | [Structural Markdown items, focused markers, and explicit native IDs](../../packages/format-markdown/README.md) |
+| `@focused-spec/format-gherkin` | [Gherkin scenarios, focused tags, and native tag IDs](../../packages/format-gherkin/README.md) |
+
+Each package ships its own README, which is also the default document returned by `plugin-docs`; a package may select another Markdown file with manifest `focusedSpec.documentation`. The examples below illustrate those specific contracts; they are not core authoring or storage requirements. Core configuration and evidence semantics remain shared.
+
+For format selection, configuration, authoring, or implementation, the loader first requests `instructions --protocol 1 --topic formats --json` from that same project-local CLI as a standalone command. The [formats topic](../../guidance/formats.md) provides shared obligations only. The agent then requests the selected format document separately with `plugin-docs`, validates its package/module and canonical root/path provenance, and treats the returned Markdown as installed dependency or project text. A composing plugin's own document names its nested contract; acquire any named parser in a subsequent explicit `plugin-docs --package <specifier> --root <path> --json` call rather than scanning options or expecting aggregation. The [CLI reference](../reference/cli.md#installed-plugin-documentation) owns exact lookup and response semantics.
+
 ## Configuration
 
-Create `.focused-spec/config.yaml` in the project root. Version 4 registers format adapters separately from document layouts and loads both formats and runners from an installed package or a project-relative module:
+Create `.focused-spec/config.yaml` in the project root. Version 5 registers formats independently, assigns one explicit format to every document layout, and loads formats and runners from installed packages or project-relative modules. Core has no `evidence` setting and rejects one at the top level.
+
+Local format and runner modules may declare a documentation file beside `module`, for example `local: { module: './plugins/local.ts', documentation: 'docs/local-plugin.md' }` under the appropriate registration map. The path is relative to the project root, not the module folder. It must name a contained `.md` or `.markdown` file; see the [documentation metadata contract](../reference/runner-api.md#plugin-documentation-metadata). It is optional for runtime use and is not passed to the plugin. A `package` registration cannot override its installed package's documentation.
+
+### Inline evidence
 
 ```yaml
-version: 4
+version: 5
 specifications:
   formats:
-    markdown:
-      package: '@focused-spec/format-markdown'
-    gherkin:
-      package: '@focused-spec/format-gherkin'
+    inline:
+      package: '@focused-spec/format-inline'
   documents:
     - match: specs/**/*.md
       scope: current
-      format: markdown
-      exclude:
-        - specs/archive/**
+      format: inline
+      exclude: [specs/archive/**]
     - match: changes/{scope}/spec.md
-      format: markdown
-    - match: features/**/*.feature
-      scope: current
-      format: gherkin
-evidence:
-  files:
-    - .focused-spec/evidence/auth.yaml
-    - .focused-spec/evidence/billing/*.yaml
+      format: inline
 runners:
   go:
     package: '@focused-spec/runner-go'
-    timeoutMs: 120000
   pytest:
     package: '@focused-spec/runner-pytest'
     options:
       command: uv
       commandArgs: [run, --with, pytest, python]
-    timeoutMs: 120000
 execution:
   maxConcurrentGroups: 1
 ```
 
-`formats` is a nonempty ID map. Every format declares exactly one `package` or `module`, with optional JSON-compatible `options` and `timeoutMs`. A package is an installed package or public subpath resolved from the consuming project with ESM import conditions; it is not a URL, filesystem path, global installation, or downloading fallback. A module is a project-relative `.ts`, `.mts`, `.js`, or `.mjs` file that remains inside the project. Format adapters are trusted project code executed in bounded isolated hosts, not security sandboxes. The core contains no built-in Markdown or Gherkin parser and never infers a format from an extension.
+The inline adapter needs no evidence file. It owns this Markdown dialect:
 
-`documents` is a nonempty ordered list. Every entry names one registered `format` and assigns exactly one path-safe scope in one of two ways:
+```markdown
+#### Scenario: Blocked account submits valid credentials
+- **ID**: `auth-login`
+- **EVIDENCE**: `go::./internal/auth::TestBlockedAccount`
+- **EVIDENCE**: `pytest::tests/functional/test_auth.py::test_blocked_account`
+- **WHEN** a blocked account submits otherwise valid credentials
+- **THEN** authentication is rejected
+```
 
-- an explicit layout has `scope: <name>` and no `{scope}` token in `match`;
-- a captured layout has exactly one `{scope}` token in `match` and no `scope` property.
+Each level-four `Scenario:` requires exactly one backticked `ID`, at least one separately backticked `EVIDENCE`, and exactly one `WHEN` and `THEN`. Metadata belongs only to that scenario. Missing, duplicate, detached, and malformed rows fail at their actual document locations. Fenced or indented code and block quotes remain literal examples. `REVISES` is unsupported; it cannot create ancestry or evidence inheritance.
 
-`match` and optional `exclude` globs are project-relative and may select any extension accepted by the chosen adapter. Absolute paths, traversal, symlink escapes, malformed captures, and unknown format IDs are errors. `{scope}` captures one nonempty path-safe fragment and preserves it exactly. It may be a complete segment, such as `changes/{scope}/spec.md`, or the variable part of one segment, such as `specs/spec-{scope}/SPEC.md`.
+### External registry evidence
 
-A harmless leading `./` (including repeated `./` prefixes) does not change discovery or `{scope}` capture, including layouts with a following `**`.
+External evidence is an explicit format composition, not a core mode:
 
-There are no implicit archive exclusions, source-framework defaults, privileged scopes, format defaults, or fallback locations. Multiple layouts may contribute documents to one scope, but each document must match exactly one layout and scope; overlapping claims are errors.
+```yaml
+version: 5
+specifications:
+  formats:
+    enrolled-markdown:
+      package: '@focused-spec/format-registry'
+      options:
+        parser:
+          package: '@focused-spec/format-markdown'
+        files:
+          - .focused-spec/evidence/auth.yaml
+          - .focused-spec/evidence/billing/*.yaml
+          - .focused-spec/evidence/features.yaml
+    gherkin:
+      package: '@focused-spec/format-gherkin'
+  documents:
+    - match: specs/**/*.md
+      scope: current
+      format: enrolled-markdown
+    - match: changes/{scope}/spec.md
+      format: enrolled-markdown
+    - match: features/**/*.feature
+      scope: current
+      format: gherkin
+runners:
+  go:
+    package: '@focused-spec/runner-go'
+  pytest:
+    package: '@focused-spec/runner-pytest'
+```
 
-Document matches, exclusions and evidence source patterns share security limits: at most 4096 characters, 32 nested brace/group levels (parentheses separately limited to 2 levels), 256 unescaped brace delimiter characters and 256 brace-expanded alternatives per pattern. Excess fails with a `glob pattern exceeds ...` violation before matching or plugin loading; selected files are never silently truncated. Hidden files are included, matching is case-sensitive, and padded (`{01..03}`) and stepped (`{1..5..2}`) ranges retain their numeric meaning. Split oversized alternatives into explicit source patterns instead of increasing the limits.
+`@focused-spec/format-registry` requires a `parser` object containing exactly one installed `package` or contained project `module`, plus optional parser `options`. Its optional nonempty `files` array names project-relative YAML paths or glob patterns. Omitting `files` selects the adapter-owned `.focused-spec/evidence.yaml` default. Explicit files never trigger that default, nested includes, or repository-wide discovery. Core neither owns nor infers an evidence location.
 
-Runner IDs name execution environments. Like formats, a runner declares exactly one installed `package` or contained project `module`, with optional JSON-compatible `options` and `timeoutMs`; runners additionally accept a project-relative `cwd`. `timeoutMs` is a positive integer no greater than `2147482647`. `execution.maxConcurrentGroups` is optional, defaults to 1, and only permits overlap for compatible groups explicitly returned by runners. The public runner API remains version 1. See the [runner guide](runners.md) and [plugin API reference](../reference/runner-api.md).
+The registry adapter's optional catalog binder sees every selected native document, not only documents parsed by its nested parser. In this example the single registry registration can therefore enroll both its Markdown items and items parsed directly by the Gherkin adapter. It is invoked once even when no `enrolled-markdown` document matches, so selected dangling external rows cannot disappear.
 
-Format and runner options must be JSON-compatible: cyclic YAML aliases are rejected as configuration violations before plugins load. Reusing an acyclic alias in several option fields is valid.
+Each selected source must match at least one `.yaml` or `.yml` file. Absolute paths, traversal, negated patterns, backslashes, symlink escapes, unsupported matches, missing sources, and overlapping lexical or canonical claims fail. Files load deterministically. A matched dangling source symlink is an error even when other shards are readable.
 
-## Required evidence registry
-
-Every configured project needs one logical evidence registry. Optional `evidence.files` explicitly names a nonempty list of project-relative `.yaml`/`.yml` paths or glob patterns. Without `evidence`, the same loader reads `.focused-spec/evidence.yaml`; an explicit list never falls back to that file. All sources resolve from the selected project root, including with `--config`.
-
-Each configured source must match at least one file. Absolute paths, parent traversal, negated patterns, backslashes, symlink escapes, non-YAML matches, and overlapping lexical or canonical file claims fail. Files are loaded deterministically; no nested `include` or implicit repository search exists.
-
-A matched dangling source symlink is an unreadable-source error, including when other shards are readable. The pattern limits above apply to every evidence source; an invalid pattern prevents loading a partial registry.
-
-For example, `evidence.files: ['.focused-spec/evidence/**/*.{yaml,yml}']` automatically includes new YAML shards anywhere under that directory. Files already covered by a glob need no separate configuration entry; add a source only for a shard outside the configured patterns. This repository uses that recursive pattern.
-
-Every shard uses the same schema:
+Each shard uses the closed evidence-only schema:
 
 ```yaml
 scopes:
   current:
-    auth.login.blocked-account:
+    auth-login:
       evidence:
         - go::./internal/auth::TestBlockedAccount
         - pytest::tests/functional/test_auth.py::test_blocked_account
 ```
 
-The exact schema is:
-
-```yaml
-scopes:
-  <scope>:
-    <lowercase.dotted.id>:
-      evidence:
-        - "[planned:]<runner-id>::<opaque selector>"
-      source:                 # optional; external binding only
-        path: project/relative/document.md
-        nativeId: EXPLICIT-HOST-ID
-```
-
-Each entry requires a nonempty `evidence` list. `source` is present only for external binding and contains exactly `path` and `nativeId`. Unknown fields and duplicate YAML fields fail validation. A selected `(scope, ID)` may occur only once across all files; duplicates fail with both locations, without merging evidence or choosing a winner. File placement does not change identity or imply scope ownership. Empty `scopes: {}` files are permitted, but all configured sources remain required; an empty logical registry succeeds only for an empty all-scope selection with no discovered documents.
-
-Evidence stays out of native documents. Multiple references on one entry form an AND contract. The selector is opaque to core, and only the first `::` separates the runner ID. Use `planned:` only while the exact target is absent; strict validation and `run` reject planned references.
-
-The public API is `loadEvidenceRegistry(projectRoot, files?, selectedScope?, selectedScenarioId?)`; pass `config.evidence?.files` as its second argument. It returns named `EvidenceRegistry` with `entries`, sorted loaded `files`, and `violations`. Each `EvidenceEntry` exposes diagnostic-only `registryPath` and `line`, separate from optional native `source` binding metadata. Scope/ID selection arguments now follow the source list.
-
-## Bind a native item
-
-Keep behavior in the owning framework's native item. Choose exactly one supported identity binding.
-
-### Editable Markdown with `@focused-spec/format-markdown`
-
-Place the marker immediately before one heading, paragraph, or list item:
-
-```markdown
-<!-- focused-spec:id=auth.login.blocked-account -->
-#### Scenario: Blocked account submits valid credentials
-- **WHEN** a blocked account submits otherwise valid credentials
-- **THEN** authentication is rejected
-```
-
-A paragraph or list item may instead carry the marker inline at its end:
-
-```markdown
-1. **Given** a blocked account, **When** it logs in, **Then** authentication is rejected. <!-- focused-spec:id=auth.login.blocked-account -->
-```
-
-The marker belongs to exactly the adjacent structural item. One blank line is allowed; two blank lines or an intervening node detach it, including inside lists. Before a list, it identifies the immediately following first item, not the whole list. A detached marker, an invalid ID, two markers on one item, or one `(scope, ID)` bound to multiple items is an error. Headings require a preceding marker; inline markers are supported only at the end of a paragraph or the complete list item, after all its content. Code examples never enroll items.
-
-### Gherkin with `@focused-spec/format-gherkin`
-
-Attach the focused tag to one `Scenario` or `Scenario Outline`:
-
-```gherkin
-@focused.auth.login.blocked-account
-Scenario: Blocked account submits valid credentials
-  Given a blocked account with valid credentials
-  When the account attempts to log in
-  Then authentication is rejected
-```
-
-Focused tags on `Feature`, `Rule`, `Background`, or `Examples` are invalid. Ordinary non-focused tags remain the host framework's concern.
-
-### External native ID
-
-Generated output must remain unmarked. When it declares a stable host-owned ID, bind that declaration from the registry:
+An external native-ID binding adds exactly `source.path` and `source.nativeId`:
 
 ```yaml
 scopes:
   order-limit:
-    order.limit.reject-at-capacity:
+    CAPACITY-1:
       source:
         path: _bmad-output/specs/spec-order-limit/SPEC.md
         nativeId: CAP-1
@@ -152,41 +126,54 @@ scopes:
         - pytest::tests/test_order_limit.py::test_order_at_limit_rejects_another_item
 ```
 
-The declaration must occur explicitly and uniquely in that path. `focused-spec` never guesses identity from a heading, line number, or similar behavior wording. If generated output has no stable explicit native ID, external binding is unsupported; do not create a companion that duplicates the behavior merely to enroll it.
+Each entry requires a nonempty `evidence` list and permits only optional `source`. Unknown or duplicate fields fail. Multiple references form an AND contract. A selected `(scope, ID)` may occur only once across all configured files; duplicates fail rather than merge. File placement does not imply identity, ownership, or ancestry. Empty `scopes: {}` files are permitted, but every configured source remains required.
 
-The official Markdown adapter recognizes a leading bold or inline-code ID alone or followed by `:` in a Markdown item, or a heading `{#ID}` anchor. The official Gherkin adapter recognizes a scenario-local non-focused tag. Markdown token IDs contain letters, digits, `.`, `_`, or `-`. Third-party adapters define their own explicit native-ID declarations through the same normalized format contract. Plain-text mentions do not declare an ID. `source.path` names one configured document; `./` is normalized, traversal and symlink escapes are rejected. Every registry file must also remain inside the project.
+## Format and document rules
 
-## Binding and selection rules
+`specifications.formats` is a nonempty ID map. Every format declares exactly one `package` or `module`, with optional JSON-compatible `options` and `timeoutMs`. A local-module registration may also declare `documentation`, a safe project-relative `.md` or `.markdown` file used only by `plugin-docs`; it is invalid on package registrations, whose documents remain package-owned. Missing module documentation blocks only documentation lookup. Package resolution starts from the consuming project with ESM import conditions; there is no URL, global, downloaded, loader-relative, or core fallback. A module is a project-relative `.ts`, `.mts`, `.js`, or `.mjs` file contained by the project. Formats are trusted project code running in bounded isolated hosts, not security sandboxes.
 
-Every marked item needs a registry entry in the same scope, and every registry entry must bind exactly one item. Missing, detached, duplicate, conflicting, unbound, or ambiguous bindings fail. Unmarked native items remain valid host content but are not focused scenarios, are not executed, and are not counted as an invented coverage metric.
+Every document layout names one registered format and assigns exactly one path-safe scope:
 
-Identity is `(scope, ID)`. The same ID may appear in different scopes only as independent entries with independent bindings and evidence. Evidence never inherits, and there is no relationship field.
+- an explicit layout has `scope: <name>` and no `{scope}` in `match`;
+- a captured layout has exactly one `{scope}` in `match` and no `scope` property.
 
-Without `--scope`, validation and execution select all scopes. With `--scope <name>`, both select only that scope. `run --scenario <id>` further isolates the matching entries, their bindings, and their evidence from unrelated failures. See the [CLI reference](../reference/cli.md) for result fields.
+`match` and optional `exclude` patterns are project-relative and may select any extension accepted by the adapter. There are no implicit archive exclusions, privileged scopes, format defaults, or extension inference. Multiple layouts may contribute documents to one scope, but one document may belong to only one layout and scope. A leading `./` does not change discovery or capture.
 
-Scope and scenario selection isolate unrelated entry semantics and cross-file duplicate identities. Source safety, missing sources, YAML syntax, and duplicate YAML fields remain errors because they prevent reliable composition. Registry entry/binding violations identify the actual shard and line.
+Document and registry patterns are bounded at 4096 characters, 32 nested group levels with parentheses limited to 2, 256 unescaped brace delimiters, and 256 expanded alternatives. Hidden files are included, matching is case-sensitive, and padded or stepped numeric ranges retain their meaning. Excess fails before partial discovery or plugin loading.
 
-## Verify
+Formats and runners accept only JSON-compatible options; cyclic YAML aliases fail before plugins load, while repeated acyclic aliases are valid. Runner registrations additionally permit a project-relative `cwd`; `timeoutMs` is a positive integer no greater than `2147482647`. `execution.maxConcurrentGroups` defaults to 1. Runner API 1 is unchanged; see the [runner guide](runners.md) and [plugin API reference](../reference/runner-api.md).
 
-While a selected entry contains planned evidence:
+## Opaque identity and binding
+
+Identity is `(scope, ID)`. Core accepts any string containing a non-whitespace character and no control characters, preserving exact case, Unicode, spaces, numeric values, and path-looking text. It never rewrites or path-interprets IDs. A selected format owns representation and escaping, so some native token syntaxes cannot express every otherwise valid core ID.
+
+For registry-backed editable Markdown, place `<!-- focused-spec:id=<id> -->` immediately before one heading, paragraph, or list item, or at the end of a paragraph or complete list item. One blank line is allowed; two blank lines or an intervening node detach the marker. Markers in code examples do not enroll items. For Gherkin, place `@focused.<id>` on one `Scenario` or `Scenario Outline`; focused tags on `Feature`, `Rule`, `Background`, or `Examples` fail.
+
+Generated output stays unmarked. Registry `source.path` and `source.nativeId` must resolve an explicit stable host-owned native ID uniquely in that configured document. Focused-spec never guesses from a heading, line, or behavior wording. If the selected parser provides no stable native ID, external binding is unsupported.
+
+Each selected occurrence supplies its own evidence. Same-ID occurrences in other scopes are independent and cannot lend evidence. Competing inline/external enrollments, two enrollments of one actual item, conflicting marker identity, dangling rows, and ambiguous native IDs fail without precedence.
+
+## Selection and verification
+
+Evidence uses `[planned:]<runner-id>::<opaque selector>`; only the first `::` separates the runner ID. While a selected reference remains planned:
 
 ```sh
-focused-spec validate --scope add-auth --syntax-only
-focused-spec validate --scope add-auth
+npx focused-spec validate --scope add-auth --syntax-only
+npx focused-spec validate --scope add-auth
 ```
 
-Syntax-only validation checks configuration, registry shape, adapter parsing, and binding without loading runner plugins. Full validation resolves concrete evidence but does not execute tests. Once all selected references are concrete:
+Syntax-only validates configuration, format output, catalog binding, normalized evidence, and source structure without loading runners. Full validation resolves concrete evidence but does not execute it. Once every selected reference is concrete:
 
 ```sh
-focused-spec validate --scope add-auth --strict
-focused-spec run --scope add-auth
+npx focused-spec validate --scope add-auth --strict
+npx focused-spec run --scope add-auth
 ```
 
-Use `focused-spec run --scope add-auth --scenario auth.login.blocked-account` to isolate one entry while other work in the scope is incomplete. Run the full scope before claiming the scope complete. `SKIP` and `ERROR` are not success; use `--allow-skip` only when explicit project policy permits unavailable optional evidence.
+`run --scenario <id>` isolates matching occurrences and selection-aware semantic diagnostics; it does not certify the rest of a scope. Structural source failures remain errors. Run the full completed scope before claiming completion. `SKIP` and `ERROR` are not success unless an explicit `--allow-skip` policy permits skips.
 
 ## Runnable framework examples
 
-From this repository's root, install the private workspace, build core followed by every adapter, and invoke the workspace-linked CLI:
+From this repository root, install and build the private workspace before invoking the workspace-linked CLI:
 
 ```sh
 npm ci
@@ -197,30 +184,19 @@ npx focused-spec run --root examples/openspec
 
 | Framework layout | Native binding | Additional commands |
 | --- | --- | --- |
-| [OpenSpec](../../examples/openspec/) | Marker on `openspec/specs/auth/spec.md` Scenario | The commands above |
+| [OpenSpec](../../examples/openspec/) | Marker on the existing Scenario through the registry adapter | The commands above |
 | [Spec Kit](../../examples/spec-kit/) | Marker on the existing numbered acceptance item | `npx focused-spec validate --root examples/spec-kit --scope 001-blocked-account --strict` then `npx focused-spec run --root examples/spec-kit --scope 001-blocked-account` |
 | [BMad](../../examples/bmad/) | Registry `source` binding to generated `SPEC.md` ID `CAP-1` | `npx focused-spec validate --root examples/bmad --scope order-limit --strict` then `npx focused-spec run --root examples/bmad --scope order-limit` |
-| [Standalone worktree consumer](../../examples/worktree-consumer/) | Marker on `specs/eligibility.md` | Commit this example as a separate Git repository, add a worktree, then run `npm ci` and `npm run evidence` there |
+| [Standalone worktree consumer](../../examples/worktree-consumer/) | Marker on its native scenario through the registry adapter | Commit the example as a separate Git repository, add a worktree, then run `npm ci` and `npm run evidence` there |
 
-The examples preserve real tests and explicitly registered official format/runner packages. OpenSpec and the standalone example use `go`; OpenSpec also uses `pytest`, and Spec Kit and BMad use `pytest` with `command: uv` and `commandArgs: [run, --with, pytest, python]` (requires `uv`). Each fresh standalone worktree needs its own `npm ci`.
+The examples retain real tests and explicitly installed adapters/runners. Each fresh standalone worktree needs its own `npm ci`.
 
 ## Migrate older configurations
 
-Versions 2 and 3 are rejected. There are no compatibility aliases, built-in parser fallback, or automatic converter. For an agent-led update, ask it to update focused-spec. The replacement local package and loader serve the complete portable [upgrade procedure](../../guidance/workflow.md#update-an-existing-project) through `instructions --protocol 1 --topic workflow --json` even while the old configuration is rejected.
+Configuration versions 1–4 and Format API 1 are rejected; version 5 has no top-level `evidence`, compatibility alias, built-in parser fallback, or automatic converter. The local installed CLI continues to serve the authoritative upgrade procedure even when old configuration cannot load:
 
-### Version 3 to version 4
+```sh
+npx --no-install focused-spec instructions --protocol 1 --topic workflow --json
+```
 
-1. Inventory every document layout, assigned scope, exclusion, registry source, runner ID/configuration, and executable evidence reference. Determine the actual format of every layout; do not infer it from the filename during execution.
-2. Install the selected format adapters independently. For the built-in-era formats, install `@focused-spec/format-markdown` and/or `@focused-spec/format-gherkin`; the `focused-spec` core alone no longer parses either format.
-3. Change `version: 3` to `version: 4`, add `specifications.formats`, and add `format: <id>` to every document layout. Preserve each layout's `match`, `scope` or `{scope}` capture, and `exclude` settings exactly unless the canonical native source genuinely moved.
-4. Give every format and runner exactly one `package` or `module`. During an agent-led upgrade, replace legacy project-local framework registrations with applicable official packages when their documented contracts preserve the existing opaque selectors and execution requirements. Retain custom registrations and established IDs when an official runner cannot preserve their required contract. Install each chosen package separately and use the framework ID `vitest`, `pytest`, or `go`; for every replaced registration, update only the runner-ID prefix in every affected evidence reference while preserving each opaque selector and AND member. Remove obsolete registrations, but preserve project-owned runner files unless their removal is separately authorized. Preserve runner `options`, `timeoutMs`, optional `cwd`, and `execution` settings.
-5. Preserve `evidence.files`, every registry shard, `(scope, ID)`, native binding, opaque selector, and AND member byte-for-byte. Apart from an intentional complete runner-ID-prefix migration to an official package, version 4 changes plugin selection, not evidence identity or ownership.
-6. Compare the final inventory, then validate native bindings and execute every completed scope. Do not claim a complete-project pass while planned evidence remains.
-
-### Version 2 native-evidence migration
-
-1. Inventory every configured scope, ID, canonical native item and exact evidence reference before editing. Preserve all AND members, opaque selectors, runner settings, execution settings, layout scopes and exclusions. Record any legacy runner ID that will intentionally become the official `vitest`, `pytest`, or `go` ID.
-2. Move inline evidence into the configured evidence-only registry (default `.focused-spec/evidence.yaml`). Bind each original ID on its canonical native item: use an adjacent Markdown marker, a Gherkin scenario tag, or `source.path` plus an explicit stable `source.nativeId` for generated/metadata-hostile sources.
-3. Remove inline `ID`, `EVIDENCE`, and `REVISES` metadata and obsolete relationship fields without changing behavioral text. Remove a duplicate focused companion only through its host workflow; if it is the sole native source, retain it as the native item.
-4. Create the version-4 format map and select a format for every layout as described above. Install selected adapters independently; preserve every document scope/exclusion, registry source and runner/execution setting. Project runner modules remain API version 1, but compatible legacy framework wrappers migrate to the official packages as described above. Use `vitest`, `pytest`, or `go` consistently in the runner map and evidence prefixes while leaving opaque selectors unchanged.
-5. Compare the migrated occurrences with the original inventory, resolve `planned:` only when the exact target exists, validate bindings, and execute every completed scope. Each same-ID scope occurrence keeps explicit evidence; nothing inherits.
+Historically, version 3 introduced native documents but still relied on implicit core parsers; version 4 made native format registration explicit while retaining core-owned registry configuration. Version 2 used inline `ID`/`EVIDENCE`/`REVISES` metadata. A current upgrade inventories every surviving occurrence and exact AND reference, moves layouts to explicit API-2 adapters and config 5, and removes unsupported `REVISES` without inheritance. Supported version-2 inline authoring may remain inline by selecting `@focused-spec/format-inline`; it need not be forced into YAML. External evidence instead moves its former source list into `@focused-spec/format-registry` options. Preserve scopes, IDs, selectors, runner settings, document exclusions, and shard ownership. Portable sequencing, approval boundaries, and evidence-sensitivity checks live only in the package-owned [workflow guidance](../../guidance/workflow.md#update-an-existing-project).

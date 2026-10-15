@@ -1,0 +1,15 @@
+scopes:
+  improve-cli-discovery-and-inspection:
+    inspection.list.read-only:
+      evidence:
+        - "vitest::test/inspection.spec.ts::CLI inspection > lists selected enrollments without importing runners, resolving evidence, executing tests, or writing"
+    inspection.show.selection:
+      evidence:
+        - "vitest::test/inspection.spec.ts::CLI inspection > selects exact opaque IDs independently across scopes"
+    inspection.output.provenance:
+      evidence:
+        - "vitest::test/inspection.spec.ts::CLI inspection > reports deterministic native and ordered evidence provenance with source fallback"
+        - "vitest::test/package.spec.ts::package distribution > lists and shows packed enrollment provenance without loading its runner"
+    inspection.errors.structural:
+      evidence:
+        - "vitest::test/inspection.spec.ts::CLI inspection > fails closed at structural and selection boundaries without partial inventories"

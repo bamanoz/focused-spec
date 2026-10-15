@@ -24,9 +24,9 @@ async function fixture(status: 'pass' | 'skip' = 'pass'): Promise<string> {
   roots.push(root)
   await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir')
   await put(root, '.focused-spec/config.yaml', [
-    'version: 4',
+    'version: 5',
     'specifications:',
-    '  formats: { markdown: { package: "@focused-spec/format-markdown" } }',
+    '  formats: { markdown: { package: "@focused-spec/format-registry", options: { parser: { package: "@focused-spec/format-markdown" } } } }',
     '  documents:',
     '    - match: openspec/specs/**/spec.md',
     '      format: markdown',
@@ -152,9 +152,9 @@ async function schedulerRoot(runners: Readonly<Record<string, string>>): Promise
   await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'dir')
   for (const [path, source] of Object.entries(runners)) await put(root, path, source)
   await put(root, '.focused-spec/config.yaml', [
-    'version: 4',
+    'version: 5',
     'specifications:',
-    '  formats: { markdown: { package: "@focused-spec/format-markdown" } }',
+    '  formats: { markdown: { package: "@focused-spec/format-registry", options: { parser: { package: "@focused-spec/format-markdown" } } } }',
     '  documents:',
     '    - match: specs/**/*.md',
     '      format: markdown',
@@ -305,9 +305,9 @@ describe('project-local TypeScript runners', () => {
     await put(root, 'package.json', '{"private":true,"type":"module"}\n')
     await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(root, 'node_modules'), 'junction')
     await put(root, '.focused-spec/config.yaml', [
-      'version: 4',
+      'version: 5',
       'specifications:',
-      '  formats: { markdown: { package: "@focused-spec/format-markdown" } }',
+      '  formats: { markdown: { package: "@focused-spec/format-registry", options: { parser: { package: "@focused-spec/format-markdown" } } } }',
       '  documents:',
       '    - match: features/{scope}/spec.md',
       '      format: markdown',
@@ -383,9 +383,9 @@ describe('project-local TypeScript runners', () => {
       { targetIds: ['not-selected'], resources: [] },
     ] }))
     await put(root, '.focused-spec/config.yaml', [
-      'version: 4',
+      'version: 5',
       'specifications:',
-      '  formats: { markdown: { package: "@focused-spec/format-markdown" } }',
+      '  formats: { markdown: { package: "@focused-spec/format-registry", options: { parser: { package: "@focused-spec/format-markdown" } } } }',
       '  documents:',
       '    - match: specs/**/*.md',
       '      format: markdown',
@@ -412,9 +412,9 @@ describe('project-local TypeScript runners', () => {
 
     for (const invalid of ['0', '1.5', 'nope']) {
       await put(root, '.focused-spec/config.yaml', [
-        'version: 4',
+        'version: 5',
         'specifications:',
-        '  formats: { markdown: { package: "@focused-spec/format-markdown" } }',
+        '  formats: { markdown: { package: "@focused-spec/format-registry", options: { parser: { package: "@focused-spec/format-markdown" } } } }',
         '  documents:',
         '    - match: specs/**/*.md',
         '      format: markdown',
@@ -616,9 +616,9 @@ describe('project-local TypeScript runners', () => {
       ].join('\n'),
     })
     await put(root, '.focused-spec/config.yaml', [
-      'version: 4',
+      'version: 5',
       'specifications:',
-      '  formats: { markdown: { package: "@focused-spec/format-markdown" } }',
+      '  formats: { markdown: { package: "@focused-spec/format-registry", options: { parser: { package: "@focused-spec/format-markdown" } } } }',
       '  documents:',
       '    - match: specs/**/*.md',
       '      format: markdown',

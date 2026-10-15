@@ -4,59 +4,49 @@
 
 A focused specification protects the smallest product-boundary outcome that can fail independently. The owning framework's native checkable item remains the only behavioral text. `focused-spec` adds only:
 
-- a lowercase dotted ID bound to that item;
-- one or more exact evidence references in a configured YAML registry, optionally split into domain files;
+- one opaque stable ID bound to that item;
+- one or more exact evidence references supplied by the selected format;
 - execution results from runner plugins loaded from the consuming project.
 
-The ID is not a second requirement, and the registry must not repeat or reinterpret the behavior.
+The ID is not a second requirement, and evidence metadata must not repeat or reinterpret the behavior.
 
-## Native items and bindings
+## Native items, enrollment, and evidence
 
-Version 4 discovers documents through explicit layouts and parses each with its explicitly registered format adapter. Core records a native item's normalized structural name and location; it does not infer a format from an extension, infer requirements from prose, or require a particular source framework. The core package has no built-in Markdown or Gherkin parser.
+Version 5 discovers documents through explicit layouts and parses each with an explicitly registered Format API 2 adapter. Core records each native item's normalized structural name and location; it does not infer a format from an extension, infer requirements from prose, require a source framework, or load an evidence registry.
 
-The official Markdown adapter binds an ID with `<!-- focused-spec:id=<id> -->` immediately before one heading, paragraph, or list item. A paragraph or list item may instead end with the marker inline. The marker must resolve to exactly that adjacent item.
+Normalized scenarios retain their canonical native `path` and `line`. Evidence coordinates are separate: optional `evidenceLocation` supplies the enrollment origin, and parallel `evidenceLocations` supplies each reference's origin. Diagnostics use the reference origin, then enrollment origin, then native item; metadata storage cannot redirect the behavioral source.
 
-The official Gherkin adapter binds an ID with `@focused.<id>` on one `Scenario` or `Scenario Outline`. Focused tags on `Feature`, `Rule`, `Background`, or `Examples` are invalid because those structures do not identify one executable scenario.
+A format enrolls an item by supplying its ID and evidence directly during parsing or by binding against the complete discovered catalog. Core validates the resulting item identity, scope, evidence references, enrollment uniqueness, and diagnostics independent of the adapter's storage. This gives projects two official authoring paths:
 
-When a document is generated or cannot preserve either marker, the registry may bind an explicit host-owned native ID:
+- `@focused-spec/format-inline` owns a Markdown scenario dialect whose `ID` and repeated `EVIDENCE` rows enroll the scenario directly, with no registry file;
+- `@focused-spec/format-registry` composes an explicit native parser such as `@focused-spec/format-markdown` or `@focused-spec/format-gherkin`, then binds YAML registry entries against the complete catalog.
 
-```yaml
-scopes:
-  current:
-    order.limit.reject-at-capacity:
-      source:
-        path: generated/SPEC.md
-        nativeId: CAP-1
-      evidence:
-        - pytest::tests/test_order_limit.py::test_order_at_limit_rejects_another_item
-```
+For editable Markdown, the native parser binds an ID with `<!-- focused-spec:id=<id> -->` adjacent to one heading, paragraph, or list item. For Gherkin, it binds `@focused.<id>` on one `Scenario` or `Scenario Outline`. These are representation syntaxes, not core ID policy. Generated or metadata-hostile documents can instead use the registry adapter's `source.path` and explicit host-owned `source.nativeId`; headings, lines, and behavior wording are never guessed as identity.
 
-`source.nativeId` is resolved only from an explicit declaration in `source.path`. Headings, line numbers, and behavior wording are not identities and are never guessed. Generated output stays unmarked.
+An enrollment is invalid when it is missing evidence, claims a nonexistent item, binds more than one item, conflicts with a marked identity, duplicates a selected `(scope, ID)`, or competes with another adapter for the same item. Unmarked native content remains outside focused execution: it is neither an error nor an arbitrary count reported as verified.
 
-A marked item without its matching registry entry is invalid. A registry entry is also invalid when it is unbound, binds more than one native item, conflicts with another binding, or names a missing or ambiguous explicit native ID. Unmarked native content is outside focused coverage: it is neither an error nor an arbitrary count reported as if focused-spec had verified it.
+## Identity and evidence semantics
 
-## Registry identity and evidence
+Identity is the pair `(scope, ID)`. IDs are exact opaque strings with at least one non-whitespace character and no control characters. Core preserves case, Unicode, spaces, numeric and path-looking values without normalization or interpretation; a format may support only values its native syntax can represent. IDs are unique within a scope. The same value may appear in another scope, but every occurrence independently binds its own item and evidence.
 
-Identity is the pair `(scope, ID)`. IDs are unique within a scope. The same ID may appear in another scope, but every occurrence must bind its own item and declare its own evidence. Scopes are execution contexts, not ownership or ancestry, and evidence never inherits between them.
+Evidence has the form `[planned:]<runner-id>::<opaque selector>`. Only the first `::` separates the runner ID; the remainder belongs to the runner. Every reference must resolve to exactly one target and produce exactly one result. Multiple references form an AND contract.
 
-Evidence has the form `<runner-id>::<opaque selector>`. Only the first `::` separates the runner ID; the remainder belongs to the runner. Every reference must resolve to exactly one target and produce exactly one result. Multiple references on an entry form an AND contract.
+Any scope may use `planned:` while an exact target does not yet exist. Non-strict validation records but does not resolve planned references. Strict validation and execution reject them. `SKIP` and `ERROR` are not success by default.
 
-Any scope may use the `planned:` prefix while an exact target does not yet exist. Non-strict validation records but does not resolve planned references. Strict validation and execution reject them. `SKIP` and `ERROR` are not success by default.
-
-The registry shape is deliberately closed: unknown fields, duplicate YAML fields, malformed IDs, malformed evidence, and malformed source bindings fail validation instead of being ignored.
+Evidence never inherits across scopes or lifecycle operations. `REVISES`, owner/revision ancestry, and precedence between competing enrollments are unsupported.
 
 ## Selection
 
-Without `--scope`, validation and execution select all registry scopes and discovered documents. With `--scope <name>`, both select only that scope. `run --scenario <id>` further isolates the selected `(scope, ID)` entries, including their binding and evidence validation; unrelated entry, binding, and evidence failures do not block that run.
+Without `--scope`, validation and execution select all discovered scopes. With `--scope <name>`, both select only that scope. `run --scenario <id>` further isolates matching occurrences, their bindings, evidence, and selection-aware diagnostics; unrelated semantic entry failures do not block that run. Structural source failures remain errors because the adapter could not reliably produce its normalized contract.
 
-An all-scope selection with `scopes: {}` and no discovered documents is valid and empty. The registry file itself is required. Selecting a missing scope or scenario is an error.
+An all-scope project with no discovered documents, enrollments, or structural source failures is valid and empty. Selecting a missing scope or scenario is an error. A selected marked item without its own evidence cannot borrow evidence from the same ID elsewhere.
 
 ## Plugin boundaries
 
-Format API version 1 normalizes native items and diagnostics; core retains ownership of discovery, path, scope, identity validation and evidence binding. A project registers every format under `specifications.formats` and selects one on each document layout. Official Markdown and Gherkin adapters are independently installed packages, not implicit core behavior.
+Format API version 2 supports per-document parsing and optional whole-catalog binding. Core owns discovery, path, scope, response validation, global identity/enrollment invariants, selection, resolution, and execution. Adapters own native syntax, evidence acquisition, and storage-specific provenance. Opaque source claims allow core to detect overlapping adapter ownership without interpreting filesystem or registry conventions.
 
-Runner API version 1 is unchanged. Core does not know Vitest, pytest, Go, or another test framework. A project registers a package or project-contained runner module in `.focused-spec/config.yaml`; the CLI asks each plugin to resolve opaque selectors and execute only the resolved targets. The official `vitest`, `pytest`, and `go` runners are separate packages, while framework installations remain consumer-owned.
+Runner API version 1 is unchanged. Core does not know Vitest, pytest, Go, or another test framework. A project registers a package or project-contained runner module in `.focused-spec/config.yaml`; the CLI asks each plugin to resolve opaque selectors and execute only selected targets. The official `vitest`, `pytest`, and `go` runners are separate packages, while framework installations remain consumer-owned.
 
-Plugins are trusted project code executed in bounded isolated hosts, not security sandboxes. They must use safe process invocation, bounded diagnostics, deterministic identities and real framework results. A runner must never return `pass` without executing the selected test; invalid format output must never become a bound native item.
+Plugins are trusted project code executed in bounded isolated hosts, not security sandboxes. A runner must never return `pass` without executing the selected test; malformed format output, forged catalog targets, overlapping source claims, crashes, and timeouts fail without fallback.
 
 The focused behavioral contract is recorded in the [capability specs](../../openspec/specs/scenario-authoring/spec.md); the [documentation map](../README.md) links every capability.

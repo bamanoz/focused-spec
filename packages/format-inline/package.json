@@ -1,0 +1,14 @@
+{
+  "name": "@focused-spec/format-inline",
+  "version": "0.9.2",
+  "description": "Inline Markdown ID and EVIDENCE format for focused-spec",
+  "repository": {"type": "git", "url": "git+https://github.com/bamanoz/focused-spec.git", "directory": "packages/format-inline"},
+  "type": "module",
+  "exports": {".": {"types": "./dist/index.d.ts", "import": "./dist/index.js"}},
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {"build": "node ../../scripts/build-package.mjs"},
+  "engines": {"node": ">=22.16.0"},
+  "peerDependencies": {"focused-spec": "^0.9.2"},
+  "dependencies": {"mdast-util-from-markdown": "^2.1.0"},
+  "license": "MIT"
+}

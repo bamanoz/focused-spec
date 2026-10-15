@@ -1,8 +1,14 @@
-version: 4
+version: 5
 specifications:
   formats:
     markdown:
-      package: '@focused-spec/format-markdown'
+      package: '@focused-spec/format-registry'
+      options:
+        parser:
+          package: '@focused-spec/format-markdown'
+        files:
+          - .focused-spec/evidence/notifications.yaml
+          - .focused-spec/evidence/auth.yaml
   documents:
     - match: specs/account-authentication.md
       scope: current
@@ -13,10 +19,6 @@ specifications:
     - match: specs/active-account.md
       scope: auth-baseline
       format: markdown
-evidence:
-  files:
-    - .focused-spec/evidence/notifications.yaml
-    - .focused-spec/evidence/auth.yaml
 runners:
   go:
     package: '@focused-spec/runner-go'

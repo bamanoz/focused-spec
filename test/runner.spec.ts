@@ -51,11 +51,12 @@ describe('native item evidence execution', () => {
     roots.push(root)
     await mkdir(join(root, '.focused-spec'))
     await writeFile(join(root, 'package.json'), '{"type":"module"}')
+    await symlink(resolve('node_modules'), join(root, 'node_modules'), 'dir')
     await writeFile(join(root, 'native.records'), 'Consumer-native document')
-    await writeFile(join(root, 'format.mjs'), `export default { apiVersion: 1, parse() { return { items: ${JSON.stringify(items)}, diagnostics: [] }; } };`)
+    await writeFile(join(root, 'format.mjs'), `export default { apiVersion: 2, parse() { return { items: ${JSON.stringify(items)}, diagnostics: [] }; } };`)
     await writeFile(join(root, '.focused-spec/config.yaml'), JSON.stringify({
-      version: 4,
-      specifications: { formats: { native: { module: './format.mjs' } }, documents: [{ match: 'native.records', scope: 'current', format: 'native' }] },
+      version: 5,
+      specifications: { formats: { native: { package: '@focused-spec/format-registry', options: { parser: { module: './format.mjs' } } } }, documents: [{ match: 'native.records', scope: 'current', format: 'native' }] },
       runners: { local: { module: './runner.mjs' } },
     }))
     await writeFile(join(root, '.focused-spec/evidence.yaml'), JSON.stringify({ scopes: { current: entries } }))

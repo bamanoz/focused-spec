@@ -4,7 +4,7 @@ The repository has Go unit and pytest functional coverage for blocked authentica
 
 ## What Changes
 
-- Add version-4 focused-spec configuration with an explicit installed Markdown format and a scope-local evidence registry.
+- Add version-5 focused-spec configuration with an explicit installed registry format composing the Markdown parser and adapter-owned scope-local YAML evidence.
 - Register the installed official Go and pytest runner packages under IDs `go` and `pytest`.
 - Mark one native scenario and bind it to both existing tests.
 

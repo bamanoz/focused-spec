@@ -25,7 +25,7 @@ The CLI SHALL provide `init [path] [--tools <IDs>] [--dry-run] [--json] [--repla
 - **THEN** only selected integration files are written; no native specification, configuration, registry, runner, dependency, global settings, or `AGENTS.md` is changed, and success identifies installation rather than evidence readiness or execution
 
 ### Requirement: Deliberate target selection
-Init SHALL trim/deduplicate all 50 catalog IDs and aliases/destinations, rejecting empty/unknown IDs, invalid options/values and extra paths before writes; `all`/`none` are unsupported. Only TTY input/output without JSON MAY prompt. Suggestions SHALL not authorize writes; confirmation SHALL show global paths first. Noninteractive/JSON input SHALL require `--tools`; cancellation SHALL not write.
+Init SHALL accept only explicitly selected catalog targets, deduplicate aliases and destinations, and reject invalid arguments before writes. Without `--tools`, only eligible TTY use MAY open the searchable multi-select picker; scripts and JSON require `--tools` and bypass it. Detected directories SHALL remain unselected, global MiniMax SHALL be marked before confirmation, and cancellation SHALL leave both roots unchanged.
 
 <!-- focused-spec:id=init.selection.explicit -->
 #### Scenario: Noninteractive initialization cannot infer authorization
@@ -34,13 +34,60 @@ Init SHALL trim/deduplicate all 50 catalog IDs and aliases/destinations, rejecti
 
 <!-- focused-spec:id=init.selection.interactive -->
 #### Scenario: Interactive confirmation determines installed targets
-- **WHEN** an interactive user selects targets or cancels after seeing suggested integrations
-- **THEN** only the confirmed nonempty selection is installed, or cancellation exits nonzero without writes
+- **WHEN** an interactive user searches and explicitly selects targets, proceeds through review, or cancels after seeing suggested integrations
+- **THEN** only the nonempty selection confirmed after review is installed, or cancellation exits nonzero without writes
+- **AND** merely detected targets and an unselected global MiniMax never become authorized by cursor placement or a default
 
 <!-- focused-spec:id=init.selection.invalid -->
 #### Scenario: Invalid selections and arguments are rejected
 - **WHEN** a user supplies an empty or unsupported target, unknown option, missing value, or extra positional argument
 - **THEN** init exits nonzero with an actionable diagnostic before any directory or file is created
+
+### Requirement: Interactive installation has a bounded focus presentation
+Interactive init SHALL show an eight-row golden `f` with a skippable 2200 ms blur-to-sharp reveal beside installation guidance in scrollback, never in an alternate screen or after clearing the display. Enter opens a separate searchable picker without another logo. `--no-animation` and reduced capabilities retain a legible static glyph and controls. Scripted init and other commands never show it or imply evidence success.
+
+<!-- focused-spec:id=init.welcome.inline -->
+#### Scenario: Welcome explains setup before choosing agents
+- **WHEN** a user starts eligible interactive init in a terminal
+- **THEN** a small animated or static logo appears beside meaningful installation guidance in normal scrollback without clearing the entire display or opening the alternate screen
+- **AND** Enter moves to a distinct searchable picker without another logo, before any project or home file is written
+
+<!-- focused-spec:id=init.focus.silhouette -->
+#### Scenario: Picker focus resolves to the approved block form
+- **WHEN** an interactive user opens init in a terminal supporting color and motion
+- **THEN** its reveal becomes progressively sharper, settles on the eight-row square lowercase `f` with a one-block stem, a three-block top ledge and a three-block crossbar extending on both sides of the stem, and does not add curls or a separate diamond
+- **AND** skipping the reveal immediately shows the same sharp glyph without waiting
+
+<!-- focused-spec:id=init.focus.fallback -->
+#### Scenario: Reduced terminal capabilities retain usable selection
+- **WHEN** animation is disabled, color is unavailable, or the terminal is narrow
+- **THEN** init shows a static, non-color-dependent glyph and usable selection controls without delaying installation review
+
+<!-- focused-spec:id=init.focus.isolation -->
+#### Scenario: Scripted initialization and ordinary commands never animate
+- **WHEN** a user invokes init with explicit `--tools` on a terminal, requests JSON output, or runs another CLI command
+- **THEN** no interactive installer screen or focus animation appears, and those commands retain their existing results
+
+### Requirement: Interactive installation restores the terminal
+Interactive init SHALL restore the cursor, input mode and screen on exit, error and interruption. Cancelling before confirmation SHALL leave project and home unchanged and SHALL not report successful installation.
+
+<!-- focused-spec:id=init.session.restore -->
+#### Scenario: Cancel or interruption returns the shell to normal
+- **WHEN** a user cancels the picker, declines review, or interrupts init during its reveal or before confirmation
+- **THEN** the terminal returns to normal input and display state without any installation writes or false success
+
+### Requirement: Inspect planned integration before confirmation
+Interactive init SHALL show exact selected destinations and their install, unchanged, replace or conflict actions before any non-preview write confirmation. Project and global paths SHALL be distinct. Review SHALL reuse ordinary root, asset and destination checks; conflicts block writes without explicit replacement. Dry-run, decline and cancellation SHALL leave both project and home untouched.
+
+<!-- focused-spec:id=init.review.prewrite -->
+#### Scenario: Mixed project and home setup requires informed consent
+- **WHEN** the picker selects a project-local target and global MiniMax while one selected destination differs from the bundled asset
+- **THEN** review identifies both destinations, the home location and the conflict before any writes; declining, cancelling, or lacking explicit replacement leaves both roots unchanged
+
+<!-- focused-spec:id=init.review.preview -->
+#### Scenario: Dry-run review performs no installation
+- **WHEN** an interactive selection uses `--dry-run` and reaches action review
+- **THEN** the terminal displays the checked plan without writing project or home files, and the existing preview exit/result semantics remain authoritative
 
 ### Requirement: Safe reinitialization
 Init SHALL plan unique selected destinations across both roots before writes. Missing files SHALL install; identical files SHALL stay untouched. Divergent regular files SHALL conflict unless `--replace` authorizes selected-file replacement. Any known conflict SHALL block all writes in both roots. Unselected targets/neighbors SHALL be preserved; destination state SHALL be rechecked before writing without clobbering concurrent changes.

@@ -3,7 +3,7 @@ import { IdGenerator } from '@cucumber/messages'
 import type { FeatureChild, Scenario as GherkinScenario, Tag } from '@cucumber/messages'
 import type { FormatDiagnostic, FormatPlugin, ParsedItem, ParseRequest } from 'focused-spec/format'
 
-const STABLE_ID = /^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+$/u
+const validFocusedId = (id: string): boolean => id.trim() !== '' && !/\p{Cc}/u.test(id)
 
 function parseGherkin(source: string): { items: ParsedItem[]; diagnostics: FormatDiagnostic[] } {
   const items: ParsedItem[] = []
@@ -12,11 +12,11 @@ function parseGherkin(source: string): { items: ParsedItem[]; diagnostics: Forma
     const focused = tags.filter(tag => tag.name.startsWith('@focused.'))
     for (const tag of focused) {
       const id = tag.name.slice('@focused.'.length)
-      if (scenario === undefined || !STABLE_ID.test(id) || focused.length !== 1) {
+      if (scenario === undefined || !validFocusedId(id) || focused.length !== 1) {
         diagnostics.push({
           line: tag.location.line,
           focusedId: id,
-          message: 'focused tag must uniquely bind a Scenario or Scenario Outline with a lowercase dotted ID',
+          message: 'focused tag must uniquely bind a Scenario or Scenario Outline with a nonblank opaque ID',
         })
       }
     }
@@ -25,7 +25,7 @@ function parseGherkin(source: string): { items: ParsedItem[]; diagnostics: Forma
         line: scenario.location.line,
         name: scenario.name,
         nativeIds: tags.filter(tag => !tag.name.startsWith('@focused.')).map(tag => tag.name.slice(1)),
-        ...(focused.length === 1 && STABLE_ID.test(focused[0]!.name.slice('@focused.'.length))
+        ...(focused.length === 1 && validFocusedId(focused[0]!.name.slice('@focused.'.length))
           ? { markerId: focused[0]!.name.slice('@focused.'.length) }
           : {}),
       })
@@ -54,7 +54,7 @@ function parseGherkin(source: string): { items: ParsedItem[]; diagnostics: Forma
 }
 
 export default {
-  apiVersion: 1,
+  apiVersion: 2,
   parse({ source }: ParseRequest) {
     return parseGherkin(source)
   },

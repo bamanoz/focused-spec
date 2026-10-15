@@ -1,12 +1,12 @@
 # Runner plugins
 
-Use the public [runner API contract](../reference/runner-api.md), not internal package modules or implementation details. Version 4 loads a runner through exactly one installed `package` or project-relative `module`; both implement unchanged `RunnerPlugin` API version 1. Package resolution starts from the consuming project, honors ESM import exports and never falls back to a global or downloaded package. A runner must distinguish an executed selected test from a skipped, missing, ambiguous, or unreported test; a successful framework exit alone cannot establish `pass`.
+Use the public [runner API contract](../reference/runner-api.md), not internal package modules or implementation details. Configuration version 5 loads a runner through exactly one installed `package` or project-relative `module`; both implement unchanged `RunnerPlugin` API version 1. A module registration may additionally name a safe project-relative Markdown `documentation` file for lookup only. Package resolution starts from the consuming project, honors ESM import exports, and never falls back to a global or downloaded package. A runner must distinguish an executed selected test from a skipped, missing, ambiguous, or unreported test; a successful framework exit alone cannot establish `pass`.
 
 ## Official runners
 
 Official runner IDs describe only the framework: `vitest`, `pytest`, and `go`. Install and register the corresponding package independently:
 
-Each installed official runner exposes this public guide as its `README.md`, staged from this single authored owner. Read the installed README, package manifest and declarations to discover its contract; no implementation inspection is needed. The installed core also serves selector/options guidance through a standalone `instructions --protocol 1 --topic runners --json` call.
+Each installed official runner exposes this public guide as its default root `README.md`, staged from this single authored owner. Read the selected installed contract and provenance through `npx focused-spec plugin-docs --runner <id> --json`; the package manifest may instead select another Markdown file with `focusedSpec.documentation`. Before registration, `npx focused-spec plugin-docs --package <specifier> --root <path> --json` performs the same code-free package lookup without loading configuration. Exported declarations supplement that public document; plugin implementation inspection is unnecessary. The installed core's separate `instructions --protocol 1 --topic runners --json` response contains shared Runner API obligations, not these framework-specific selectors or options.
 
 ```yaml
 runners:
@@ -41,9 +41,11 @@ Duplicate full Vitest names within the same file are ambiguous; identical names 
 
 Vitest execution selects collected public task identities in one batch, not a regex over flattened titles. Results retain both file and test identity. Distinct hierarchy paths that flatten to the same spaced name do not execute each other's tests, and literal ` > ` text in a title remains literal. All official process helpers decode stdout and stderr as UTF-8 streams, preserving multibyte characters split across output chunks.
 
+Vitest supports Node.js 22.16.0+ in both compiled-package and source-checkout execution. When its helper is TypeScript source, the runner enables Node's type stripping as needed; consumers do not need to set `NODE_OPTIONS` or add a runtime flag. Compiled installations execute the emitted JavaScript helper.
+
 ## Custom runners
 
-Before writing one, inspect the project's existing runner registrations and installed official packages; reuse a compatible selector contract rather than creating a second plugin. Register a custom project module only when no installed runner fits. For an agent implementing or repairing one, the package-owned [runner guidance](../../guidance/runners.md) owns the exact collection, report interpretation, and verification procedure. The project's explicit installed CLI serves it through `instructions --protocol 1 --topic runners --json`; no skill-local reference, global/downloaded CLI, or source-checkout fallback is allowed. Start with serial execution and add partitioning only after auditing shared resources.
+Before writing one, inspect the project's existing runner registrations and acquire public contracts for compatible installed packages, official or third-party; reuse a compatible selector contract rather than creating a second plugin. Register a custom project module only when no existing compatible runner fits; add `documentation: <project-relative Markdown file>` beside `module` when it should be discoverable through `plugin-docs`. For an agent selecting, configuring, implementing, or repairing a runner, the package-owned [runner guidance](../../guidance/runners.md) provides shared collection, report interpretation, and verification rules. The project's explicit installed CLI serves that topic through a standalone `instructions --protocol 1 --topic runners --json` call, followed by a separate `plugin-docs --runner <id> --json` request for the selected contract. No skill-local reference, global/downloaded CLI, source checkout, or another plugin document is a fallback. Start with serial execution.
 
 ## Optional execution groups
 

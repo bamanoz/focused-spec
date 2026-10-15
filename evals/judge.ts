@@ -1,7 +1,7 @@
 import { access, readFile, rename, writeFile } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { glob } from 'glob'
-import { discoverDocuments, loadConfig, loadEvidenceRegistry } from '../packages/core/dist/index.js'
+import { discoverDocuments, loadConfig } from '../packages/core/dist/index.js'
 import type { EvalCase, EvalGate } from './types.ts'
 import { runProcess } from './process.ts'
 import { judgeEvidenceRepair } from './evidence-repair.ts'
@@ -9,6 +9,7 @@ import { evalRepositoryRoot } from './provision.ts'
 import { upgradeSensitivityGate } from './upgrade.ts'
 import { parseTrustedNativeDocument } from './native-parse.ts'
 import { specRevisionGate } from './spec-revision.ts'
+import { loadConfiguredRegistries } from './evidence.ts'
 
 const PROTECTED_PATHS = [
   'auth/auth.go',
@@ -30,6 +31,27 @@ type ObjectValue = Record<string, unknown>
 
 function object(value: unknown): value is ObjectValue {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function withoutRegistryFiles(config: unknown): unknown {
+  if (!object(config)) return config
+  const clone = structuredClone(config)
+  if (!object(clone.specifications) || !object(clone.specifications.formats)) return clone
+  for (const format of Object.values(clone.specifications.formats)) {
+    if (!object(format) || format.package !== '@focused-spec/format-registry' || !object(format.options)) continue
+    delete format.options.files
+  }
+  return clone
+}
+
+function hasExecutableInlineEvidence(source: string): boolean {
+  let fenced = false
+  for (const line of source.split(/\r?\n/u)) {
+    if (/^\s*```/u.test(line)) { fenced = !fenced; continue }
+    if (fenced || /^(?:\s{4,}|\s*>)/u.test(line)) continue
+    if (/^\s*- \*\*EVIDENCE\*\*:\s*`[^`]+`\s*$/u.test(line)) return true
+  }
+  return false
 }
 
 function transcriptEvents(transcript: string): ObjectValue[] {
@@ -312,29 +334,33 @@ export async function judgeProposalCheckpoint(workspace: string, evalCase: EvalC
   const proposalAfter = proposalBefore === undefined ? undefined : await snapshotProposalFiles(workspace)
   const productChanges = proposalBefore === undefined || proposalAfter === undefined ? []
     : [...new Set([...proposalBefore.keys(), ...proposalAfter.keys()])].filter(path => proposalBefore.get(path) !== proposalAfter.get(path))
-  const implementationStarted = (proposalBefore === undefined && (await Promise.all(implementationPaths.map(exists))).some(Boolean)) || productChanges.length > 0
+  const specSources = await Promise.all(specs.map(path => readFile(join(root, path), 'utf8')))
+  const executableInline = specSources.some(hasExecutableInlineEvidence)
+  const implementationStarted = (proposalBefore === undefined && (await Promise.all(implementationPaths.map(exists))).some(Boolean))
+    || productChanges.length > 0 || executableInline
   const nativeDocuments = await Promise.all(specs.map(async relativePath => {
     const path = `openspec/changes/${evalCase.changeName}/${relativePath}`
-    return parseTrustedNativeDocument('markdown', path, await readFile(join(root, relativePath), 'utf8'), evalCase.changeName!)
+    return parseTrustedNativeDocument('markdown', path, await readFile(join(root, relativePath), 'utf8'), evalCase.changeName!, workspace)
   }))
   const violations = nativeDocuments.flatMap(document => document.violations)
   const marked = nativeDocuments.flatMap(document => document.items.filter(item => item.markerId !== undefined))
-  const legacyRows = (await Promise.all(specs.map(path => readFile(join(root, path), 'utf8'))))
-    .some(source => /\*\*(?:ID|EVIDENCE)\*\*|planned:/u.test(source))
+  const unsupportedRows = specSources.some(source => /\*\*REVISES\*\*|planned:/u.test(source))
   const selectedScenarioId = marked.length === 1 ? marked[0]?.markerId : undefined
   const prescribedIdentityValid = evalCase.prescribedScenarioId === undefined
     || selectedScenarioId === evalCase.prescribedScenarioId
   const nativePlanValid = violations.length === 0 && selectedScenarioId !== undefined
-    && prescribedIdentityValid && !legacyRows
+    && prescribedIdentityValid && !unsupportedRows
   const expectedIdentity = evalCase.prescribedScenarioId === undefined
     ? 'one valid native marker'
     : `one valid native marker ${evalCase.prescribedScenarioId}`
   const gates = [
     gate('proposal-artifacts', missing.length === 0 && specs.length > 0, missing.length === 0 ? `${specs.length} delta specs created` : `missing ${missing.join(', ')}`),
-    gate('planning-boundary', !implementationStarted, implementationStarted ? `configuration, registry or product implementation started during proposal turn${productChanges.length === 0 ? '' : `: ${productChanges.join(', ')}`}` : 'no focused-spec or product implementation files created'),
+    gate('planning-boundary', !implementationStarted, implementationStarted
+      ? `configuration, executable registry/inline evidence, or product implementation started during proposal turn${productChanges.length === 0 ? '' : `: ${productChanges.join(', ')}`}`
+      : 'no focused-spec executable integration or product implementation files created'),
     gate('planned-evidence', nativePlanValid, nativePlanValid
-      ? `native item ${selectedScenarioId} marked; registry evidence correctly deferred to apply`
-      : `expected ${expectedIdentity}; found ${marked.map(item => item.markerId).join(', ') || 'none'}${legacyRows ? '; legacy ID/EVIDENCE rows found' : ''}`),
+      ? `native item ${selectedScenarioId} marked; intended evidence integration correctly deferred to apply`
+      : `expected ${expectedIdentity}; found ${marked.map(item => item.markerId).join(', ') || 'none'}${unsupportedRows ? '; unsupported REVISES or executable planned row found' : ''}`),
   ]
   return {
     gates,
@@ -367,13 +393,14 @@ async function judgeScenarioCheckpoint(
   scopeOverride?: string,
   selectedScenarioId?: string,
 ): Promise<ScenarioCheckpoint> {
-  const requestedScope = scopeOverride ?? (evalCase.id === 'openspec-brownfield' ? undefined : await configuredWorkingScope(workspace, evalCase))
+  const publicationLifecycle = evalCase.id === 'openspec-brownfield' || evalCase.lifecycle === 'inline-publication'
+  const requestedScope = scopeOverride ?? (publicationLifecycle ? undefined : await configuredWorkingScope(workspace, evalCase))
   const loaded = await loadConfig(workspace)
   if (loaded.config === undefined) {
     return { gate: gate('scenario-contract', false, loaded.violations.map(violation => `${violation.path}: ${violation.message}`).join('\n')) }
   }
-  const selectedScope = requestedScope ?? (evalCase.id === 'openspec-brownfield' ? configuredMainScope(loaded.config) : undefined)
-  if (selectedScope === undefined && evalCase.id !== 'openspec-brownfield') {
+  const selectedScope = requestedScope ?? (publicationLifecycle ? configuredMainScope(loaded.config) : undefined)
+  if (selectedScope === undefined && !publicationLifecycle) {
     return { gate: gate('scenario-contract', false, 'named change has no unique configured working scope') }
   }
   const discovery = await discoverDocuments(workspace, loaded.config, selectedScope)
@@ -392,10 +419,12 @@ async function judgeScenarioCheckpoint(
     return { gate: gate('scenario-contract', false,
       `expected ${expected} in scope ${scope}; found ${bindings.map(binding => binding.id).join(', ') || 'none'}`) }
   }
-  if (evalCase.id === 'openspec-brownfield' && scopeOverride === undefined && scenario.path !== 'openspec/specs/account-authentication/spec.md') {
+  const publishedSelection = publicationLifecycle
+    && (scopeOverride === undefined || scopeOverride === configuredMainScope(loaded.config))
+  if (publishedSelection && scenario.path !== 'openspec/specs/account-authentication/spec.md') {
     return { gate: gate('scenario-contract', false, `expected ${scenario.id} in openspec/specs/account-authentication/spec.md, found ${scenario.path}`) }
   }
-  if (evalCase.changeName !== undefined && evalCase.id !== 'openspec-brownfield'
+  if (evalCase.changeName !== undefined && !publishedSelection
     && !scenario.path.startsWith(`openspec/changes/${evalCase.changeName}/specs/`)) {
     return { gate: gate('scenario-contract', false, `selected item is outside the named change: ${scenario.path}`) }
   }
@@ -407,7 +436,7 @@ async function judgeScenarioCheckpoint(
     && selectorsPresent
     && evidence.every(value => !value.startsWith('planned:'))
   return {
-    gate: gate('scenario-contract', passed, `${evidence.length} registry evidence references across ${distinctRunners.size} runners: ${evidence.join(', ')}`),
+    gate: gate('scenario-contract', passed, `${evidence.length} normalized evidence references across ${distinctRunners.size} runners: ${evidence.join(', ')}`),
     ...(passed ? { selectedScenarioId: scenario.id } : {}),
   }
 }
@@ -516,10 +545,11 @@ export async function mutationGate(
   const pythonPath = join(workspace, 'app', 'auth.py')
   const goSource = await readFile(goPath, 'utf8')
   const pythonSource = await readFile(pythonPath, 'utf8')
-  const goMutated = evalCase.id === 'openspec-brownfield'
+  const brownfieldProduct = evalCase.id === 'openspec-brownfield' || evalCase.lifecycle === 'inline-publication'
+  const goMutated = brownfieldProduct
     ? goSource.replace('return !blocked && credentialsValid', 'return credentialsValid')
     : goSource.replace('return credentialsValid && !blocked', 'return credentialsValid')
-  const pythonMutated = evalCase.id === 'openspec-brownfield'
+  const pythonMutated = brownfieldProduct
     ? pythonSource.replace('return not blocked and credentials_valid', 'return credentials_valid')
     : pythonSource.replace('return credentials_valid and not blocked', 'return credentials_valid')
   const loaded = await loadConfig(workspace)
@@ -540,7 +570,7 @@ export async function mutationGate(
   if (!expectedEvidenceCountValid(evidence.length, evalCase) || !expectedSelectorsPresent(evidence, evalCase)
     || evidence.length !== Number(checkGo) + Number(checkPython)
     || (evalCase.id !== 'full-skill-routing' && (!checkGo || !checkPython))) {
-    return gate('mutation-sensitivity', false, 'selected registry evidence is not supported by independent product tests')
+    return gate('mutation-sensitivity', false, 'selected normalized evidence is not supported by independent product tests')
   }
   if ((checkGo && goMutated === goSource) || (checkPython && pythonMutated === pythonSource)) {
     return gate('mutation-sensitivity', false, 'fixture mutation target was not found')
@@ -628,37 +658,57 @@ function matchingPassedScenario(
     && result.evidence.length === expectedEvidence.length
     && expectedEvidence.every(reference => result.evidence.includes(reference)))
 }
-interface RegistryCheckpoint {
+interface EvidenceCheckpoint {
   readonly scope: string
   readonly id: string
   readonly evidence: readonly string[]
+  readonly representation: 'registry' | 'inline'
   readonly source?: { readonly path: string; readonly nativeId: string }
 }
 
-async function registryCheckpoint(workspace: string, scope: string, id: string): Promise<{
-  readonly checkpoint?: RegistryCheckpoint
+async function normalizedEvidenceCheckpoint(workspace: string, scope: string, id: string): Promise<{
+  readonly checkpoint?: EvidenceCheckpoint
+  readonly source?: string
   readonly violations: readonly { readonly path: string; readonly message: string }[]
 }> {
   const loaded = await loadConfig(workspace)
   if (loaded.config === undefined) return { violations: loaded.violations }
-  const registry = await loadEvidenceRegistry(workspace, loaded.config.evidence?.files, scope, id)
+  const discovery = await discoverDocuments(workspace, loaded.config, scope, id)
+  if (discovery.violations.length > 0) return { violations: discovery.violations }
+  const scenarios = [...discovery.scopes.values()].flat().flatMap(document => document.scenarios)
+    .filter(scenario => scenario.scope === scope && scenario.id === id)
+  const scenario = scenarios.length === 1 ? scenarios[0] : undefined
+  if (scenario === undefined) return { violations: [{ path: '.focused-spec/config.yaml', message: `expected one normalized occurrence ${scope}/${id}; found ${scenarios.length}` }] }
+  const source = await readFile(join(workspace, scenario.path), 'utf8')
+  const registry = await loadConfiguredRegistries(workspace, loaded.config, scope, id)
   const entries = registry.entries.filter(entry => entry.scope === scope && entry.id === id)
-  return {
-    ...(entries.length === 1 ? { checkpoint: {
+  if (registry.violations.length > 0 || entries.length > 1) return { source, violations: registry.violations }
+  const entry = entries[0]
+  if (entry !== undefined) {
+    const exact = entry.evidence.length === scenario.evidence.length
+      && entry.evidence.every(reference => scenario.evidence.includes(reference))
+    return exact ? { source, violations: [], checkpoint: {
       scope,
       id,
-      evidence: entries[0]!.evidence,
-      ...(entries[0]!.source === undefined ? {} : { source: entries[0]!.source }),
-    } } : {}),
-    violations: registry.violations,
+      evidence: scenario.evidence,
+      representation: 'registry',
+      ...(entry.source === undefined ? {} : { source: entry.source }),
+    } } : { source, violations: [{ path: entry.registryPath, message: 'registry evidence differs from normalized scenario evidence' }] }
   }
+  const lines = source.split(/\r?\n/u)
+  const idRows = lines.filter(line => line === `- **ID**: \`${id}\``)
+  const evidenceRows = scenario.evidence.filter(reference => lines.includes(`- **EVIDENCE**: \`${reference}\``))
+  if (idRows.length !== 1 || evidenceRows.length !== scenario.evidence.length) {
+    return { source, violations: [{ path: scenario.path, message: 'normalized evidence lacks exact inline ID or EVIDENCE rows' }] }
+  }
+  return { source, violations: [], checkpoint: { scope, id, evidence: scenario.evidence, representation: 'inline' } }
 }
 
 export interface WorkingEvidenceCheckpoint {
   readonly gates: readonly EvalGate[]
   readonly selectedScenarioId?: string
   readonly scope?: string
-  readonly registry?: RegistryCheckpoint
+  readonly evidence?: EvidenceCheckpoint
   readonly source?: string
 }
 
@@ -676,34 +726,28 @@ export async function judgeWorkingCheckpoint(
     ? undefined
     : await focusedCommand(workspace, ['run', '--scope', scope, '--scenario', scenarioId, '--json'])
   const matches = run?.code === 0 ? passedScenarios(run.stdout).filter(result => result.scope === scope && result.id === scenarioId) : []
-  const selectedRegistry: {
-    readonly checkpoint?: RegistryCheckpoint
-    readonly violations: readonly { readonly path: string; readonly message: string }[]
-  } = scenarioId === undefined
-    ? { violations: [] }
-    : await registryCheckpoint(workspace, scope, scenarioId)
-  const sourcePath = join(workspace, 'openspec', 'changes', evalCase.changeName, 'specs', 'account-authentication', 'spec.md')
-  const source = await exists(sourcePath) ? await readFile(sourcePath, 'utf8') : undefined
-  const parsed = source === undefined ? undefined : parseTrustedNativeDocument('markdown', `openspec/changes/${evalCase.changeName}/specs/account-authentication/spec.md`, source, scope)
-  const marked = parsed?.items.filter(item => item.markerId !== undefined) ?? []
-  const registryMatchesRun = selectedRegistry.checkpoint !== undefined && matches.length === 1
-    && matches[0]!.evidence.length === selectedRegistry.checkpoint.evidence.length
-    && selectedRegistry.checkpoint.evidence.every(reference => matches[0]!.evidence.includes(reference))
-  const snapshotValid = source !== undefined && parsed?.violations.length === 0 && marked.length === 1
-    && marked[0]?.markerId === scenarioId && selectedRegistry.violations.length === 0 && registryMatchesRun
+  const selected = scenarioId === undefined
+    ? { violations: [] as readonly { readonly path: string; readonly message: string }[] }
+    : await normalizedEvidenceCheckpoint(workspace, scope, scenarioId)
+  const evidenceMatchesRun = selected.checkpoint !== undefined && matches.length === 1
+    && matches[0]!.evidence.length === selected.checkpoint.evidence.length
+    && selected.checkpoint.evidence.every(reference => matches[0]!.evidence.includes(reference))
+  const representationMatches = evalCase.evidenceStorage === undefined
+    || selected.checkpoint?.representation === evalCase.evidenceStorage
+  const snapshotValid = selected.violations.length === 0 && evidenceMatchesRun && representationMatches
   const gates = [
     gate('working-validation', strict.code === 0, (strict.stdout || strict.stderr).trim()),
     gate('working-execution', run?.code === 0 && contract.gate.passed && snapshotValid,
       contract.gate.passed && snapshotValid && run !== undefined
         ? (run.stdout || run.stderr).trim()
-        : [contract.gate.detail, ...selectedRegistry.violations.map(item => item.message)].join('; ')),
+        : [contract.gate.detail, ...selected.violations.map(item => item.message), representationMatches ? '' : `expected ${evalCase.evidenceStorage} evidence`].filter(Boolean).join('; ')),
   ]
   return {
     gates,
     scope,
     ...(gates.every(item => item.passed) && scenarioId !== undefined ? { selectedScenarioId: scenarioId } : {}),
-    ...(selectedRegistry.checkpoint === undefined ? {} : { registry: selectedRegistry.checkpoint }),
-    ...(source === undefined ? {} : { source }),
+    ...(selected.checkpoint === undefined ? {} : { evidence: selected.checkpoint }),
+    ...(selected.source === undefined ? {} : { source: selected.source }),
   }
 }
 
@@ -735,7 +779,7 @@ export async function brownfieldGate(
   const workingScopes = [...allWorking.scopes].filter(([, documents]) => documents.some(document => document.path === workingPath))
   if (workingScopes.length > 1) return [gate('brownfield-contract', false, 'named change has no unique configured working scope')]
   const workingScope = workingScopes[0]?.[0]
-  const retainedWorkingScope = workingScope ?? checkpoint?.scope ?? checkpoint?.registry?.scope
+  const retainedWorkingScope = workingScope ?? checkpoint?.scope ?? checkpoint?.evidence?.scope
   const workingDiscovery = workingScope === undefined ? undefined : await discoverDocuments(workspace, loaded.config, workingScope)
   if (workingDiscovery !== undefined && workingDiscovery.violations.length > 0) {
     return [gate('brownfield-contract', false, workingDiscovery.violations.map(violation => violation.message).join('\n'))]
@@ -746,64 +790,80 @@ export async function brownfieldGate(
     return [gate('brownfield-contract', false, 'live working binding changed its checkpointed identity')]
   }
   const workingBindingActive = workingDocument?.scenarios.some(scenario => scenario.id === expectedId) === true
-  const workingSource = workingBindingActive ? await readFile(join(workspace, workingPath), 'utf8') : checkpoint?.source
-  const workingRegistry = !workingBindingActive
-    ? checkpoint?.registry
-    : (await registryCheckpoint(workspace, workingScope!, expectedId)).checkpoint
-  if (workingSource === undefined || workingRegistry === undefined) {
-    return [gate('brownfield-contract', false, 'working marker and scope-local registry evidence were not independently checkpointed before discovery ended')]
+  const workingSelected = !workingBindingActive
+    ? checkpoint?.evidence
+    : (await normalizedEvidenceCheckpoint(workspace, workingScope!, expectedId)).checkpoint
+  const workingSource = workingBindingActive
+    ? await readFile(join(workspace, workingPath), 'utf8')
+    : checkpoint?.source
+  if (workingSource === undefined || workingSelected === undefined) {
+    return [gate('brownfield-contract', false, 'working identity and normalized evidence were not independently checkpointed before discovery ended')]
   }
-  const [mainSource, archiveSource] = await Promise.all([
+  const historyPath = evalCase.lifecycle === 'inline-publication' ? 'openspec/specs/authentication-history/spec.md' : mainPath
+  const [mainSource, archiveSource, historySource] = await Promise.all([
     readFile(join(workspace, mainPath), 'utf8'),
     readFile(join(workspace, archivePath), 'utf8'),
+    readFile(join(workspace, historyPath), 'utf8'),
   ])
-  const mainNative = parseTrustedNativeDocument('markdown', mainPath, mainSource, main.scope)
-  const workingNative = parseTrustedNativeDocument('markdown', workingPath, workingSource, retainedWorkingScope ?? changeName)
   const originalScenarios = [...archiveSource.matchAll(/^#### Scenario: (.+)\n(- \*\*WHEN\*\* [^\n]+\n- \*\*THEN\*\* [^\n]+)/gmu)]
   const originalOutcome = originalScenarios.find(match => match[1] === 'Blocked account with valid credentials')?.[2]
   const historical = originalScenarios.filter(match => match[1] !== 'Blocked account with valid credentials').map(match => match[0])
-  const preservedHistorical = historical.filter(scenario => mainSource.includes(scenario)).length
-  const mainScopeRegistry = await loadEvidenceRegistry(workspace, loaded.config.evidence?.files, main.scope)
-  const mainMarkers = mainNative.items.filter(item => item.markerId !== undefined)
-  const historicalPreserved = historical.length === 3 && preservedHistorical === historical.length
-    && !archiveSource.includes('focused-spec:id=') && !/\*\*(?:ID|EVIDENCE)\*\*/u.test(archiveSource)
-    && mainMarkers.length === 1 && mainMarkers[0]?.markerId === expectedId
+  const preservedHistorical = historical.filter(scenario => historySource.includes(scenario)).length
   const mainOccurrences = main.scenarios.filter(scenario => scenario.id === expectedId)
-  const workingMarkers = workingNative.items.filter(item => item.markerId !== undefined)
   const mainScenario = mainOccurrences.length === 1 ? mainOccurrences[0] : undefined
   const mainEvidence = mainScenario?.evidence ?? []
-  const mainRegistry = await registryCheckpoint(workspace, main.scope, expectedId)
+  const mainSelected = await normalizedEvidenceCheckpoint(workspace, main.scope, expectedId)
+  const expectedRepresentation = evalCase.evidenceStorage ?? 'registry'
+  const representationValid = mainSelected.checkpoint?.representation === expectedRepresentation
+    && workingSelected.representation === expectedRepresentation
+  const exactMainIdentity = expectedRepresentation === 'inline'
+    ? mainSource.split(/\r?\n/u).filter(line => line === `- **ID**: \`${expectedId}\``).length === 1
+      && !mainSource.includes('focused-spec:id=')
+    : parseTrustedNativeDocument('markdown', mainPath, mainSource, main.scope, workspace).items
+      .filter(item => item.markerId === expectedId).length === 1
+  const exactWorkingIdentity = expectedRepresentation === 'inline'
+    ? workingSource.split(/\r?\n/u).filter(line => line === `- **ID**: \`${expectedId}\``).length === 1
+      && !workingSource.includes('focused-spec:id=')
+    : parseTrustedNativeDocument('markdown', workingPath, workingSource, retainedWorkingScope ?? changeName, workspace).items
+      .filter(item => item.markerId === expectedId).length === 1
+  const historicalPreserved = historical.length === 3 && preservedHistorical === historical.length
+    && !archiveSource.includes('focused-spec:id=') && !/\*\*(?:ID|EVIDENCE)\*\*/u.test(archiveSource)
+    && (evalCase.lifecycle !== 'inline-publication' || !/\*\*(?:ID|EVIDENCE)\*\*/u.test(historySource))
+  const requiredRevisionTerms = evalCase.expectedRevisionTerms ?? []
+  const mainOutcomeValid = evalCase.lifecycle === 'inline-publication'
+    ? requiredRevisionTerms.length > 0 && requiredRevisionTerms.every(term => mainSource.toLocaleLowerCase().includes(term.toLocaleLowerCase()))
+    : originalOutcome !== undefined && mainSource.includes(originalOutcome)
+  const workingOutcomeValid = evalCase.lifecycle === 'inline-publication'
+    ? requiredRevisionTerms.length > 0 && requiredRevisionTerms.every(term => workingSource.toLocaleLowerCase().includes(term.toLocaleLowerCase()))
+    : originalOutcome !== undefined && workingSource.includes(originalOutcome)
   const mainContractValid = originalOutcome !== undefined
-    && mainSource.includes(originalOutcome)
-    && workingSource.includes(originalOutcome)
-    && mainNative.violations.length === 0
-    && mainScenario?.name === 'Scenario: Blocked account with valid credentials'
-    && mainRegistry.violations.length === 0
-    && mainRegistry.checkpoint !== undefined
-    && mainScopeRegistry.violations.length === 0
-    && mainScopeRegistry.entries.length === 1
-    && mainScopeRegistry.entries[0]?.id === expectedId
+    && mainOutcomeValid
+    && workingOutcomeValid
+    && exactMainIdentity
+    && (evalCase.lifecycle === 'inline-publication' || mainScenario?.name === 'Scenario: Blocked account with valid credentials')
+    && mainSelected.violations.length === 0
+    && mainSelected.checkpoint !== undefined
+    && representationValid
     && mainEvidence.length === evalCase.expectedEvidenceCount
-    && mainRegistry.checkpoint.evidence.length === mainEvidence.length
-    && mainRegistry.checkpoint.evidence.every(reference => mainEvidence.includes(reference))
+    && mainSelected.checkpoint.evidence.length === mainEvidence.length
+    && mainSelected.checkpoint.evidence.every(reference => mainEvidence.includes(reference))
     && evalCase.expectedSelectorFragments.every(fragment => mainEvidence.some(reference => reference.includes(fragment)))
   const workingContractValid = originalOutcome !== undefined
-    && workingSource.includes(originalOutcome)
-    && workingNative.violations.length === 0
-    && workingMarkers.length === 1 && workingMarkers[0]?.markerId === expectedId
-    && workingRegistry.scope === retainedWorkingScope
-    && workingRegistry.id === expectedId
-    && workingRegistry.evidence.length === mainEvidence.length
-    && workingRegistry.evidence.every(reference => mainEvidence.includes(reference))
+    && workingOutcomeValid
+    && exactWorkingIdentity
+    && workingSelected.scope === retainedWorkingScope
+    && workingSelected.id === expectedId
+    && workingSelected.evidence.length === mainEvidence.length
+    && workingSelected.evidence.every(reference => mainEvidence.includes(reference))
 
   const mainRun = await focusedCommand(workspace, ['run', '--scope', main.scope, '--scenario', expectedId, '--json'])
   const mainResults = mainRun.code === 0 ? passedScenarios(mainRun.stdout) : []
   const mainPass = mainContractValid ? matchingPassedScenario(mainResults, main.scope, expectedId, mainEvidence) : undefined
   let workingPassed = checkpoint?.gates.every(item => item.passed) === true && workingContractValid
   if (checkpoint === undefined && workingDocument !== undefined && workingContractValid) {
-    const workingRun = await focusedCommand(workspace, ['run', '--scope', workingRegistry.scope, '--scenario', expectedId, '--json'])
+    const workingRun = await focusedCommand(workspace, ['run', '--scope', workingSelected.scope, '--scenario', expectedId, '--json'])
     const workingResults = workingRun.code === 0 ? passedScenarios(workingRun.stdout) : []
-    workingPassed = matchingPassedScenario(workingResults, workingRegistry.scope, expectedId, workingRegistry.evidence) !== undefined
+    workingPassed = matchingPassedScenario(workingResults, workingSelected.scope, expectedId, workingSelected.evidence) !== undefined
   }
 
   const source = join(workspace, 'openspec', 'changes', changeName)
@@ -823,10 +883,10 @@ export async function brownfieldGate(
     gate('native-history-preservation', historicalPreserved,
       `${preservedHistorical}/${historical.length} unmarked historical native scenarios preserved directly`),
     gate('main-scope-evidence', mainContractValid && mainPass !== undefined, mainRun.code === 0
-      ? `main scope=${main.scope}; occurrence count=${mainOccurrences.length}; expected ${evalCase.expectedEvidenceCount} explicit registry references; observed ${mainPass?.evidence.length ?? 0} passing evidence`
+      ? `main scope=${main.scope}; occurrence count=${mainOccurrences.length}; expected ${evalCase.expectedEvidenceCount} explicit ${expectedRepresentation} references; observed ${mainPass?.evidence.length ?? 0} passing evidence`
       : mainRun.stdout.trim() || mainRun.stderr.trim()),
     gate('transition-stable-evidence', evidenceStable, afterTransition.code === 0
-      ? `working document absent; checkpointed ${changeName} registry evidence ${workingPassed ? 'PASS and unchanged' : 'missing or altered'}; explicit ${main.scope} registry evidence ${transitionedPass === undefined ? 'missing or altered' : 'PASS with unchanged evidence'}`
+      ? `working document absent; checkpointed ${changeName} ${expectedRepresentation} evidence ${workingPassed ? 'PASS and unchanged' : 'missing or altered'}; explicit ${main.scope} ${expectedRepresentation} evidence ${transitionedPass === undefined ? 'missing or altered' : 'PASS with unchanged evidence'}`
       : afterTransition.stdout.trim() || afterTransition.stderr.trim()),
   ]
 }
@@ -838,12 +898,11 @@ export async function registryPlacementGate(workspace: string, evalCase: EvalCas
     return gate('registry-placement', false, 'valid baseline, configured registry and selected native identity required')
   }
   const [original, registry] = await Promise.all([
-    loadEvidenceRegistry(baselineRoot, before.config.evidence?.files),
-    loadEvidenceRegistry(workspace, after.config.evidence?.files),
+    loadConfiguredRegistries(baselineRoot, before.config),
+    loadConfiguredRegistries(workspace, after.config),
   ])
-  const { evidence: _originalEvidence, ...originalConfig } = before.config
-  const { evidence: _currentEvidence, ...currentConfig } = after.config
-  const unchangedConfiguration = JSON.stringify(originalConfig) === JSON.stringify(currentConfig)
+  const unchangedConfiguration = JSON.stringify(withoutRegistryFiles(before.config))
+    === JSON.stringify(withoutRegistryFiles(after.config))
   const retained = original.entries.every(entry => registry.entries.some(actual => actual.scope === entry.scope
     && actual.id === entry.id && actual.registryPath === entry.registryPath
     && JSON.stringify(actual.evidence) === JSON.stringify(entry.evidence)
@@ -872,7 +931,8 @@ export async function judgeCompletedWorkspace(
 ): Promise<EvalGate[]> {
   const gates: EvalGate[] = []
   let scope = evalCase.changeName === undefined ? undefined : await configuredWorkingScope(workspace, evalCase)
-  if (evalCase.id === 'openspec-brownfield') {
+  const publicationLifecycle = evalCase.id === 'openspec-brownfield' || evalCase.lifecycle === 'inline-publication'
+  if (publicationLifecycle) {
     const loaded = await loadConfig(workspace)
     if (loaded.config !== undefined) {
       scope = configuredMainScope(loaded.config)
@@ -916,7 +976,7 @@ export async function judgeCompletedWorkspace(
   else if (evalCase.id === 'project-upgrade' && strict?.code === 0 && run?.code === 0) gates.push(await upgradeSensitivityGate(workspace))
   else if (strict?.code === 0 && run?.code === 0) gates.push(await mutationGate(workspace, evalCase, scope, effectiveScenarioId))
   else gates.push(gate('mutation-sensitivity', false, 'focused validation or execution failed'))
-  if (evalCase.id === 'openspec-brownfield') {
+  if (publicationLifecycle) {
     gates.push(...await brownfieldGate(workspace, evalCase, checkpoint, effectiveScenarioId))
   }
   return gates

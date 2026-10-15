@@ -103,6 +103,27 @@ export const EVAL_CASES: readonly EvalCase[] = [
     expectedSelectorFragments: ['TestBlockedAccountWithValidCredentials', 'test_blocked_account_with_valid_credentials'],
   },
   {
+    id: 'inline-lifecycle',
+    description: 'Revises, checkpoints and publishes an existing inline-evidence scenario without converting storage or losing unrelated history.',
+    source: 'openspec',
+    overlay: 'cases/inline-lifecycle/overlay',
+    changeName: 'revise-inline-blocked-account',
+    turns: [{
+      promptPath: 'cases/inline-lifecycle/prompt.md',
+      skills: ['focused-spec', 'openspec-apply-change'],
+      checkpoint: 'working-evidence',
+    }, {
+      promptPath: 'cases/inline-lifecycle/publish.md',
+      skills: ['focused-spec', 'openspec-sync-specs', 'openspec-archive-change'],
+    }],
+    prescribedScenarioId: 'Auth/Blocked 账户',
+    expectedEvidenceCount: 2,
+    expectedSelectorFragments: ['TestBlockedAccountWithValidCredentials', 'test_blocked_account_with_valid_credentials'],
+    expectedRevisionTerms: ['administratively blocked', 'otherwise valid credentials', 'authentication is rejected'],
+    evidenceStorage: 'inline',
+    lifecycle: 'inline-publication',
+  },
+  {
     id: 'openspec-propose-apply',
     description: 'Creates a native-marker proposal, respects the planning boundary, then applies it with registry evidence in a fresh agent session.',
     source: 'openspec',
@@ -120,6 +141,23 @@ export const EVAL_CASES: readonly EvalCase[] = [
     ],
     expectedEvidenceCount: 2,
     expectedSelectorFragments: EXPECTED_SELECTORS,
+  },
+  {
+    id: 'inline-propose-apply',
+    description: 'Blindly authors and applies a public inline-evidence OpenSpec scenario while enforcing the planning boundary.',
+    source: 'openspec',
+    changeName: 'add-inline-blocked-account',
+    turns: [{
+      promptPath: 'cases/inline-propose-apply/propose.md',
+      skills: ['focused-spec', 'openspec-propose'],
+      checkpoint: 'proposal',
+    }, {
+      promptPath: 'cases/inline-propose-apply/apply.md',
+      skills: ['focused-spec', 'openspec-apply-change'],
+    }],
+    expectedEvidenceCount: 2,
+    expectedSelectorFragments: EXPECTED_SELECTORS,
+    evidenceStorage: 'inline',
   },
   {
     id: 'full-skill-routing',

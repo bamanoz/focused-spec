@@ -1,0 +1,3 @@
+Publish the completed OpenSpec change `revise-inline-blocked-account`. Follow the repository-installed OpenSpec, focused-spec, sync, and archive workflows.
+
+The working occurrence has already passed its independent checkpoint. Sync it into the main specification without deleting unrelated historical native scenarios. Preserve the exact opaque ID and both exact evidence references inline in the published Markdown source; do not create or convert them to a YAML evidence registry. Strictly validate and execute the selected main occurrence, complete the tasks, and archive the change. Do not modify product code or tests.

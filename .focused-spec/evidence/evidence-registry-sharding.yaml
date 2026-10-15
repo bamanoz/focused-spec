@@ -24,3 +24,28 @@ scopes:
     registry.source.broken:
       evidence:
         - vitest::test/registry-sharding.spec.ts::sharded evidence registry > reports dangling registry links beside readable shards
+  make-format-evidence-storage-agnostic:
+    "registry.sharding.compose":
+      evidence:
+        - "vitest::test/registry-sharding.spec.ts::sharded evidence registry > composes explicit domain shards with AND evidence"
+    "registry.sharding.config-safe":
+      evidence:
+        - "vitest::test/registry-sharding.spec.ts::sharded evidence registry > rejects unsafe evidence configuration before discovery"
+    "registry.sharding.source-boundaries":
+      evidence:
+        - "vitest::test/registry-sharding.spec.ts::sharded evidence registry > rejects missing overlapping unsupported and escaping sources"
+    "registry.sharding.duplicates":
+      evidence:
+        - "vitest::test/registry-sharding.spec.ts::sharded evidence registry > rejects duplicate identities across shards with both locations"
+    "registry.sharding.selection":
+      evidence:
+        - "vitest::test/registry-sharding.spec.ts::sharded evidence registry > isolates selected identities and scopes across shards"
+    "registry.sharding.provenance":
+      evidence:
+        - "vitest::test/registry-sharding.spec.ts::sharded evidence registry > reports binding failures at their shard and line"
+    "registry.glob.bounds":
+      evidence:
+        - "vitest::test/registry-sharding.spec.ts::sharded evidence registry > rejects excessive registry glob complexity without partial sources"
+    "registry.source.broken":
+      evidence:
+        - "vitest::test/registry-sharding.spec.ts::sharded evidence registry > reports dangling registry links beside readable shards"

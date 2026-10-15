@@ -1,11 +1,15 @@
 import type { FocusedSpecConfig, Scenario, SpecDocument, Violation } from './model.js'
+import { isFocusedId, isScopeName } from './model.js'
 import { parseEvidenceReference } from './parser.js'
-import { STABLE_ID } from './model.js'
-import { discoverDocuments, isScopeName } from './sources.js'
+import { discoverDocuments } from './sources.js'
 import type { OperationTimings } from './timings.js'
 
 function diagnostic(scenario: Scenario, message: string): Violation {
-  return { path: scenario.path, line: scenario.line, scenarioId: scenario.id, message }
+  return { path: scenario.evidenceLocation?.path ?? scenario.path, line: scenario.evidenceLocation?.line ?? scenario.line, scenarioId: scenario.id, message }
+}
+function evidenceDiagnostic(scenario: Scenario, index: number, message: string): Violation {
+  const location = scenario.evidenceLocations?.[index] ?? scenario.evidenceLocation
+  return { path: location?.path ?? scenario.path, line: location?.line ?? scenario.line, scenarioId: scenario.id, message }
 }
 
 export function validateDocuments(
@@ -19,17 +23,17 @@ export function validateDocuments(
     if (!isScopeName(document.scope)) violations.push({ path: document.path, message: `invalid document scope name ${document.scope}` })
     for (const scenario of document.scenarios) {
       if (scenario.scope !== document.scope) violations.push(diagnostic(scenario, `scenario scope ${scenario.scope} does not match document scope ${document.scope}`))
-      if (!STABLE_ID.test(scenario.id)) violations.push(diagnostic(scenario, `invalid stable ID ${scenario.id}`))
+      if (!isFocusedId(scenario.id)) violations.push(diagnostic(scenario, `invalid focused ID ${scenario.id}`))
       const key = `${scenario.scope}\u0000${scenario.id}`
       const previous = byScopedId.get(key)
       if (previous === undefined) byScopedId.set(key, scenario)
-      else violations.push(diagnostic(scenario, `duplicate stable ID within scope ${scenario.scope}; first bound at ${previous.path}:${previous.line}`))
-      if (scenario.evidence.length === 0) violations.push(diagnostic(scenario, 'expected at least one evidence registry reference'))
-      for (const raw of scenario.evidence) {
+      else violations.push(diagnostic(scenario, `duplicate focused ID within scope ${scenario.scope}; first bound at ${previous.path}:${previous.line}`))
+      if (scenario.evidence.length === 0) violations.push(diagnostic(scenario, 'expected at least one format-provided evidence reference'))
+      for (const [index, raw] of scenario.evidence.entries()) {
         const reference = parseEvidenceReference(raw)
-        if ('error' in reference) { violations.push(diagnostic(scenario, `invalid evidence ${raw}: ${reference.error}`)); continue }
-        if (reference.planned && !options.allowPlanned) violations.push(diagnostic(scenario, `planned evidence is not allowed in strict validation: ${raw}; use non-strict validate while planning, then replace planned evidence before strict validation or run`))
-        if (!Object.hasOwn(config.runners, reference.runnerId)) violations.push(diagnostic(scenario, `unknown evidence runner ${reference.runnerId}`))
+        if ('error' in reference) { violations.push(evidenceDiagnostic(scenario, index, `invalid evidence ${raw}: ${reference.error}`)); continue }
+        if (reference.planned && !options.allowPlanned) violations.push(evidenceDiagnostic(scenario, index, `planned evidence is not allowed in strict validation: ${raw}; use non-strict validate while planning, then replace planned evidence before strict validation or run`))
+        if (!Object.hasOwn(config.runners, reference.runnerId)) violations.push(evidenceDiagnostic(scenario, index, `unknown evidence runner ${reference.runnerId}`))
       }
     }
   }
@@ -64,7 +68,7 @@ export async function validateFocusedSpecs(projectRoot: string, config: FocusedS
   })
   documents.sort((left, right) => left.scope.localeCompare(right.scope) || left.path.localeCompare(right.path))
   if (id === undefined && selected.length > 0 && selected.every(document => document.scenarios.length === 0)) {
-    violations.push({ path: options.scopeName ?? '.focused-spec/evidence.yaml', message: options.scopeName === undefined ? 'no registered native items in discovered documents' : `scope has no registered native items: ${options.scopeName}` })
+    violations.push({ path: options.scopeName ?? '.focused-spec/config.yaml', message: options.scopeName === undefined ? 'no enrolled native items in discovered documents' : `scope has no enrolled native items: ${options.scopeName}` })
   }
   violations.push(...validateDocuments(documents, config, { allowPlanned: !options.strict }).violations)
   const unique = new Map<string, Violation>()

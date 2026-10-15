@@ -21,6 +21,8 @@ function runNpm(args: readonly string[], cwd: string, timeoutMs: number) {
 interface PackedDependencies {
   readonly focused: string
   readonly markdown: string
+  readonly inline: string
+  readonly registry: string
   readonly go: string
   readonly pytest: string
   readonly openspec?: string
@@ -35,18 +37,20 @@ async function packLocalPackage(packageRoot: string, cache: string): Promise<str
 }
 
 async function packDependencies(includeOpenSpec: boolean, cache: string): Promise<PackedDependencies> {
-  const [focused, markdown, go, pytest] = await Promise.all([
+  const [focused, markdown, inline, registry, go, pytest] = await Promise.all([
     packLocalPackage(join(repositoryRoot, 'packages/core'), cache),
     packLocalPackage(join(repositoryRoot, 'packages/format-markdown'), cache),
+    packLocalPackage(join(repositoryRoot, 'packages/format-inline'), cache),
+    packLocalPackage(join(repositoryRoot, 'packages/format-registry'), cache),
     packLocalPackage(join(repositoryRoot, 'packages/runner-go'), cache),
     packLocalPackage(join(repositoryRoot, 'packages/runner-pytest'), cache),
   ])
-  if (!includeOpenSpec) return { focused, markdown, go, pytest }
+  if (!includeOpenSpec) return { focused, markdown, inline, registry, go, pytest }
   const openspecPack = await runNpm(['pack', `@fission-ai/openspec@${OPEN_SPEC_VERSION}`, '--ignore-scripts', '--prefer-offline', '--pack-destination', cache], repositoryRoot, 120_000)
   if (openspecPack.code !== 0) throw new Error(`OpenSpec pack failed: ${openspecPack.stderr || openspecPack.stdout}`)
   const openspecName = openspecPack.stdout.trim().split(/\r?\n/u).at(-1)
   if (openspecName === undefined || openspecName === '') throw new Error('OpenSpec pack did not report a tarball')
-  return { focused, markdown, go, pytest, openspec: join(cache, openspecName) }
+  return { focused, markdown, inline, registry, go, pytest, openspec: join(cache, openspecName) }
 }
 
 async function installSkills(workspace: string, skills: readonly string[], openspecSkillsDir: string): Promise<void> {
@@ -67,6 +71,8 @@ async function installPackages(workspace: string, includeOpenSpec: boolean, cach
   manifest.devDependencies = {
     'focused-spec': `file:${packages.focused}`,
     '@focused-spec/format-markdown': `file:${packages.markdown}`,
+    '@focused-spec/format-inline': `file:${packages.inline}`,
+    '@focused-spec/format-registry': `file:${packages.registry}`,
     '@focused-spec/runner-go': `file:${packages.go}`,
     '@focused-spec/runner-pytest': `file:${packages.pytest}`,
     ...(includeOpenSpec ? { '@fission-ai/openspec': `file:${packages.openspec!}` } : {}),
@@ -81,7 +87,7 @@ async function prepareUpgrade(workspace: string, cache: string): Promise<{ basel
   const reference = join(cache, 'reference')
   await mkdir(reference)
   await writeFile(join(reference, 'package.json'), '{"private":true}')
-  const archives = [packages.focused, packages.markdown, packages.go, packages.pytest]
+  const archives = [packages.focused, packages.inline, packages.registry, packages.markdown, packages.go, packages.pytest]
   const candidate = await runNpm(['install', '--ignore-scripts', '--no-audit', '--no-fund', '--prefix', reference, ...archives], repositoryRoot, 180_000)
   if (candidate.code !== 0) throw new Error(`candidate reference install failed: ${candidate.stderr || candidate.stdout}`)
   const legacy = await runNpm(['install', '--save-dev', '--ignore-scripts', '--no-audit', '--no-fund', `focused-spec@${LEGACY_VERSION}`, 'yaml@2.8.1'], workspace, 180_000)
@@ -100,6 +106,8 @@ async function prepareUpgrade(workspace: string, cache: string): Promise<{ basel
   const workspacePackages = [
     ['focused-spec', 'core', packages.focused],
     ['@focused-spec/format-markdown', 'format-markdown', packages.markdown],
+    ['@focused-spec/format-inline', 'format-inline', packages.inline],
+    ['@focused-spec/format-registry', 'format-registry', packages.registry],
     ['@focused-spec/runner-go', 'runner-go', packages.go],
     ['@focused-spec/runner-pytest', 'runner-pytest', packages.pytest],
   ] as const

@@ -41,3 +41,30 @@ scopes:
         - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects
           instructions protocol 2 then 1 before project execution with no stdout and
           a help pointer
+  make-format-evidence-storage-agnostic:
+    "cli.help.validate":
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state"
+    "cli.help.run":
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > discovers commands and native options without reading project state"
+    "cli.help.agent-guide":
+      evidence:
+        - "vitest::test/cli.spec.ts::focused-spec CLI > explains guide compatibility without loading package guidance"
+  improve-cli-discovery-and-inspection:
+    cli.version.offline:
+      evidence:
+        - "vitest::test/cli-discovery.spec.ts::CLI discovery and transport > reports invoked offline identity and rejects ignored version arguments"
+        - "vitest::test/package.spec.ts::package distribution > reports invoked identity from a packed unconfigured consumer"
+    cli.errors.json:
+      evidence:
+        - "vitest::test/cli-discovery.spec.ts::CLI discovery and transport > returns JSON argument errors across commands without prototype command leakage"
+    cli.errors.runtime:
+      evidence:
+        - "vitest::test/cli-discovery.spec.ts::CLI discovery and transport > renders uncaught plugin documentation failures as one JSON error"
+    cli.errors.opaque-values:
+      evidence:
+        - "vitest::test/cli-discovery.spec.ts::CLI discovery and transport > preserves opaque option-looking IDs without enabling JSON or help transport"
+    cli.help.discovery-inspection:
+      evidence:
+        - "vitest::test/cli-discovery.spec.ts::CLI discovery and transport > discovers version inspection and validation selection help offline"

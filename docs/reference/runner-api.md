@@ -1,15 +1,22 @@
 # Plugin API reference
 
-## Format API
+## Format API 2
 
 Import public types from `focused-spec/format`:
 
 ```ts
+export interface SourceLocation {
+  readonly path: string
+  readonly line: number
+}
+
 export interface ParsedItem {
   readonly line: number
   readonly name: string
   readonly nativeIds: readonly string[]
   readonly markerId?: string
+  readonly evidence?: readonly string[]
+  readonly evidenceLocations?: readonly SourceLocation[]
 }
 
 export interface FormatDiagnostic {
@@ -18,51 +25,86 @@ export interface FormatDiagnostic {
   readonly focusedId?: string
 }
 
-export interface ParseResult {
-  readonly items: readonly ParsedItem[]
-  readonly diagnostics: readonly FormatDiagnostic[]
-}
-
 export interface ParseRequest {
+  readonly projectRoot: string
   readonly path: string
   readonly source: string
   readonly options: JsonValue
   readonly signal: AbortSignal
 }
 
+export interface ParseResult {
+  readonly items: readonly ParsedItem[]
+  readonly diagnostics: readonly FormatDiagnostic[]
+}
+
+export interface CatalogDocument {
+  readonly path: string
+  readonly scope: string
+  readonly items: readonly ParsedItem[]
+}
+
+export interface BindRequest {
+  readonly projectRoot: string
+  readonly documents: readonly CatalogDocument[]
+  readonly selection: { readonly scope?: string; readonly scenarioId?: string }
+  readonly options: JsonValue
+  readonly signal: AbortSignal
+}
+
+export interface Enrollment {
+  readonly document: number
+  readonly item: number
+  readonly id: string
+  readonly evidence: readonly string[]
+  readonly evidenceLocations?: readonly SourceLocation[]
+  readonly location: SourceLocation
+}
+
+export interface SourceClaim {
+  readonly key: string
+  readonly location: SourceLocation
+}
+
+export interface BindDiagnostic {
+  readonly location: SourceLocation
+  readonly message: string
+  readonly scope?: string
+  readonly focusedId?: string
+}
+
+export interface BindResult {
+  readonly enrollments: readonly Enrollment[]
+  readonly diagnostics: readonly BindDiagnostic[]
+  readonly sourceClaims: readonly SourceClaim[]
+}
+
 export interface FormatPlugin {
-  readonly apiVersion: 1
+  readonly apiVersion: 2
   parse(request: ParseRequest): ParseResult | Promise<ParseResult>
+  bind?(request: BindRequest): BindResult | Promise<BindResult>
 }
 ```
 
-The default export is an object with `apiVersion: 1`. Official adapters use `satisfies FormatPlugin` while retaining a concrete synchronous `parse` return type, so trusted tooling may call them directly without widening the result to a promise; third-party adapters may return synchronously or asynchronously. The adapter reports positive source lines, structural names, zero or more explicit native IDs, an optional direct focused marker ID, and structured diagnostics. Results contain no document path or scope; core owns discovery, scope and evidence binding.
+The default export is an object with `apiVersion: 2`. `parse` runs once per discovered document and returns native items plus document-local diagnostics. Core supplies the canonical `projectRoot`, project-relative `path`, document `source`, configured JSON-compatible `options`, and abort `signal`; an adapter cannot override path or scope. A parsed item can enroll itself by returning `markerId` with nonempty `evidence`. `evidenceLocations`, when supplied, is parallel to `evidence`: it has exactly one positive location for each reference in the same order, allowing a malformed second AND member to be reported at its own metadata row.
 
-Source lines are diagnostic coordinates, not item identity. Distinct normalized items may share a source line and bind independently; two registrations may not claim the same actual item.
+`bind` is optional and runs once after parsing in the same bounded command-scoped format session. It receives the complete selected catalog, including documents parsed by other adapters, together with current scope/scenario selection. Core invokes every layout-referenced binding-capable adapter even when that adapter parsed no documents. This supports an explicit registry adapter that binds mixed native formats and still reports dangling selected registrations.
 
-Core validates every normalized result before binding evidence. Invalid lines, names, IDs, result shapes, crashes, timeouts, or generic host failures are violations and never cause extension inference or fallback to another adapter. Format code runs as trusted project code in a bounded child host, not a security sandbox.
+An enrollment addresses one catalog item by actual `document` and `item` array indices, supplies the exact opaque ID, nonempty evidence, enrollment provenance, and optional parallel per-reference provenance. It cannot forge a document path/scope, target an absent item, override a conflicting marker, or enroll an already enrolled item. `SourceClaim.key` is an opaque canonical identity chosen by the adapter; core compares claims across adapters to reject overlapping evidence ownership without interpreting paths or storage formats. It never opens a diagnostic or evidence-location path returned by a plugin.
 
-The public core function and configuration types are exported from `focused-spec` and are asynchronous at the core boundary:
+The core public `Scenario` keeps `path`/`line` at the actual native item. Its optional `evidenceLocation` stores the enrollment origin independently of optional per-reference `evidenceLocations`; validation and resolution diagnostics fall back through those origins before the native coordinates. Core never opens either evidence-origin path.
 
-```ts
-export type FormatConfig = (
-  | { readonly package: string; readonly module?: never }
-  | { readonly module: string; readonly package?: never }
-) & {
-  readonly options?: JsonValue
-  readonly timeoutMs?: number
-}
+Core validates every response shape and global invariant before runner resolution. Invalid lines, names, IDs, location-array lengths, references, catalog targets, duplicate `(scope, ID)` values, competing enrollments, overlapping source claims, crashes, timeouts, and generic host failures are violations. Selection-aware bind diagnostics carry known `scope`/`focusedId`; structural/source diagnostics remain blocking. Format API 1 is rejected without a compatibility shim.
 
-parseNativeDocument(
-  projectRoot: string,
-  path: string,
-  source: string,
-  scope: string,
-  formatConfig: FormatConfig,
-): Promise<NativeDocument>
-```
+IDs are opaque: core requires a nonblank string without control characters and preserves its exact case and value. Representation and escaping belong to the format. Source `line` values are diagnostic coordinates, not item identity; distinct items may share one line and remain independently addressable by catalog index.
 
-Package/subpath resolution uses the consuming project's ESM import conditions; project modules remain inside the selected root. The core has no built-in Markdown/Gherkin parser and does not infer a format from `path`.
+Formats supply normalized evidence but never execute it. Core retains discovery, document scope/path, response validation, selection, reference validation, resolution, and execution. A package/subpath resolves from the consuming project using ESM import conditions; a project module stays inside the selected root. Core has no built-in Markdown/Gherkin/inline parser, evidence registry, or format inference.
+
+## Plugin documentation metadata
+
+Public plugin documentation is discovered independently of Format API 2 and Runner API 1 execution. An installed package needs no extra manifest field when its contract is package-root `README.md`; optional manifest `focusedSpec.documentation` may select another relative `.md` or `.markdown` file. A project-module format or runner registration may add `documentation: <project-relative Markdown file>` beside `module`. That field is invalid beside `package`, is not passed to the plugin, and its absence affects only `plugin-docs`, not parsing, resolution, or execution.
+
+The CLI resolves and reads the selected document without importing plugin code. Documentation path containment, strict UTF-8, provenance, output, and sequential composition semantics are defined by the [`plugin-docs` CLI contract](cli.md#installed-plugin-documentation); they do not change either plugin API version or add documentation fields to runtime request objects.
 
 ## Runner API
 

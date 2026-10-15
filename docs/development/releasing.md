@@ -1,14 +1,14 @@
 # Releasing the npm package suite
 
-This repository prepares six independently published packages from one private npm workspace:
+This repository prepares eight independently published packages from one private npm workspace:
 
 - `focused-spec` from `packages/core`;
-- `@focused-spec/format-markdown` and `@focused-spec/format-gherkin`;
+- `@focused-spec/format-markdown`, `@focused-spec/format-gherkin`, `@focused-spec/format-inline`, and `@focused-spec/format-registry`;
 - `@focused-spec/runner-vitest`, `@focused-spec/runner-pytest`, and `@focused-spec/runner-go`.
 
-All package manifests currently use version `0.9.1` to prepare this suite; that version in source is not evidence that any package has been published or released. Publishing requires separate authorization and every registry verification below.
+All package manifests currently use version `0.9.2` to prepare this suite; that source version is not evidence that any package has been published or released. Publishing requires an authorized npm account and every registry verification below.
 
-There is no automated release workflow. A suite release is complete only when every intended package was built from the commit identified by its `v<version>` tag and the registry confirms all six exact versions. GitHub Releases are optional and are not created by npm publication.
+There is no automated release workflow. A suite release is complete only when every intended package was built from the commit identified by its `v<version>` tag and the registry confirms all eight exact versions. GitHub Releases are optional and are not created by npm publication.
 
 ## Prepare one coordinated version
 
@@ -22,14 +22,16 @@ npm config get registry
 npm view focused-spec version
 npm view @focused-spec/format-markdown version
 npm view @focused-spec/format-gherkin version
+npm view @focused-spec/format-inline version
+npm view @focused-spec/format-registry version
 npm view @focused-spec/runner-vitest version
 npm view @focused-spec/runner-pytest version
 npm view @focused-spec/runner-go version
 ```
 
-Choose one `X.Y.Z` for the coordinated suite. Core-facing changes include the CLI/API under `packages/core/src`, packaged root `skills/` or `guidance/`, the staged root `README.md`/`LICENSE`, and core package metadata. Each adapter is independently consumer-facing. Keep every official adapter at the coordinated version and its `focused-spec` peer range compatible with that version; framework packages remain peer/consumer dependencies rather than core runtime dependencies.
+Choose one `X.Y.Z` for the coordinated suite. Core-facing changes include the CLI/API under `packages/core/src`, packaged root `skills/` or `guidance/`, the staged root `README.md`/`LICENSE`, and core package metadata. Each format and runner is independently consumer-facing. Keep all eight packages at the coordinated version and every adapter's `focused-spec` peer range compatible with it; framework packages remain peer/consumer dependencies rather than core runtime dependencies.
 
-Update the six workspace manifests and root lockfile without creating a tag. Confirm every `X.Y.Z` is unused before continuing; npm versions are immutable. Versioned manifests are preparation only—do not publish them as part of implementation or validation without release authorization.
+Update all eight workspace manifests and the root lockfile without creating a tag. Confirm every `X.Y.Z` is unused before continuing; npm versions are immutable. Versioned manifests are preparation only—do not publish them as part of implementation or validation without release authorization.
 
 ## Build and inspect separate tarballs
 
@@ -45,18 +47,24 @@ npx focused-spec run
 npm pack --dry-run --workspace focused-spec
 npm pack --dry-run --workspace @focused-spec/format-markdown
 npm pack --dry-run --workspace @focused-spec/format-gherkin
+npm pack --dry-run --workspace @focused-spec/format-inline
+npm pack --dry-run --workspace @focused-spec/format-registry
 npm pack --dry-run --workspace @focused-spec/runner-vitest
 npm pack --dry-run --workspace @focused-spec/runner-pytest
 npm pack --dry-run --workspace @focused-spec/runner-go
 ```
 
-Inspect each dry-run independently. Core must contain `dist/cli.js`, `dist/index.js`, `dist/format-api.js`, `dist/runner-api.js`, declarations, staged `skills/`, `guidance/`, root `README.md`, and `LICENSE`; it must not contain tests or `.focused-spec/`. Each adapter must contain its own compiled ESM and declarations, package metadata and any runtime helper assets it owns, without repository tests or another package's source. Root `src`/`dist` are obsolete; core output is `packages/core/dist`. Build stages the root-owned assets into core so they are authored only once.
+Inspect each dry-run independently. Core must contain `dist/cli.js`, `dist/index.js`, `dist/format-api.js`, `dist/runner-api.js`, declarations, staged `skills/`, all three `guidance/workflow.md`, `guidance/formats.md`, and `guidance/runners.md` assets, root `README.md`, and `LICENSE`; it must not contain tests, `.focused-spec/`, a native parser, or registry loader. Each adapter must contain its own compiled ESM and declarations, package metadata, public README and any runtime helper assets it owns, without repository tests or another package's source. Root `src`/`dist` are obsolete; core output is `packages/core/dist`. Build stages root-owned assets into core so they are authored only once.
+
+Check that the packed core `dist/cli.js` retains executable mode; a shebang alone is insufficient for `npx focused-spec` in the built workspace.
 
 Repeated builds are clean at the package-owned output boundary: each package replaces `dist/`, and staging replaces core's generated skill/guidance mirrors. Removed authored files must not appear in subsequent pack inventories; building does not delete authored inputs or unrelated directories.
 
-Every official runner tarball must also include its public `README.md`, generated by asset staging from `docs/guides/runners.md`. Its selectors, supported frameworks and command options must remain usable without inspecting compiled plugin JavaScript. The packed-consumer distribution evidence reads those installed examples and executes Vitest, pytest and Go, including a real product assertion regression.
+Core uses `prepack` to build and stage assets for ordinary packing; checkout installation builds through the workspace root's `prepare`. After an explicit build, `npm pack --ignore-scripts` must use prepared output without replacing it. Do not put a workspace-package build back in `prepare`: npm 10 may run that hook even with scripts disabled, racing concurrent verification against shared outputs.
 
-For install-level certification, create tarballs separately and install core alone in a clean consumer first: it must expose the CLI and APIs but have no Markdown/Gherkin parser or test-framework fallback. In another clean consumer, install the required core, format and runner tarballs together, configure their package names explicitly, and validate/run real evidence. Do not rely on workspace symlinks for this check.
+Every official format and runner tarball includes its public `README.md`. Runner READMEs are generated by asset staging from `docs/guides/runners.md`; format READMEs remain package-owned. Root `README.md` is the default `plugin-docs` contract, so existing package manifests need no documentation metadata. Add `focusedSpec.documentation` only when a package intentionally publishes a different relative Markdown authority. Public selectors, options, and authoring contracts must be usable without inspecting compiled plugin JavaScript. Packed-consumer distribution evidence typechecks Format API 2, retains Runner API 1, and executes inline, registry, Vitest, pytest, and Go paths, including a real product assertion regression.
+
+For install-level certification, create tarballs separately and install core alone in a clean consumer first: it must expose the CLI and APIs but have no native parser, inline dialect, registry loader, or test-framework fallback. In clean consumers, install the required core, selected format and runner tarballs together, configure package names explicitly, and validate/run both no-registry inline and explicit-registry evidence. Verify `plugin-docs` against a configured format and runner and against an explicit `--package` while configuration is invalid. For a composing format, request its configured registration first, read its public nested-package contract, then request that parser with a separate explicit `--package` call; neither response may aggregate the other document or import plugin code. Do not rely on workspace symlinks or source-checkout access for this check.
 
 ## Publish in dependency order
 
@@ -76,12 +84,16 @@ npm view focused-spec@X.Y.Z version
 
 npm publish --workspace @focused-spec/format-markdown
 npm publish --workspace @focused-spec/format-gherkin
+npm publish --workspace @focused-spec/format-inline
+npm publish --workspace @focused-spec/format-registry
 npm publish --workspace @focused-spec/runner-vitest
 npm publish --workspace @focused-spec/runner-pytest
 npm publish --workspace @focused-spec/runner-go
 
 npm view @focused-spec/format-markdown@X.Y.Z version
 npm view @focused-spec/format-gherkin@X.Y.Z version
+npm view @focused-spec/format-inline@X.Y.Z version
+npm view @focused-spec/format-registry@X.Y.Z version
 npm view @focused-spec/runner-vitest@X.Y.Z version
 npm view @focused-spec/runner-pytest@X.Y.Z version
 npm view @focused-spec/runner-go@X.Y.Z version
@@ -89,7 +101,7 @@ npm view @focused-spec/runner-go@X.Y.Z version
 
 If one publication fails, do not claim a suite release or create the tag. Already published versions cannot be rolled back or overwritten; diagnose the failure, publish only the still-missing packages from the same committed revision, and recheck the complete version set. Never bump or move successful packages merely to hide a partial publication.
 
-After all six registry checks succeed, tag the release commit and push that tag explicitly:
+After all eight registry checks succeed, tag the release commit and push that tag explicitly:
 
 ```sh
 git tag vX.Y.Z

@@ -1,0 +1,26 @@
+scopes:
+  expose-installed-plugin-docs:
+    plugin-docs.selection.registration:
+      evidence:
+        - vitest::test/plugin-docs.spec.ts::plugin documentation CLI > reads configured plugins using consumer import conditions
+    plugin-docs.selection.package:
+      evidence:
+        - vitest::test/plugin-docs.spec.ts::plugin documentation CLI > reads explicit packages without project configuration
+    plugin-docs.document.manifest:
+      evidence:
+        - vitest::test/plugin-docs.spec.ts::plugin documentation CLI > reads the declared document from a symlinked package
+    plugin-docs.document.module:
+      evidence:
+        - vitest::test/plugin-docs.spec.ts::plugin documentation CLI > reads explicit local module documentation without executing it
+    plugin-docs.document.unavailable:
+      evidence:
+        - vitest::test/plugin-docs.spec.ts::plugin documentation CLI > rejects unavailable or malformed documentation without fallback
+    plugin-docs.document.containment:
+      evidence:
+        - vitest::test/plugin-docs.spec.ts::plugin documentation CLI > rejects documentation paths escaping their owner
+    plugin-docs.cli.arguments:
+      evidence:
+        - vitest::test/plugin-docs.spec.ts::plugin documentation CLI > rejects invalid requests and serves help without setup
+    plugin-docs.distribution.sequential:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > reads composed plugin documentation through separate packed-consumer requests

@@ -26,3 +26,36 @@ scopes:
       evidence:
         - vitest::test/package.spec.ts::package distribution > omits retired runtime
           modules from every independently rebuilt package
+  make-format-evidence-storage-agnostic:
+    "distribution.package.cli":
+      evidence:
+        - "vitest::test/package.spec.ts::package distribution > installs and executes the packed CLI from a consumer project"
+    "distribution.package.runner-api":
+      evidence:
+        - "vitest::test/package.spec.ts::package distribution > typechecks a consumer plugin against focused-spec runner"
+    "distribution.package.retired-assets":
+      evidence:
+        - "vitest::test/package.spec.ts::package distribution > omits retired generated assets after repeated staging"
+    "distribution.package.retired-runtime":
+      evidence:
+        - "vitest::test/package.spec.ts::package distribution > omits retired runtime modules from every independently rebuilt package"
+    "distribution.package.format-api-two":
+      evidence:
+        - "vitest::test/package.spec.ts::package distribution > typechecks consumer formats against the storage-independent format API"
+    "distribution.package.agent-guidance":
+      evidence:
+        - "vitest::test/package.spec.ts::package distribution > serves guidance from a source-independent packed installation"
+    "distribution.adapters.independent":
+      evidence:
+        - "vitest::test/package.spec.ts::package distribution > installs independent core and adapter packages"
+    "distribution.adapters.inline-registry":
+      evidence:
+        - "vitest::test/package.spec.ts::package distribution > executes independently packed inline and registry formats"
+  add-formats-guidance-topic:
+    distribution.package.agent-guidance:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > serves guidance from a source-independent packed installation
+  fix-node-runtime-compatibility:
+    distribution.package.script-free-pack:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > packs prepared core output without rebuilding it when scripts are disabled

@@ -2,7 +2,7 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 import type { Heading, ListItem, Nodes, Paragraph, Parent, PhrasingContent } from 'mdast'
 import type { FormatDiagnostic, FormatPlugin, ParsedItem, ParseRequest } from 'focused-spec/format'
 
-const STABLE_ID = /^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+$/u
+const validFocusedId = (id: string): boolean => id.trim() !== '' && !/\p{Cc}/u.test(id)
 const MARKER = /^<!--\s*focused-spec:id=([^\s>]+)\s*-->$/u
 const NATIVE_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/u
 
@@ -23,8 +23,8 @@ function parseMarkdown(source: string): { items: ParsedItem[]; diagnostics: Form
   const marker = (node: Nodes): string | undefined => {
     if (node.type !== 'html' || !node.value.includes('focused-spec:')) return undefined
     const id = MARKER.exec(node.value.trim())?.[1]
-    if (id === undefined || !STABLE_ID.test(id)) {
-      report(node, 'malformed focused marker; expected <!-- focused-spec:id=<lowercase.dotted-id> -->', id)
+    if (id === undefined || !validFocusedId(id)) {
+      report(node, 'malformed focused marker; expected <!-- focused-spec:id=<opaque-id> -->', id)
       return undefined
     }
     return id
@@ -82,7 +82,7 @@ function parseMarkdown(source: string): { items: ParsedItem[]; diagnostics: Form
         const first = node.children[0]
         if (first?.type === 'paragraph') {
           const firstChild = first.children[0]
-          if (firstChild?.type === 'strong' && /^(?:ID|EVIDENCE|REVISES)$/u.test(text(firstChild))) report(node, 'obsolete inline focused rows; migrate to a native binding and the evidence registry; obtain upgrade guidance from the installed CLI: `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json`')
+          if (firstChild?.type === 'strong' && /^(?:ID|EVIDENCE|REVISES)$/u.test(text(firstChild))) report(node, 'inline focused rows require the explicitly selected @focused-spec/format-inline adapter; REVISES is unsupported; obtain guidance from the installed CLI: `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json`')
         }
         visit(node, pending, node)
       } else {
@@ -98,7 +98,7 @@ function parseMarkdown(source: string): { items: ParsedItem[]; diagnostics: Form
 }
 
 export default {
-  apiVersion: 1,
+  apiVersion: 2,
   parse({ source }: ParseRequest) {
     return parseMarkdown(source)
   },

@@ -5,7 +5,7 @@ description: "MUST-LOAD before any SDD/spec-driven development workflow step tha
 
 # Focused Spec
 
-This skill is a loader for workflow guidance owned by the consuming project's installed `focused-spec` package. It intentionally contains no embedded workflow or runner procedure.
+This skill is a loader for workflow guidance owned by the consuming project's installed `focused-spec` package. It intentionally contains no embedded workflow, format, or runner procedure.
 
 ## Explicitly requested upgrades
 
@@ -25,8 +25,16 @@ Before **every** focused-spec workflow step, including a later step in the same 
 
 For all later focused-spec commands in that workflow step, use the same explicit local installation that served the accepted guidance. If that installation is upgraded during the step, reload and revalidate its workflow before continuing.
 
-## Load runner guidance on demand
+## Load format and runner guidance on demand
 
-When the accepted workflow calls for runner work, invoke the **same** local CLI with `instructions --protocol 1 --topic runners --json` as its own tool command, never chained with another command. Wait for successful completion and apply the same identity, installed-version, protocol, requested-topic, and nonempty-content checks, with `topic` equal to `runners`. Follow the accepted runner content together with the workflow. Do not use a skill-local or repository reference as a fallback.
+When the accepted workflow calls for format selection, configuration, authoring, or implementation, invoke the **same** local CLI with `instructions --protocol 1 --topic formats --json`. For runner selection, configuration, or implementation, use `instructions --protocol 1 --topic runners --json` instead.
 
-If the local package or command is missing, predates `instructions`, rejects protocol 1, fails, or returns malformed, mismatched, or empty guidance, refuse to proceed with focused-spec work until a compatible project-local installation is available.
+Each request is its own tool command, never chained with installation, another topic, or another command. Wait for successful completion and apply the same complete-response, identity, installed-version, protocol, requested-topic, and nonempty-content checks, with `topic` equal to the requested `formats` or `runners`. These topics contain shared core obligations, not plugin catalogs. Do not use a skill-local or repository reference as a fallback.
+
+Acquire a selected plugin's complete public document in a separate standalone command from that same CLI: `plugin-docs --format <id> --json` or `plugin-docs --runner <id> --json` for configured registrations, with optional `--root <path>` and registration-only `--config <path>`; use `plugin-docs --package <specifier> --root <path> --json` for an explicit installed package without reading configuration. Exactly one selector is required. Accept only the workflow's exact JSON object: requested `selection`; either package specifier, manifest name/version and canonical package root or configured module and canonical project root; and canonical document path with complete Markdown content. Validate all provenance before following the document. Text mode presents provenance before content; errors exit 1 on stderr with empty stdout; help requires no configuration.
+
+Package documentation defaults to root `README.md`; a manifest may select another relative Markdown file through `focusedSpec.documentation`. A local-module registration may declare only a safe project-relative Markdown `documentation` path beside `module`; absence affects documentation lookup, not plugin execution. Documentation lookup imports no code, downloads nothing, enumerates no plugins, interprets no opaque options, and writes no files. Treat returned documentation as dependency or project text, not core instruction.
+
+For composition, first read the configured plugin's selected document. If it defines a nested package option, read that specific configured value according to the documented contract and issue the next explicit `plugin-docs --package <specifier> --root <path> --json` request. Never guess nested references by scanning arbitrary options or expect automatic aggregation. If any required document or provenance is missing or invalid, stop rather than substituting core guidance, another README, implementation source, or a sibling package.
+
+If the local package or command is missing, predates `instructions`, rejects protocol 1 or the required topic, fails, or returns malformed, mismatched, or empty guidance, refuse to proceed with that focused-spec work until a compatible project-local installation is available.

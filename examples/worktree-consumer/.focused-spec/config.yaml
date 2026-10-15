@@ -1,8 +1,11 @@
-version: 4
+version: 5
 specifications:
   formats:
     markdown:
-      package: "@focused-spec/format-markdown"
+      package: "@focused-spec/format-registry"
+      options:
+        parser:
+          package: "@focused-spec/format-markdown"
   documents:
     - match: specs/**/*.md
       format: markdown

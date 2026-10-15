@@ -9,7 +9,7 @@ for (const asset of ['skills', 'guidance']) {
   await cp(join(root, asset), join(core, asset), { recursive: true })
 }
 await copyFile(join(root, 'README.md'), join(core, 'README.md'))
-for (const name of ['core', 'format-markdown', 'format-gherkin', 'runner-vitest', 'runner-pytest', 'runner-go']) {
+for (const name of ['core', 'format-markdown', 'format-gherkin', 'format-inline', 'format-registry', 'runner-vitest', 'runner-pytest', 'runner-go']) {
   await copyFile(join(root, 'LICENSE'), join(root, 'packages', name, 'LICENSE'))
 }
 const runnerGuide = (await readFile(join(root, 'docs/guides/runners.md'), 'utf8'))

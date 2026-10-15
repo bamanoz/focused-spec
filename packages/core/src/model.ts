@@ -1,5 +1,15 @@
+import type { SourceLocation } from './format-api.js'
 import type { JsonValue, ResolvedTarget, TargetResult } from './runner-api.js'
-export const STABLE_ID = /^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+$/u
+
+const CONTROL_CHARACTER = /\p{Cc}/u
+const SCOPE_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$/u
+
+export function isFocusedId(value: string): boolean {
+  return /\S/u.test(value) && !CONTROL_CHARACTER.test(value)
+}
+export function isScopeName(value: string): boolean {
+  return SCOPE_NAME.test(value)
+}
 
 
 export interface NativeItem {
@@ -9,6 +19,8 @@ export interface NativeItem {
   readonly name: string
   readonly markerId?: string
   readonly nativeIds: readonly string[]
+  readonly evidence?: readonly string[]
+  readonly evidenceLocations?: readonly SourceLocation[]
 }
 
 export interface NativeDocument {
@@ -18,14 +30,6 @@ export interface NativeDocument {
   readonly violations: readonly Violation[]
 }
 
-export interface EvidenceEntry {
-  readonly scope: string
-  readonly id: string
-  readonly line: number
-  readonly registryPath: string
-  readonly evidence: readonly string[]
-  readonly source?: { readonly path: string; readonly nativeId: string }
-}
 
 export interface Scenario {
   readonly id: string
@@ -34,6 +38,8 @@ export interface Scenario {
   readonly line: number
   readonly name: string
   readonly evidence: readonly string[]
+  readonly evidenceLocation?: SourceLocation
+  readonly evidenceLocations?: readonly SourceLocation[]
 }
 
 export interface SpecDocument {
@@ -50,8 +56,8 @@ export interface Violation {
 }
 
 export type PluginConfig = (
-  | { readonly package: string; readonly module?: never }
-  | { readonly module: string; readonly package?: never }
+  | { readonly package: string; readonly module?: never; readonly documentation?: never }
+  | { readonly module: string; readonly package?: never; readonly documentation?: string }
 ) & {
   readonly timeoutMs?: number
   readonly options?: JsonValue
@@ -68,13 +74,10 @@ export interface DocumentLayout {
 }
 
 export interface FocusedSpecConfig {
-  readonly version: 4
+  readonly version: 5
   readonly specifications: {
     readonly formats: Readonly<Record<string, FormatConfig>>
     readonly documents: readonly DocumentLayout[]
-  }
-  readonly evidence?: {
-    readonly files: readonly string[]
   }
   readonly runners: Readonly<Record<string, RunnerConfig>>
   readonly execution?: {
