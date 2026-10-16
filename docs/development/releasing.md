@@ -8,7 +8,7 @@ This repository prepares eight independently published packages from one private
 
 All package manifests currently use version `0.9.2` to prepare this suite; that source version is not evidence that any package has been published or released. Publishing requires an authorized npm account and every registry verification below.
 
-There is no automated release workflow. A suite release is complete only when every intended package was built from the commit identified by its `v<version>` tag and the registry confirms all eight exact versions. GitHub Releases are optional and are not created by npm publication.
+There is no automated release workflow. A suite release is complete only when all eight exact npm versions are available from the registry, the remote `v<version>` tag identifies the built source commit, and a published (not draft) GitHub Release exists for that tag. npm publication and Git tags do not create a GitHub Release.
 
 ## Prepare one coordinated version
 
@@ -109,5 +109,20 @@ git push origin vX.Y.Z
 git ls-remote --tags origin refs/tags/vX.Y.Z
 ```
 
-Confirm the remote tag resolves to the release commit and every package reports `X.Y.Z`. If tag push fails, retry the same tag; do not bump the suite just to repair it. Existing tags must never be silently moved. A GitHub Release may be created separately when release notes or downloadable assets are wanted; it is not required for npm installation.
+Confirm the remote tag resolves to the release commit and every package reports `X.Y.Z`. If tag push fails, retry the same tag; do not bump the suite just to repair it. Existing tags must never be silently moved. Write release notes covering consumer-visible changes and migration, then create and verify the GitHub Release separately:
+
+```sh
+gh release create vX.Y.Z --verify-tag --title "focused-spec vX.Y.Z" --notes-file release-notes.txt
+gh release view vX.Y.Z --json url,tagName,isDraft,isPrerelease,publishedAt,body
+```
+
+`release-notes.txt` above is a reviewed local input, not a file to commit or a required downloadable release asset. For a stable release, verify the returned URL opens the published release, `tagName` is `vX.Y.Z`, `isDraft` and `isPrerelease` are false, `publishedAt` is set, and `body` contains the reviewed notes. If the release already exists, inspect and correct it rather than creating a duplicate; if GitHub creation fails, report the npm versions and tag as published but the suite release as incomplete.
+
+## Release completion checklist
+
+- [ ] The release commit is on `origin/main`; the working tree used to build and pack was clean and all required checks passed.
+- [ ] All eight `X.Y.Z` versions are visible in the npm registry; a clean consumer can install the published packages.
+- [ ] Remote tag `vX.Y.Z` resolves to that exact release commit; it was not moved to repair a partial publish.
+- [ ] GitHub Release `vX.Y.Z` exists for that tag, has reviewed notes, is published (not draft), and is not marked prerelease for a stable version.
+- [ ] Report the npm version, Git commit, remote tag and **GitHub Release URL** together; never call a tag page or npm publication alone a completed release.
 
