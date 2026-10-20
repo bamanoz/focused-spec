@@ -13,9 +13,9 @@ Executable specifications keep the Given/When/Expect scenario in code and verify
 | Language | SDK and installation | Runnable bank example |
 | --- | --- | --- |
 | JavaScript/TypeScript | [`@focused-spec/scenarios-typescript`](packages/sdk/typescript/README.md) on npm | [TypeScript bank](examples/scenarios/typescript/) |
-| Go 1.23+ | [`github.com/bamanoz/focused-spec/packages/sdk/go`](packages/sdk/go/README.md), version `v0.10.0` | [Go bank](examples/scenarios/go/) |
-| Python 3.11+ | [`focused-spec-scenarios`](packages/sdk/python/README.md) on PyPI, version `0.10.0` | [Python bank](examples/scenarios/python/) |
-| .NET 9+ | [`FocusedSpec.Scenarios`](packages/sdk/dotnet/FocusedSpec.Scenarios/README.md), version `0.10.0`, via [GitHub Release and local NuGet feed](docs/guides/install.md#net-sdk-from-github-releases) | [.NET bank](examples/scenarios/dotnet/) |
+| Go 1.23+ | [`github.com/bamanoz/focused-spec/packages/sdk/go`](packages/sdk/go/README.md) | [Go bank](examples/scenarios/go/) |
+| Python 3.11+ | [`focused-spec-scenarios`](packages/sdk/python/README.md) on PyPI | [Python bank](examples/scenarios/python/) |
+| .NET 9+ | [`FocusedSpec.Scenarios`](packages/sdk/dotnet/FocusedSpec.Scenarios/README.md) via [GitHub Release and local NuGet feed](docs/guides/install.md#net-sdk-from-github-releases) | [.NET bank](examples/scenarios/dotnet/) |
 
 The .NET package is **not published on nuget.org**. Its installation guide covers the public download, checksum, pinned dependency, and repeatable CI restore; no Microsoft account is needed. Optional CLI discovery/direct execution plugins are available for JavaScript/TypeScript and Go only. Python and .NET execute natively through their SDKs and consumer-owned tests.
 
