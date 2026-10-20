@@ -8,7 +8,16 @@
 
 ## Executable specifications
 
-Executable specifications keep the Given/When/Expect scenario in code and verify the application's actual result. The maintained [TypeScript bank demo](examples/scenarios/typescript/) and [Go bank demo](examples/scenarios/go/) exercise their real account implementations through ordinary tests and readable demos; optional focused-spec plugins run the same suites. The SDK APIs can also be used without focused-spec or an SDD framework.
+Executable specifications keep the Given/When/Expect scenario in code and verify the application's actual result. Independent SDKs are available for **JavaScript/TypeScript, Go, Python, and .NET**; no SDD framework or focused-spec CLI is required.
+
+| Language | SDK and installation | Runnable bank example |
+| --- | --- | --- |
+| JavaScript/TypeScript | [`@focused-spec/scenarios-typescript`](packages/sdk/typescript/README.md) on npm | [TypeScript bank](examples/scenarios/typescript/) |
+| Go 1.23+ | [`github.com/bamanoz/focused-spec/packages/sdk/go`](packages/sdk/go/README.md), version `v0.10.0` | [Go bank](examples/scenarios/go/) |
+| Python 3.11+ | [`focused-spec-scenarios`](packages/sdk/python/README.md) on PyPI, version `0.10.0` | [Python bank](examples/scenarios/python/) |
+| .NET 9+ | [`FocusedSpec.Scenarios`](packages/sdk/dotnet/FocusedSpec.Scenarios/README.md), version `0.10.0`, via [GitHub Release and local NuGet feed](docs/guides/install.md#net-sdk-from-github-releases) | [.NET bank](examples/scenarios/dotnet/) |
+
+The .NET package is **not published on nuget.org**. Its installation guide covers the public download, checksum, pinned dependency, and repeatable CI restore; no Microsoft account is needed. Optional CLI discovery/direct execution plugins are available for JavaScript/TypeScript and Go only. Python and .NET execute natively through their SDKs and consumer-owned tests.
 
 ## Bind native requirements to tests
 
@@ -70,7 +79,7 @@ npx focused-spec validate --strict
 npx focused-spec run
 ```
 
-SDK-only consumers do not need CLI installation or configuration. See the [TypeScript SDK](packages/sdk/typescript/README.md) and [Go SDK](packages/sdk/go/README.md). For planned evidence and scope selection, see [concepts](docs/concepts/README.md) and the [CLI reference](docs/reference/cli.md).
+SDK-only consumers do not need CLI installation or configuration; use the language-specific SDK links above. For planned evidence and scope selection, see [concepts](docs/concepts/README.md) and the [CLI reference](docs/reference/cli.md).
 
 ## Shipped examples
 
@@ -82,8 +91,10 @@ SDK-only consumers do not need CLI installation or configuration. See the [TypeS
 | Plain Markdown | [Standalone worktree consumer](examples/worktree-consumer/) | Native scenario heading |
 | Executable TypeScript | [TypeScript SDK bank demo](examples/scenarios/typescript/) | Native Given/When/Expect suite |
 | Executable Go | [Go SDK bank demo](examples/scenarios/go/) | Native typed suite |
+| Executable Python | [Python SDK bank demo](examples/scenarios/python/) | Native Given/When/Expect suite |
+| Executable .NET | [.NET SDK bank demo](examples/scenarios/dotnet/) | Native typed suite |
 
-The framework examples use explicitly installed format and runner packages to bind native items to real tests. The bank demos use independent language SDKs and keep six event-sourced account outcomes in native code, without Markdown copies or registries. Ordinary test wrappers, readable demos, and optional focused-spec plugins exercise those same suites. [Run the examples](docs/guides/configuration.md#runnable-framework-examples) from this repository's checkout.
+The framework examples use explicitly installed format and runner packages to bind native items to real tests. All four bank demos use independent language SDKs and keep six event-sourced account outcomes in native code, without Markdown copies or registries. Ordinary test wrappers and readable demos exercise those same suites; optional focused-spec plugins do so for JavaScript/TypeScript and Go. [Run the examples](docs/guides/configuration.md#standalone-executable-bank-specifications) from this repository's checkout.
 
 ## Learn more
 

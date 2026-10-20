@@ -256,7 +256,7 @@ dotnet test examples/scenarios/dotnet/ScenarioBank.Tests/ScenarioBank.Tests.cspr
 dotnet run --project examples/scenarios/dotnet/ScenarioBank.Demo/ScenarioBank.Demo.csproj
 ```
 
-The package README files define independent installation and SDK APIs. The example projects intentionally use the checkout SDKs; a released consumer installs the Python distribution from its Python package index or the .NET SDK from NuGet, then installs pytest/xUnit separately as its test dependency.
+The package README files define independent installation and SDK APIs. The example projects intentionally use the checkout SDKs; a released consumer installs the Python distribution from PyPI or the .NET SDK from its [GitHub Release through a local NuGet feed](install.md#net-sdk-from-github-releases), then installs pytest/xUnit separately as its test dependency. The .NET `0.10.0` package is not published on nuget.org.
 
 ## Migrate older configurations
 
