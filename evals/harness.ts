@@ -10,6 +10,7 @@ import { evalRepositoryRoot, provisionWorkspace, readEvalPrompt } from './provis
 import { interviewFailedAgent } from './diagnostic.ts'
 import { isUpgradeArtifact, upgradeArtifactsGate, upgradePreservationGate } from './upgrade.ts'
 import { runAgentTurn, saveEvalResult } from './result.ts'
+import { judgeIntegrationWorkspace } from './integration.ts'
 
 export async function runEval(
   options: EvalRunOptions,
@@ -28,7 +29,7 @@ export async function runEval(
 
   try {
     try {
-    const snapshots = new Map(await snapshotProtectedFiles(workspace.path, selected.editablePaths))
+    const snapshots = workspace.integration === undefined ? new Map(await snapshotProtectedFiles(workspace.path, selected.editablePaths)) : new Map<string, string>()
     const proposalBefore = await snapshotProposalFiles(workspace.path)
     if (workspace.upgrade !== undefined) {
       for (const path of snapshots.keys()) if (isUpgradeArtifact(path)) snapshots.delete(path)
@@ -76,7 +77,9 @@ export async function runEval(
     if (turns.length === selected.turns.length && gates.every(item => item.passed)) {
       try {
         if (workspace.upgrade !== undefined) gates.push(await upgradeArtifactsGate(workspace.path, workspace.upgrade), await upgradePreservationGate(workspace.path, workspace.upgrade))
-        if (gates.every(item => item.passed)) gates.push(...await judgeCompletedWorkspace(workspace.path, selected, snapshots, transcripts, workingCheckpoint, selectedScenarioId))
+        if (gates.every(item => item.passed)) gates.push(...(workspace.integration === undefined
+          ? await judgeCompletedWorkspace(workspace.path, selected, snapshots, transcripts, workingCheckpoint, selectedScenarioId)
+          : await judgeIntegrationWorkspace(workspace.path, selected, workspace.integration, transcripts)))
       } catch (error) {
         gates.push({ name: 'evaluation-error', passed: false, detail: error instanceof Error ? error.message : String(error) })
       }

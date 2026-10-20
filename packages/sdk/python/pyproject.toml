@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "focused-spec-scenarios"
+version = "0.1.0"
+description = "Independent executable Given/When/Expect scenarios for Python"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "focused-spec contributors" }]
+license-files = ["LICENSE"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/focused_spec_scenarios"]

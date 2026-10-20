@@ -7,6 +7,7 @@ import type { RunnerConfig } from './model.js'
 import { isJsonValue } from './config.js'
 import type { ExecutionGroup, JsonValue, ResolveResponse, ResolvedTarget, RunResponse, TargetResult } from './runner-api.js'
 import { pluginExecArgv, pluginReference } from './plugin-module.js'
+import { retainExecutionEvents } from './execution-events.js'
 const DEFAULT_TIMEOUT_MS = 120_000
 const OUTPUT_LIMIT = 16_384
 
@@ -220,6 +221,7 @@ export async function runRunnerTargets(
       targetId: result.targetId,
       status: result.status as TargetResult['status'],
       ...(result.diagnostic === undefined ? {} : { diagnostic: result.diagnostic }),
+      ...(Object.hasOwn(result, 'events') ? { events: retainExecutionEvents(result.events) } : {}),
     }
   })
   for (const target of targets) {

@@ -7,8 +7,8 @@
   },
   "devDependencies": {
     "focused-spec": "file:../../packages/core",
-    "@focused-spec/format-markdown": "file:../../packages/format-markdown",
-    "@focused-spec/format-registry": "file:../../packages/format-registry",
-    "@focused-spec/runner-go": "file:../../packages/runner-go"
+    "@focused-spec/format-markdown": "file:../../packages/formats/markdown",
+    "@focused-spec/format-registry": "file:../../packages/formats/registry",
+    "@focused-spec/runner-go": "file:../../packages/runners/go"
   }
 }

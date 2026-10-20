@@ -1,6 +1,14 @@
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | { readonly [key: string]: JsonValue } | readonly JsonValue[]
 
+export interface ExecutionEvent {
+  readonly kind: string
+  readonly message: string
+  readonly data?: JsonValue
+}
+
+export { createEventCollector, retainExecutionEvents } from './execution-events.js'
+
 export interface RunnerContext {
   readonly projectRoot: string
   readonly cwd: string
@@ -46,6 +54,7 @@ export interface TargetResult {
   readonly targetId: string
   readonly status: TargetStatus
   readonly diagnostic?: string
+  readonly events?: readonly ExecutionEvent[]
 }
 
 export interface RunResponse {

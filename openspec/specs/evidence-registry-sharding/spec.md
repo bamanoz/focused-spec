@@ -7,18 +7,18 @@ Explicit domain-owned YAML files compose one evidence registry without changing 
 ## Requirements
 
 ### Requirement: Explicit logical registry composition
-The CLI SHALL compose one logical evidence registry from optional version-3 evidence.files, a nonempty list of safe project-relative YAML paths or glob patterns.
+The explicitly selected registry format SHALL compose one logical evidence registry from its own nonempty list of safe project-relative YAML paths or patterns. It SHALL resolve registrations against the complete native catalog and return normalized evidence; core SHALL NOT load YAML evidence or infer a registry location.
 
 <!-- focused-spec:id=registry.sharding.compose -->
 #### Scenario: Domain shards contribute to one logical registry
 - **WHEN** explicitly configured domain shards register distinct native items with multiple evidence references
 - **THEN** discovery binds all entries and preserves every reference as an AND contract without loading an unconfigured registry
-- **AND** Omission SHALL select the canonical .focused-spec/evidence.yaml through the same loader. Explicit sources SHALL NOT trigger fallback, nested includes, or implicit repository-wide search. Each source SHALL match at least one YAML file; unsafe configuration, missing sources, unsupported matched extensions, overlapping lexical/canonical claims, and symlink escapes SHALL fail before evidence execution. Files SHALL be loaded deterministically.
+- **AND** An adapter-owned documented default MAY select .focused-spec/evidence.yaml through that adapter’s same loader; omission SHALL NOT create a core fallback. Explicit sources SHALL NOT trigger fallback, nested includes, or implicit repository-wide search. Each source SHALL match at least one YAML file; unsafe configuration, missing sources, unsupported matched extensions, overlapping lexical/canonical claims, and symlink escapes SHALL fail before evidence execution. Files SHALL be loaded deterministically.
 
 <!-- focused-spec:id=registry.sharding.config-safe -->
 #### Scenario: Unsafe registry configuration is rejected
-- **WHEN** evidence configuration is empty, contains unknown fields, or declares unsafe source patterns
-- **THEN** configuration fails before source discovery
+- **WHEN** registry-adapter options are empty, contain unknown fields, or declare unsafe source patterns
+- **THEN** the selected adapter reports its options error before source discovery
 
 <!-- focused-spec:id=registry.sharding.source-boundaries -->
 #### Scenario: Source boundaries are enforced
@@ -26,7 +26,7 @@ The CLI SHALL compose one logical evidence registry from optional version-3 evid
 - **THEN** registry loading reports the offending source rather than silently dropping or accepting it
 
 ### Requirement: Scope-local uniqueness and diagnostic provenance
-Each selected (scope, ID) SHALL occur at most once across all configured files, with no merge or last-wins resolution.
+The selected registry adapter SHALL preserve at most one selected (scope, ID) across its sources, with no merge or last-wins resolution. It SHALL return exact file/line provenance and selection-aware binding diagnostics; core SHALL also reject competing normalized enrollments across adapters.
 
 <!-- focused-spec:id=registry.sharding.duplicates -->
 #### Scenario: Cross-file duplicate registrations fail
@@ -46,7 +46,7 @@ Each selected (scope, ID) SHALL occur at most once across all configured files, 
 
 ### Requirement: Bounded registry source discovery
 
-Registry source patterns SHALL use the same limits as document patterns: 4096 characters, 32 nested group levels with parentheses limited to 2 levels, 256 brace delimiter characters and 256 expanded alternatives per pattern. Excess SHALL produce an actionable violation without partially loading sources. Bounded alternatives SHALL preserve padded and stepped numeric ranges.
+The selected registry adapter’s source patterns SHALL use the same limits as document patterns: 4096 characters, 32 nested group levels with parentheses limited to 2 levels, 256 brace delimiter characters and 256 expanded alternatives per pattern. Excess SHALL produce an actionable violation without partially loading sources. Bounded alternatives SHALL preserve padded and stepped numeric ranges.
 
 <!-- focused-spec:id=registry.glob.bounds -->
 #### Scenario: Excessive registry pattern complexity
@@ -55,9 +55,10 @@ Registry source patterns SHALL use the same limits as document patterns: 4096 ch
 
 ### Requirement: Unreadable registry source discovery
 
-A matched dangling symlink SHALL be reported as an unreadable source, not silently removed from the registry selection.
+The selected registry adapter SHALL report a matched dangling symlink as an unreadable source rather than silently remove it from the registry selection.
 
 <!-- focused-spec:id=registry.source.broken -->
 #### Scenario: Dangling registry source link
 - **WHEN** a registry source pattern matches a dangling symlink beside a readable shard
 - **THEN** loading reports the unreadable source instead of silently accepting incomplete evidence
+

@@ -1,0 +1,23 @@
+scopes:
+  current:
+    python-sdk.independent:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > runs the packed SDK without framework dependencies
+    python-sdk.invalid-declaration:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > rejects invalid declarations before driver execution
+    python-sdk.comparison:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > compares actual results exactly and isolates declarations
+    python-sdk.cleanup:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > preserves execution and cleanup failures
+    python-sdk.cancellation:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > retains cleanup after cancellation
+    python-sdk.events:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > reports ordered events with actual mismatch observations
+    python-example.bank:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > runs the maintained pytest bank consumer and demo

@@ -17,5 +17,10 @@ __pycache__/
 /packages/core/skills/
 /packages/core/guidance/
 /packages/core/README.md
-/packages/*/LICENSE
-/packages/runner-*/README.md
+/packages/**/LICENSE
+/packages/runners/*/README.md
+!/packages/sdk/python/LICENSE
+!/packages/sdk/dotnet/FocusedSpec.Scenarios/LICENSE
+bin/
+obj/
+*.nupkg

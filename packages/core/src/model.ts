@@ -1,5 +1,5 @@
 import type { SourceLocation } from './format-api.js'
-import type { JsonValue, ResolvedTarget, TargetResult } from './runner-api.js'
+import type { ExecutionEvent, JsonValue, ResolvedTarget, TargetResult } from './runner-api.js'
 
 const CONTROL_CHARACTER = /\p{Cc}/u
 const SCOPE_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$/u
@@ -108,6 +108,8 @@ export interface PlannedEvidence {
 export interface PlannedScenario {
   readonly scope: string
   readonly id: string
+  readonly name: string
+  readonly source: SourceLocation
   readonly evidence: readonly PlannedEvidence[]
 }
 
@@ -130,11 +132,14 @@ export interface EvidenceResult {
   readonly reference: string
   readonly status: EvidenceStatus
   readonly diagnostic?: string
+  readonly events?: readonly ExecutionEvent[]
 }
 
 export interface ScenarioResult {
   readonly scope: string
   readonly id: string
+  readonly name: string
+  readonly source: SourceLocation
   readonly status: EvidenceStatus
   readonly evidence: readonly EvidenceResult[]
 }

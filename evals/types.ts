@@ -13,6 +13,12 @@ export interface EvalTurn {
   readonly checkpoint?: 'proposal' | 'working-evidence'
 }
 
+export interface IntegrationCase {
+  readonly source: 'openspec' | 'spec-kit' | 'inline' | 'typescript' | 'go'
+  readonly mode: 'integrate' | 'recommend' | 'install' | 'revise' | 'author'
+  readonly cli: boolean
+}
+
 export interface EvalCase {
   readonly id: string
   readonly description: string
@@ -30,6 +36,7 @@ export interface EvalCase {
   readonly evidenceStorage?: 'registry' | 'inline'
   readonly lifecycle?: 'inline-publication'
   readonly expectedRevisionTerms?: readonly string[]
+  readonly integration?: IntegrationCase
 }
 
 export interface AgentRequest {

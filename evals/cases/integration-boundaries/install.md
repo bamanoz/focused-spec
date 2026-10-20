@@ -1,0 +1,1 @@
+Verify or complete the project-local focused-spec CLI and Oh My Pi agent integration installation. Install only core and that agent integration if needed. Report the verified version, paths and activation boundary. Do not select/install plugins, configure evidence, author specifications or tests, or claim behavioral verification from installation.

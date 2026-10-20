@@ -1,0 +1,18 @@
+{
+  "name": "scenario-bank-demo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Independent SDK bank scenarios with optional focused-spec integration.",
+  "type": "module",
+  "engines": { "node": ">=22.16.0" },
+  "scripts": {
+    "start": "node demo.mjs",
+    "test": "node --test --test-reporter=spec test/account.node.mjs"
+  },
+  "devDependencies": {
+    "@focused-spec/scenarios-typescript": "file:../../../packages/sdk/typescript",
+    "focused-spec": "file:../../../packages/core",
+    "@focused-spec/format-scenarios-typescript": "file:../../../packages/formats/scenarios-typescript",
+    "@focused-spec/runner-scenarios-typescript": "file:../../../packages/runners/scenarios-typescript"
+  }
+}

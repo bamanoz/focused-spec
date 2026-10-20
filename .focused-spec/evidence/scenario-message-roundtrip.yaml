@@ -1,0 +1,20 @@
+scopes:
+  current:
+    scenario-message-roundtrip.canonical-messages:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          roundtrips canonical bank messages through the application codec
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          roundtrips canonical Go bank messages through the application codec
+    scenario-message-roundtrip.independent:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > checks
+          serialization without executing or rewriting bank scenarios
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          checks Go serialization without executing or rewriting bank scenarios
+    scenario-message-roundtrip.loss-detected:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          detects a lost decline reason independently of bank behavior
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          detects a lost Go decline reason independently of bank behavior

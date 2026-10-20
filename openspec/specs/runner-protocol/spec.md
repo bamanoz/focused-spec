@@ -119,3 +119,52 @@ Separately installed Vitest, pytest and Go runners SHALL collect exact selected 
 #### Scenario: Go reports concrete test events
 - **WHEN** selected Go tests pass, fail or skip and a collected test disappears before execution
 - **THEN** the runner reports real test events and never treats a missing test as passing
+
+
+### Requirement: Supported-runtime source execution
+The official Vitest runner SHALL resolve and execute exact selected evidence when loaded from its TypeScript source on every supported Node.js version, including 22.16.0, without caller-provided type-stripping flags. Compiled package execution SHALL retain the same selected outcomes.
+
+<!-- focused-spec:id=runner.official.source-runtime -->
+#### Scenario: Source runner launches its helper on the minimum Node runtime
+- **WHEN** the source-mode Vitest runner selects passing and failing tests on Node.js 22.16.0 without ambient type-stripping flags
+- **THEN** it resolves the exact tests and reports their actual independent outcomes instead of failing to load its helper
+
+### Requirement: Optional structured execution events
+Runner API 1 target results SHALL optionally carry ordered events with nonblank string kind and message and optional JSON-compatible data. Kind SHALL be producer-defined: core SHALL NOT restrict kinds or interpret their meaning. Existing plugins omitting events SHALL retain unchanged status and cardinality semantics.
+
+<!-- focused-spec:id=runner.events.optional -->
+#### Scenario: Event-capable and existing runners coexist
+- **WHEN** one selected runner reports its own event kinds, including a record named truncated followed by another event, and another reports only its existing target status
+- **THEN** both actual outcomes reach the caller, all supplied generic events remain ordered, and no events are invented for the other target
+
+### Requirement: Invalid event reports do not become evidence
+An explicitly supplied event list SHALL satisfy the generic event envelope, including nonblank kind and message, optional JSON-compatible data and no unknown envelope fields. Every supplied record SHALL be validated, including any omitted suffix. Invalid reports SHALL yield runner ERROR, not a claimed pass; unrelated invocations SHALL remain independent.
+
+<!-- focused-spec:id=runner.events.invalid -->
+#### Scenario: A malformed event prevents a claimed pass
+- **WHEN** a runner reports pass with missing or invalid envelope fields or non-JSON data, even after the retained prefix
+- **THEN** its invocation reports ERROR with an actionable diagnostic rather than returning that target as passing evidence
+
+### Requirement: Event retention is explicitly bounded
+Retained target events SHALL have documented count and encoded-byte bounds. Overflow SHALL preserve an ordered prefix and append an explicit truncation notice within those bounds without altering the target's status. A producer-defined kind SHALL NOT stop collection or make subsequent valid events invalid.
+
+<!-- focused-spec:id=runner.events.bounded -->
+#### Scenario: A verbose target remains bounded without a hidden loss of detail
+- **WHEN** a correctly executed target emits more events or larger values than its retention budget permits
+- **THEN** its result retains a bounded ordered prefix and a visible truncation marker while preserving its actual status
+
+### Requirement: Direct runners retain events on verification failure
+Both direct scenario runners SHALL retain already collected events in their target report when SDK verification returns a mismatch or application error. Explanations and observations SHALL NOT determine pass status. An unexecuted action or missing final report SHALL NOT gain fabricated Actual events or a passing outcome.
+
+<!-- focused-spec:id=runner.events.failed-target -->
+#### Scenario: An explained wrong bank observation remains a failure
+- **WHEN** a selected bank action explains its branch but returns an incorrect observation through either direct runner
+- **THEN** the target fails and its report retains the available inputs, explanation and actual observation alongside the verification diagnostic
+
+### Requirement: Runner responses survive transport without repair
+Runner responses SHALL be JSON-compatible before transport. Nonfinite numbers, undefined values, functions, symbols, sparse arrays, cyclic values, accessors and non-JSON objects SHALL fail the invocation rather than being removed, coerced or replaced during serialization. Valid JSON payloads SHALL retain their exact values in resolve, partition and run responses. Receiver-side shape and cardinality validation SHALL remain enforced.
+
+<!-- focused-spec:id=runner.response.lossless -->
+#### Scenario: Invalid runner data cannot become passing evidence
+- **WHEN** a selected runner returns values that JSON transport would silently remove or transform during resolution, partitioning or execution
+- **THEN** its invocation fails without claiming PASS or executing rejected resolution or partition results, while a valid JSON response still executes with its original data

@@ -1,7 +1,7 @@
 # Development
 
 - [Repository workflow](workflow.md)
-- [Eight-package suite release process](releasing.md)
+- [Coordinated npm suite and separate Go, Python, and .NET SDK release gates](releasing.md)
 - [Agent evaluations](agent-evals.md)
 
 Run the standard checks before handoff:

@@ -6,6 +6,8 @@ import type { EvalCase } from './types.ts'
 import { runProcess } from './process.ts'
 import { captureUpgradeBaseline, LEGACY_VERSION, serveUpgradeCandidate } from './upgrade.ts'
 import type { UpgradeBaseline } from './upgrade.ts'
+import { prepareIntegration } from './integration.ts'
+import type { IntegrationBaseline } from './integration.ts'
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url))
 const evalRoot = fileURLToPath(new URL('.', import.meta.url))
@@ -39,11 +41,11 @@ async function packLocalPackage(packageRoot: string, cache: string): Promise<str
 async function packDependencies(includeOpenSpec: boolean, cache: string): Promise<PackedDependencies> {
   const [focused, markdown, inline, registry, go, pytest] = await Promise.all([
     packLocalPackage(join(repositoryRoot, 'packages/core'), cache),
-    packLocalPackage(join(repositoryRoot, 'packages/format-markdown'), cache),
-    packLocalPackage(join(repositoryRoot, 'packages/format-inline'), cache),
-    packLocalPackage(join(repositoryRoot, 'packages/format-registry'), cache),
-    packLocalPackage(join(repositoryRoot, 'packages/runner-go'), cache),
-    packLocalPackage(join(repositoryRoot, 'packages/runner-pytest'), cache),
+    packLocalPackage(join(repositoryRoot, 'packages/formats/markdown'), cache),
+    packLocalPackage(join(repositoryRoot, 'packages/formats/inline'), cache),
+    packLocalPackage(join(repositoryRoot, 'packages/formats/registry'), cache),
+    packLocalPackage(join(repositoryRoot, 'packages/runners/go'), cache),
+    packLocalPackage(join(repositoryRoot, 'packages/runners/pytest'), cache),
   ])
   if (!includeOpenSpec) return { focused, markdown, inline, registry, go, pytest }
   const openspecPack = await runNpm(['pack', `@fission-ai/openspec@${OPEN_SPEC_VERSION}`, '--ignore-scripts', '--prefer-offline', '--pack-destination', cache], repositoryRoot, 120_000)
@@ -105,11 +107,11 @@ async function prepareUpgrade(workspace: string, cache: string): Promise<{ basel
   const baseline = await captureUpgradeBaseline(workspace, candidateRoot)
   const workspacePackages = [
     ['focused-spec', 'core', packages.focused],
-    ['@focused-spec/format-markdown', 'format-markdown', packages.markdown],
-    ['@focused-spec/format-inline', 'format-inline', packages.inline],
-    ['@focused-spec/format-registry', 'format-registry', packages.registry],
-    ['@focused-spec/runner-go', 'runner-go', packages.go],
-    ['@focused-spec/runner-pytest', 'runner-pytest', packages.pytest],
+    ['@focused-spec/format-markdown', 'formats/markdown', packages.markdown],
+    ['@focused-spec/format-inline', 'formats/inline', packages.inline],
+    ['@focused-spec/format-registry', 'formats/registry', packages.registry],
+    ['@focused-spec/runner-go', 'runners/go', packages.go],
+    ['@focused-spec/runner-pytest', 'runners/pytest', packages.pytest],
   ] as const
   const candidates = await Promise.all(workspacePackages.map(async ([name, directory, tarball]) => ({
     name,
@@ -126,6 +128,7 @@ async function prepareUpgrade(workspace: string, cache: string): Promise<{ basel
 export interface ProvisionedWorkspace {
   readonly path: string
   readonly upgrade?: UpgradeBaseline
+  readonly integration?: IntegrationBaseline
   finish(): Promise<void>
   cleanup(): Promise<void>
 }
@@ -141,7 +144,8 @@ export async function provisionWorkspace(
   const workspace = join(directory, 'workspace')
   const cache = join(directory, 'packages')
   let upgrade: Awaited<ReturnType<typeof prepareUpgrade>> | undefined
-  const finish = async () => { await upgrade?.close(); upgrade = undefined }
+  let integration: Awaited<ReturnType<typeof prepareIntegration>> | undefined
+  const finish = async () => { await upgrade?.close(); upgrade = undefined; await integration?.close(); integration = undefined }
   const cleanup = async () => { await finish(); await rm(directory, { recursive: true, force: true }) }
   try {
     await mkdir(cache)
@@ -150,9 +154,10 @@ export async function provisionWorkspace(
     if (evalCase.overlay !== undefined) await cp(join(evalRoot, evalCase.overlay), workspace, { recursive: true, force: true })
     const skills = evalCase.turns.flatMap(turn => [...turn.skills])
     if (evalCase.id === 'project-upgrade') upgrade = await prepareUpgrade(workspace, cache)
+    else if (evalCase.integration !== undefined) integration = await prepareIntegration(workspace, cache, evalCase.integration, packLocalPackage)
     else await installPackages(workspace, evalCase.source === 'openspec', cache)
     await installSkills(workspace, skills, openspecSkillsDir ?? '')
-    return { path: workspace, cleanup, finish, ...(upgrade === undefined ? {} : { upgrade: upgrade.baseline }) }
+    return { path: workspace, cleanup, finish, ...(upgrade === undefined ? {} : { upgrade: upgrade.baseline }), ...(integration === undefined ? {} : { integration: integration.baseline }) }
   } catch (error) {
     await cleanup()
     throw error

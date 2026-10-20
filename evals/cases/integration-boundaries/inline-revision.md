@@ -1,0 +1,1 @@
+Review the existing standalone authentication scenario for blocked accounts with valid credentials, clarify it only if necessary, and verify its existing exact evidence and application-regression sensitivity. Preserve the supported representation, identity, evidence ownership and configuration. Do not change application code or tests.

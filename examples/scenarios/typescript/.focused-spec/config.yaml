@@ -1,0 +1,13 @@
+version: 5
+specifications:
+  formats:
+    scenarios:
+      package: '@focused-spec/format-scenarios-typescript'
+      options: { runner: scenarios }
+  documents:
+    - match: specifications/**/*.scenarios.mjs
+      scope: current
+      format: scenarios
+runners:
+  scenarios:
+    package: '@focused-spec/runner-scenarios-typescript'

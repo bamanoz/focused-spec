@@ -188,43 +188,51 @@ scopes:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > rejects a proposal that creates configuration or a planned evidence registry
         - vitest::test/acp-agent.spec.ts::genuine planning consent > keeps host questions independent from runtime plan approval
-  make-format-evidence-storage-agnostic:
-    "agent.proposal.planning-only":
+    agent.proposal.inline-boundary:
       evidence:
-        - "vitest::test/evals.spec.ts::agent eval harness > rejects a proposal that creates configuration or a planned evidence registry"
-    "agent.apply.mutation-sensitive":
+        - vitest::test/evals.spec.ts::agent eval harness > rejects planning-time
+          inline evidence integration
+    agent.adoption.inline-continuity:
       evidence:
-        - "vitest::test/evals.spec.ts::agent eval harness > rejects applied evidence that misses a controlled product regression"
-    "agent.proposal.product-checkpoint":
+        - vitest::test/evals.spec.ts::agent eval harness > preserves inline evidence
+          through revision and publication
+    agent.integration.preserve-existing:
       evidence:
-        - "vitest::test/audit-eval-runtime.spec.ts::audit eval runtime boundaries > stops a proposal modifying app/auth.py before an apply turn can restore it"
-        - "vitest::test/audit-eval-runtime.spec.ts::audit eval runtime boundaries > stops a proposal modifying auth/auth_test.go before an apply turn can restore it"
-        - "vitest::test/audit-eval-runtime.spec.ts::audit eval runtime boundaries > stops a proposal modifying tests/functional/test_auth.py before an apply turn can restore it"
-        - "vitest::test/audit-eval-runtime.spec.ts::audit eval runtime boundaries > stops a proposal modifying new-product.py before an apply turn can restore it"
-    "agent.proposal.inline-boundary":
+        - vitest::test/evals.spec.ts::agent eval harness > rejects unauthorized
+          conversion of an existing integration
+    agent.integration.route-selection:
       evidence:
-        - "vitest::test/evals.spec.ts::agent eval harness > rejects planning-time inline evidence integration"
-    "agent.adoption.preserve-native":
+        - vitest::test/evals.spec.ts::agent eval harness > requires completed local
+          integration guidance for composition selection
+    agent.integration.native-source:
       evidence:
-        - "vitest::test/evals.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery"
-    "agent.adoption.surviving-evidence":
+        - vitest::test/evals.spec.ts::agent eval harness > rejects replacement of
+          native acceptance items during integration
+    agent.integration.standalone-choice:
       evidence:
-        - "vitest::test/evals.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery"
-        - "vitest::test/evals.spec.ts::agent eval harness > retains executed checkpoints after working identity and registry retire in place"
-    "agent.adoption.evidence-continuity":
+        - vitest::test/evals.spec.ts::agent eval harness > judges standalone
+          compositions against the requested canonical source
+    agent.integration.phase-boundaries:
       evidence:
-        - "vitest::test/evals.spec.ts::agent eval harness > detects lost or altered evidence across document transitions"
-    "agent.adoption.inline-continuity":
+        - vitest::test/evals.spec.ts::agent eval harness > rejects configuration
+          writes during recommendation or installation only
+    agent.integration.selected-contracts:
       evidence:
-        - "vitest::test/evals.spec.ts::agent eval harness > preserves inline evidence through revision and publication"
-    "agent.upgrade.preserve-project":
+        - vitest::test/evals.spec.ts::agent eval harness > requires selected
+          installed contracts before integration configuration
+    agent.workflow.single-source:
       evidence:
-        - "vitest::test/evals.spec.ts::agent eval harness > rejects lost scope-local evidence and tampered upgrade artifacts"
-    "agent.review.evidence-sync":
+        - vitest::test/evals.spec.ts::agent eval harness > rejects duplicate
+          behavioral sources beside executable scenarios
+    agent.workflow.application-boundary:
       evidence:
-        - "vitest::test/evals.spec.ts::agent eval harness > rejects stale green evidence after native revision and accepts synchronized sensitive evidence"
-        - "vitest::test/evals.spec.ts::agent eval harness > rejects unchanged native behavior and loss of an independent registry entry during revision"
-    "agent.review.phase-boundaries":
+        - vitest::test/evals.spec.ts::agent eval harness > rejects executable
+          evidence disconnected from the mutated application
+    agent.workflow.independent-oracle:
       evidence:
-        - "vitest::test/evals.spec.ts::agent eval harness > rejects a proposal that creates configuration or a planned evidence registry"
-        - "vitest::test/acp-agent.spec.ts::genuine planning consent > keeps host questions independent from runtime plan approval"
+        - vitest::test/evals.spec.ts::agent eval harness > rejects observations that
+          conceal the claimed application regression
+    agent.workflow.proof-not-diagnostics:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects diagnostic
+          success when selected behavioral comparison fails

@@ -50,6 +50,7 @@ async function runGroup(
       resultByKey.set(target.key, {
         status: result.status === 'pass' ? 'PASS' : result.status === 'fail' ? 'FAIL' : 'SKIP',
         ...(result.diagnostic === undefined ? {} : { diagnostic: result.diagnostic }),
+        ...(result.events === undefined ? {} : { events: result.events }),
       })
     }
   } catch (error) {
@@ -157,6 +158,8 @@ export async function executePlan(
     return {
       scope: scenario.scope,
       id: scenario.id,
+      name: scenario.name,
+      source: scenario.source,
       status: aggregate(evidence.map(item => item.status)),
       evidence,
     }

@@ -1,0 +1,1 @@
+Recommend how to run and maintain this bank project’s behavioral scenarios. Inspect its current sources and runtime and explain the smallest suitable composition and remaining prerequisites. Recommendation only: do not install packages or modify any files.

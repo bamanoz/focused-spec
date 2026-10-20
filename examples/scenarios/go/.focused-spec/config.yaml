@@ -1,0 +1,14 @@
+version: 5
+specifications:
+  formats:
+    scenarios-go:
+      package: '@focused-spec/format-scenarios-go'
+      options: { runner: scenarios-go }
+  documents:
+    - match: specifications/**/*.scenarios.go
+      scope: current
+      format: scenarios-go
+runners:
+  scenarios-go:
+    package: '@focused-spec/runner-scenarios-go'
+    timeoutMs: 120000

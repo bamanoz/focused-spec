@@ -2,12 +2,12 @@ import { access, mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import goRunner from '../packages/runner-go/src/index.js'
-import pytestRunner from '../packages/runner-pytest/src/index.js'
-import vitestRunner from '../packages/runner-vitest/src/index.js'
-import { runProcess as runGoProcess } from '../packages/runner-go/src/process.js'
-import { runProcess as runPytestProcess } from '../packages/runner-pytest/src/process.js'
-import { runProcess as runVitestProcess } from '../packages/runner-vitest/src/process.js'
+import goRunner from '../packages/runners/go/src/index.js'
+import pytestRunner from '../packages/runners/pytest/src/index.js'
+import vitestRunner from '../packages/runners/vitest/src/index.js'
+import { runProcess as runGoProcess } from '../packages/runners/go/src/process.js'
+import { runProcess as runPytestProcess } from '../packages/runners/pytest/src/process.js'
+import { runProcess as runVitestProcess } from '../packages/runners/vitest/src/process.js'
 
 const roots: string[] = []
 afterEach(async () => {

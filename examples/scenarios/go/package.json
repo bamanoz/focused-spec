@@ -1,0 +1,11 @@
+{
+  "name": "scenario-bank-go-demo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Independent Go SDK bank scenarios with optional focused-spec integration.",
+  "devDependencies": {
+    "focused-spec": "file:../../../packages/core",
+    "@focused-spec/format-scenarios-go": "file:../../../packages/formats/scenarios-go",
+    "@focused-spec/runner-scenarios-go": "file:../../../packages/runners/scenarios-go"
+  }
+}

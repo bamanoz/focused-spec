@@ -1,6 +1,7 @@
 import { loadConfig } from './config.js'
 import type { Scenario, Violation } from './model.js'
 import { validateFocusedSpecs } from './validate.js'
+import { safeText } from './terminal-text.js'
 
 export type InspectionScopeSelection =
   | { readonly mode: 'all' }
@@ -98,8 +99,8 @@ export async function inspectEnrollments(
 function displaySelection(selection: InspectionSelection): string {
   const scopes = selection.scopes.mode === 'all'
     ? 'all discovered scopes'
-    : `selected scope ${selection.scopes.name}`
-  const scenario = selection.scenario === undefined ? '' : `, scenario ${selection.scenario}`
+    : `selected scope ${safeText(selection.scopes.name)}`
+  const scenario = selection.scenario === undefined ? '' : `, scenario ${safeText(selection.scenario)}`
   return `inspection selection: ${scopes}${scenario}\n`
 }
 
@@ -113,17 +114,17 @@ export function displayInspection(result: InspectionResult, json: boolean): void
     process.stderr.write(displaySelection(result.selection))
     for (const violation of result.violations) {
       const location = violation.line === undefined ? violation.path : `${violation.path}:${violation.line}`
-      process.stderr.write(`${location}: ${violation.message}\n`)
+      process.stderr.write(`${safeText(location)}: ${safeText(violation.message)}\n`)
     }
     return
   }
 
   process.stdout.write(displaySelection(result.selection))
   for (const scenario of result.scenarios) {
-    process.stdout.write(`[${scenario.scope}] ${scenario.id}: ${scenario.name}\n`)
-    process.stdout.write(`  native: ${scenario.source.path}:${scenario.source.line}\n`)
+    process.stdout.write(`[${safeText(scenario.scope)}] ${safeText(scenario.id)}: ${safeText(scenario.name)}\n`)
+    process.stdout.write(`  native: ${safeText(scenario.source.path)}:${scenario.source.line}\n`)
     for (const evidence of scenario.evidence) {
-      process.stdout.write(`  evidence: ${evidence.reference} (${evidence.source.path}:${evidence.source.line})\n`)
+      process.stdout.write(`  evidence: ${safeText(evidence.reference)} (${safeText(evidence.source.path)}:${evidence.source.line})\n`)
     }
   }
 }

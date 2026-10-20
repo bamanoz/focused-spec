@@ -1,4 +1,5 @@
 import process from 'node:process'
+import { safeText } from './terminal-text.js'
 
 class CliArgumentError extends Error {
   readonly help: string
@@ -62,6 +63,6 @@ export function printCliError(error: unknown, json: boolean): void {
     process.stderr.write(`${JSON.stringify({ error: detail }, null, 2)}\n`)
     return
   }
-  process.stderr.write(`${message}\n`)
-  if (error instanceof CliArgumentError) process.stderr.write(`Run '${error.help}' for usage.\n`)
+  process.stderr.write(`${message.split('\n').map(safeText).join('\n')}\n`)
+  if (error instanceof CliArgumentError) process.stderr.write(`Run '${safeText(error.help)}' for usage.\n`)
 }

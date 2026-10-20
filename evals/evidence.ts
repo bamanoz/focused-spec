@@ -1,5 +1,5 @@
-import { loadEvidenceRegistry } from '../packages/format-registry/dist/index.js'
-import type { EvidenceRegistry, RegistryViolation } from '../packages/format-registry/dist/index.js'
+import { loadEvidenceRegistry } from '../packages/formats/registry/dist/index.js'
+import type { EvidenceRegistry, RegistryViolation } from '../packages/formats/registry/dist/index.js'
 import type { FocusedSpecConfig } from '../packages/core/dist/index.js'
 
 function object(value: unknown): Record<string, unknown> | undefined {

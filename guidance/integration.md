@@ -1,0 +1,35 @@
+# Focused Spec Integration
+
+This is the installed core package's offline orientation for choosing a composition, not a plugin manual or permission to change a project. Load the same installation's workflow first. Keep its phase, approval, identity, evidence and verification obligations. Reading this topic installs nothing and proves no behavior.
+
+## Inspect before choosing
+
+Establish the consuming project and dependency-owning workspace, package manager, task phase and authorization. Inspect the host's authoring process, canonical editable or generated behavioral source, existing configuration/enrollments and evidence owners, actual application boundary, tests and runtime prerequisites. Use repository facts before asking; ask only about unresolved alternatives with materially different ownership or authoring consequences.
+
+Preserve supported existing choices for ordinary work. An incompatible configuration follows the workflow's upgrade procedure, not greenfield replacement. A host name such as OpenSpec or Spec Kit does not select a format. Do not rewrite native acceptance items into another dialect merely because an adapter is familiar. Multiple domains may use different explicit paths, but two adapters must not own the same item.
+
+## Candidate capabilities
+
+This map is illustrative, nonexclusive and not a compatibility certification. Project-owned and third-party plugins remain eligible through their public contracts. Names provide orientation before optional packages are installed; concrete syntax, options, selectors and composed dependencies belong to each selected package.
+
+| Need | Candidate capabilities |
+| --- | --- |
+| Existing native Markdown or Gherkin with separate evidence ownership | A registry and compatible native parser; official examples are `@focused-spec/format-registry` with `@focused-spec/format-markdown` or `@focused-spec/format-gherkin` |
+| Standalone text scenarios | `@focused-spec/format-inline`, with the runner matching the existing tests |
+| Existing test framework | Reuse a compatible installed or project runner first; official examples include `@focused-spec/runner-vitest`, `@focused-spec/runner-pytest`, `@focused-spec/runner-go` |
+| Native JavaScript/TypeScript executable scenarios | Independent `@focused-spec/scenarios-typescript`; optionally `@focused-spec/format-scenarios-typescript` and `@focused-spec/runner-scenarios-typescript` for CLI discovery/execution |
+| Native Go executable scenarios | Independent Go module `github.com/bamanoz/focused-spec/packages/sdk/go`; optionally `@focused-spec/format-scenarios-go` and `@focused-spec/runner-scenarios-go` for CLI discovery/execution |
+| Native Python executable scenarios | Independent Python distribution `focused-spec-scenarios` (`focused_spec_scenarios` import), Python 3.11+; execute directly or through consumer-owned pytest tests |
+| Native .NET executable scenarios | Independent NuGet package `FocusedSpec.Scenarios`, .NET 9+; execute directly or through consumer-owned xUnit tests |
+
+Go, Python and .NET SDKs are native distributions, not npm packages. Check their documented distribution and publication prerequisites; do not infer registry availability from a source manifest or invent a successful remote installation. Node, Go, Python 3.11+, .NET 9+ and selected test frameworks remain consumer-owned prerequisites. Selecting any independent SDK for the first time still requires this topic, even if the task explicitly excludes CLI integration. SDK-only execution needs neither focused configuration nor CLI plugins. Native Go/Python/.NET SDK execution also needs no Node; the local CLI serving this orientation is not an SDK runtime dependency. Native code scenarios are the behavioral source, not tests requiring a Markdown companion or registry.
+
+Python and .NET SDKs currently provide no focused-spec native-discovery format or direct scenario runner. Do not invent `format-scenarios-python`, `runner-scenarios-python`, .NET counterparts, or a bundled xUnit runner. Keep their native execution path unless CLI integration is requested. Python pytest wrappers can then use the existing pytest runner's public exact-selector contract; .NET wrappers require a compatible installed/project runner before CLI binding can be claimed. Neither case authorizes copying the code scenarios into Markdown.
+
+## Select, acquire contracts, then integrate
+
+1. Recommend the smallest compatible composition. Identify the retained source, evidence owner, execution path, required packages/prerequisites, and what will deliberately remain uninstalled. Do not add every package or infer a storage conversion from an installation request.
+2. Public package documentation may inform preliminary selection before installation. When installation is authorized, use the existing package manager at the established dependency owner. For npm SDKs and CLI plugins, obtain the selected installed package's exact public contract through a separate `<project-local-focused-spec> plugin-docs --package <specifier> --root <path> --json` request before configuring it. Existing registrations use the workflow's `--format` or `--runner` requests. Validate selection and package/version/root/document provenance as the workflow requires. Follow a composing package's documented nested package through another explicit request; do not discover dependencies by scanning opaque options or implementation. For native Go/Python/.NET SDKs, read the selected module/distribution/NuGet package's public README and metadata with its origin/version visible; `plugin-docs --package` resolves npm packages, not those native distributions. Use the project's existing native dependency manager or an authorized local module, Python wheel/editable path or NuGet feed/project reference. A local artifact proves local use, not registry publication.
+3. If the contract is absent or incompatible, reconsider the recommendation or report the precise missing prerequisite. Do not guess syntax, silently change representation, enumerate packages, import implementation, or substitute stale repository instructions. Generated/metadata-hostile sources need a documented stable native identity exposed by their parser; without one binding is unsupported, not a guessed heading or coordinate.
+4. Recommendation-only work stops without installation or executable setup. Installation-only work stops after verified core/agent setup, explicitly leaving composition/configuration/evidence pending. Planning records the proposed composition and exact intended evidence in host-permitted artifacts; it does not create executable integration.
+5. During authorized implementation, follow the installed workflow and selected contracts to bind the first in-scope native outcome. Run its real evidence and controlled product-regression sensitivity, then the completed configured scope. For SDK-only work execute the native suite without adding focused configuration. Guidance, discovery and validation are not execution or coverage.

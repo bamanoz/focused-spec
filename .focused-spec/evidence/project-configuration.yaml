@@ -68,63 +68,18 @@ scopes:
           before a globstar with leading ./ for zero-depth documents
         - vitest::test/cli.spec.ts::focused-spec CLI > preserves captured scope
           before a globstar with leading ./ for nested documents
-  make-format-evidence-storage-agnostic:
-    "config.document.invalid":
+    config.evidence.adapter-owned:
       evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > reports missing and malformed configuration"
-    "config.runner.timeout-bound":
+        - vitest::test/cli.spec.ts::focused-spec CLI > runs inline ID and EVIDENCE
+          without any registry file
+        - vitest::test/cli.spec.ts::focused-spec CLI > runs registry-backed native
+          formats without core evidence configuration
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects old config and format
+          APIs without fallback
+    config.format.api-cutover:
       evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects runner timeouts that overflow the host timer"
-    "config.runner.invalid-options":
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects old config and format
+          APIs without fallback
+    format.response.lossless:
       evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid runner paths and non-JSON options"
-    "config.layout.invalid":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects unsafe document layouts and escaped specification symlinks"
-    "config.format.version-three":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > advertises executable workflow guidance for obsolete configuration and inline metadata"
-    "config.registry.required":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects a missing evidence registry"
-    "config.options.cyclic":
-      evidence:
-        - "vitest::test/plugins.spec.ts::plugin architecture > rejects cyclic format YAML options before loading either plugin"
-        - "vitest::test/plugins.spec.ts::plugin architecture > rejects cyclic runner YAML options before loading either plugin"
-        - "vitest::test/plugins.spec.ts::plugin architecture > accepts repeated acyclic YAML aliases in format and runner options"
-    "config.evidence.adapter-owned":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > runs inline ID and EVIDENCE without any registry file"
-        - "vitest::test/cli.spec.ts::focused-spec CLI > runs registry-backed native formats without core evidence configuration"
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects old config and format APIs without fallback"
-    "config.format.api-cutover":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects old config and format APIs without fallback"
-    "config.source.empty-files":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > preserves successful validation and execution for an empty registry"
-    "config.source.openspec-discovery":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > reports all scenarios, planned evidence, and unique resolved targets"
-    "config.source.layout-variants":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > discovers fixed and captured scope documents from declared patterns"
-    "config.source.missing-scope":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects a selected scope with no documents"
-    "config.source.empty-scope-document":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects selections containing only unmarked native content"
-    "config.source.overlap":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects a document claimed by multiple layouts"
-    "config.source.mixed-scope-enrollment":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > runs marked outcomes beside untouched native content"
-    "config.source.legacy-only-selection":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects selections containing only unmarked native content"
-    "config.source.dot-capture":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > preserves captured scope before a globstar with leading ./ for zero-depth documents"
-        - "vitest::test/cli.spec.ts::focused-spec CLI > preserves captured scope before a globstar with leading ./ for nested documents"
+        - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects lossy format responses before transport

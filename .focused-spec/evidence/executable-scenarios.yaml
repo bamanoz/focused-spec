@@ -1,0 +1,83 @@
+scopes:
+  current:
+    executable-sdk.independent:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > runs a
+          packed SDK scenario without focused-spec
+    executable-sdk.invalid-declaration:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          rejects invalid declarations before execution
+    executable-sdk.actual-comparison:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > fails
+          when real application events differ
+    executable-sdk.input-isolation:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          preserves expectations when a driver mutates inputs
+    executable-sdk.cleanup:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > cleans
+          up failures and preserves both errors
+    executable-format.static-discovery:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          discovers source locations without importing drivers
+    executable-format.dynamic-rejected:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          rejects dynamic declarations without executing them
+    executable-format.direct-enrollment:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > runs
+          native code scenarios without a registry
+    executable-runner.exact-selection:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          executes only the selected opaque identity
+    executable-runner.missing-target:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          rejects a target removed after resolution
+    executable-runner.driver-boundary:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          rejects driver escapes without importing them
+    executable-runner.typescript-driver:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          executes an erasable TypeScript driver without consumer flags
+    executable-distribution.consumer:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > runs
+          packed plugins outside the source checkout
+    executable-example.bank:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          detects the bank withdrawal boundary regression
+    executable-sdk.cleanup-cancellation:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          releases prepared resources after cancellation without losing failures
+          or explanations
+    executable-sdk.cleanup-awaited:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > awaits
+          cancellation independent asynchronous cleanup
+    executable-sdk.preparation-ownership:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > does
+          not clean an unprepared subject after preparation fails
+    executable-sdk.cancel-before-preparation:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > does
+          not acquire resources for pre aborted execution
+    executable-sdk.cancel-after-preparation:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > skips
+          the action and releases resources after preparation cancellation
+    executable-sdk.cancel-after-action:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          rejects a matching action result after cancellation

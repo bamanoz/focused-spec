@@ -16,6 +16,8 @@ import { OperationTimings } from './timings.js'
 import { argumentError, jsonRequested, printCliError } from './cli-error.js'
 import { readVersion, displayVersion } from './cli-version.js'
 import { inspectEnrollments, displayInspection } from './inspection.js'
+import type { ExecutionEvent } from './runner-api.js'
+import { safeText } from './terminal-text.js'
 
 type InspectionCommand = 'list' | 'show'
 
@@ -30,6 +32,7 @@ interface CliOptions {
   readonly allowSkip: boolean
   readonly scenarioId?: string
   readonly timings: boolean
+  readonly details: boolean
 }
 
 interface PluginDocsOptions {
@@ -58,7 +61,7 @@ Commands:
   validate  Check native bindings and resolve format-provided evidence without running tests
   run       Strictly validate, then execute selected evidence
   plugin-docs  Read one installed plugin's public Markdown documentation
-  instructions  Read version-compatible workflow, format or runner guidance from this package
+  instructions  Read version-compatible workflow, integration, format or runner guidance from this package
   init      Install selected agent integrations without evidence setup
   version   Identify this executable and its supported contract versions offline
   list      Inspect enrolled items and evidence provenance without resolving targets
@@ -119,6 +122,7 @@ Options:
   --allow-skip      Allow an overall successful exit with SKIP; never relabel SKIP as PASS
   --json            Print the execution result as JSON
   --timings         Include elapsed validation, resolution and execution phase timings
+  --details         Show retained execution events for passing evidence too
   -h, --help        Show this help
 
 Run always validates strictly before starting tests; planned: evidence blocks execution.
@@ -351,6 +355,7 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
   let allowSkip = false
   let scenarioId: string | undefined
   let timings = false
+  let details = false
   const seen = new Set<string>()
 
   for (let index = 1; index < argumentsList.length; index += 1) {
@@ -363,6 +368,7 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
     else if (argument === '--syntax-only') syntaxOnly = true
     else if (argument === '--json') json = true
     else if (argument === '--timings') timings = true
+    else if (argument === '--details') details = true
     else if (argument === '--allow-skip') allowSkip = true
     else if (argument === '--root' || argument === '--config' || argument === '--scope' || argument === '--scenario') {
       const value = argumentsList[index + 1]
@@ -380,6 +386,7 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
   if (command === 'validate' && allowSkip) {
     throw argumentError('--allow-skip is valid only for run', command)
   }
+  if (command === 'validate' && details) throw argumentError('--details is valid only for run', command)
   if (command === 'run' && (strict || syntaxOnly)) {
     throw argumentError('run is always strict and cannot be syntax-only', command)
   }
@@ -393,6 +400,7 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
     json,
     allowSkip,
     timings,
+    details,
     ...(scenarioId === undefined ? {} : { scenarioId }),
   }
 }
@@ -447,24 +455,24 @@ function runContext(options: CliOptions): RunContext {
 }
 
 function displayScopeSelection(selection: ScopeSelection): string {
-  return selection.mode === 'all' ? 'all discovered scopes' : `selected scope ${String(selection.name)}`
+  return selection.mode === 'all' ? 'all discovered scopes' : `selected scope ${safeText(String(selection.name))}`
 }
 
 function displayValidationContext(context: ValidationContext): string {
   const selection = context.validationScope
-  const scenario = selection.scenario === undefined ? '' : `, scenario ${selection.scenario}`
+  const scenario = selection.scenario === undefined ? '' : `, scenario ${safeText(selection.scenario)}`
   return `validation scope: ${displayScopeSelection(selection.scopes)}${scenario}\n`
 }
 
 function displayRunContext(context: RunContext): string {
   const selection = context.executionSelection
-  const scenario = selection.scenario === undefined ? '' : `, scenario ${selection.scenario}`
+  const scenario = selection.scenario === undefined ? '' : `, scenario ${safeText(selection.scenario)}`
   return `${displayValidationContext(context)}execution selection: ${displayScopeSelection(selection.scopes)}${scenario}\n`
 }
 
 function displayViolation(violation: Violation): string {
   const location = violation.line === undefined ? violation.path : `${violation.path}:${violation.line}`
-  return `${location}: ${violation.message}`
+  return `${safeText(location)}: ${safeText(violation.message)}`
 }
 
 function elapsed(started: number): number {
@@ -479,7 +487,7 @@ function displayTimings(timings: PhaseTimings): string {
     `total ${timings.totalMs.toFixed(2)} ms`,
   ]
   const runners = timings.runnerOperations.map(row => `  runner ${row.runnerId} ${row.operation}: ${row.durationMs.toFixed(2)} ms, start ${row.startedMs.toFixed(2)} ms, ${row.operation === 'resolve' ? `selectors ${row.selectorCount}` : `targets ${row.targetCount}`}, ${row.outcome}\n`)
-  const formats = timings.formatOperations.map(row => `  format ${row.formatId} [${row.scope}] ${row.path}: ${row.durationMs.toFixed(2)} ms, start ${row.startedMs.toFixed(2)} ms, ${row.coldStart ? 'cold-start' : 'reused-host'}, ${row.outcome}\n`)
+  const formats = timings.formatOperations.map(row => `  format ${safeText(row.formatId)} [${safeText(row.scope)}] ${safeText(row.path)}: ${row.durationMs.toFixed(2)} ms, start ${row.startedMs.toFixed(2)} ms, ${row.coldStart ? 'cold-start' : 'reused-host'}, ${row.outcome}\n`)
   return `timings: ${phases.join(', ')}\n${runners.join('')}${formats.join('')}`
 }
 
@@ -502,18 +510,24 @@ function printViolations(
   if (timings !== undefined) process.stderr.write(displayTimings(timings))
 }
 
-function printExecution(result: ExecutionResult, json: boolean, context: RunContext, timings?: PhaseTimings): void {
+function displayEvent(event: ExecutionEvent): string {
+  return `[${safeText(event.kind)}] ${safeText(event.message)}${event.data === undefined ? '' : ` ${safeText(JSON.stringify(event.data))}`}`
+}
+
+function printExecution(result: ExecutionResult, json: boolean, context: RunContext, timings?: PhaseTimings, details = false): void {
   if (json) {
     process.stdout.write(`${JSON.stringify({ ...result, executionStarted: result.targetCount > 0, ...context, ...(timings === undefined ? {} : { timings }) }, null, 2)}\n`)
     return
   }
   process.stdout.write(displayRunContext(context))
   for (const scenario of result.scenarios) {
-    const scope = context.executionSelection.scopes.mode === 'all' ? ` [${scenario.scope}]` : ''
-    process.stdout.write(`${scenario.status}${scope} ${scenario.id}\n`)
+    const scope = context.executionSelection.scopes.mode === 'all' ? ` [${safeText(scenario.scope)}]` : ''
+    process.stdout.write(`${scenario.status}${scope} ${safeText(scenario.id)}\n`)
+    process.stdout.write(`  ${safeText(scenario.name)} (${safeText(scenario.source.path)}:${scenario.source.line})\n`)
     for (const evidence of scenario.evidence) {
-      process.stdout.write(`  ${evidence.status} ${evidence.reference}\n`)
-      if (evidence.diagnostic !== undefined) process.stdout.write(`    ${evidence.diagnostic.split('\n').join('\n    ')}\n`)
+      process.stdout.write(`  ${evidence.status} ${safeText(evidence.reference)}\n`)
+      if (evidence.diagnostic !== undefined) process.stdout.write(`    ${evidence.diagnostic.split('\n').map(safeText).join('\n    ')}\n`)
+      if (details || evidence.status !== 'PASS') for (const event of evidence.events ?? []) process.stdout.write(`    ${displayEvent(event)}\n`)
     }
   }
   const counts = { PASS: 0, FAIL: 0, SKIP: 0, ERROR: 0 }
@@ -636,7 +650,7 @@ async function main(argumentsList: readonly string[]): Promise<number> {
     maxConcurrentGroups: loaded.config.execution?.maxConcurrentGroups ?? 1,
   }, operationTimings)
   phases.executionMs = elapsed(executionStarted)
-  printExecution(result, options.json, context as RunContext, reportedTimings())
+  printExecution(result, options.json, context as RunContext, reportedTimings(), options.details)
   return result.success ? 0 : 1
 }
 

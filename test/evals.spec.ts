@@ -1,4 +1,6 @@
 import { cp, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { glob } from 'glob'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,6 +14,9 @@ import { evalCase } from '../evals/cases.ts'
 import { provisionWorkspace } from '../evals/provision.ts'
 import { runProcess } from '../evals/process.ts'
 import { captureUpgradeBaseline, upgradeArtifactsGate, upgradePreservationGate } from '../evals/upgrade.ts'
+import { executableBehaviorGates, executableSourceGate, integrationBoundaryGates, integrationFiles, integrationRoutingGate, selectedContractsGate } from '../evals/integration.ts'
+import type { IntegrationBaseline } from '../evals/integration.ts'
+import type { IntegrationCase } from '../evals/types.ts'
 
 const roots: string[] = []
 const repository = fileURLToPath(new URL('..', import.meta.url))
@@ -50,11 +55,11 @@ async function put(root: string, path: string, source: string): Promise<void> {
 async function installFocusedPackage(root: string): Promise<void> {
   const packages = [
     ['core', 'focused-spec', ['guidance', 'skills']],
-    ['format-markdown', '@focused-spec/format-markdown', []],
-    ['format-inline', '@focused-spec/format-inline', []],
-    ['format-registry', '@focused-spec/format-registry', []],
-    ['runner-go', '@focused-spec/runner-go', []],
-    ['runner-pytest', '@focused-spec/runner-pytest', ['python']],
+    ['formats/markdown', '@focused-spec/format-markdown', []],
+    ['formats/inline', '@focused-spec/format-inline', []],
+    ['formats/registry', '@focused-spec/format-registry', []],
+    ['runners/go', '@focused-spec/runner-go', []],
+    ['runners/pytest', '@focused-spec/runner-pytest', ['python']],
   ] as const
   await Promise.all(packages.map(async ([directory, name, assets]) => {
     const destination = join(root, 'node_modules', ...name.split('/'))
@@ -243,6 +248,42 @@ async function brownfieldFixture(options: BrownfieldFixtureOptions = {}): Promis
   return root
 }
 
+async function boundaryFixture(packages: readonly string[], native: ReadonlyMap<string, string> = new Map(), config?: string): Promise<{ root: string; baseline: IntegrationBaseline }> {
+  const root = await mkdtemp(join(tmpdir(), 'focused-eval-composition-'))
+  roots.push(root)
+  for (const name of packages) await put(root, `node_modules/${name}/package.json`, JSON.stringify({ name, version: '0.9.2' }))
+  for (const [path, content] of native) await put(root, path, content)
+  if (config !== undefined) await put(root, '.focused-spec/config.yaml', config)
+  const candidates = new Map<string, ReadonlyMap<string, string>>()
+  for (const name of packages) {
+    const files = await glob('**/*', { cwd: join(root, 'node_modules', name), nodir: true })
+    candidates.set(name, new Map(await Promise.all(files.map(async path => [path, createHash('sha256').update(await readFile(join(root, 'node_modules', name, path))).digest('hex')] as const))))
+  }
+  return { root, baseline: { files: await integrationFiles(root), protected: new Map(), candidates, native, packages: [...packages].sort(), ...(config === undefined ? {} : { config }) } }
+}
+
+async function bankFixture(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'focused-eval-bank-'))
+  roots.push(root)
+  await cp(join(repository, 'examples/scenarios/typescript'), root, { recursive: true, filter: path => !path.includes('node_modules') && !path.includes('.focused-spec') })
+  const sdk = join(root, 'node_modules/@focused-spec/scenarios-typescript')
+  await mkdir(sdk, { recursive: true })
+  await cp(join(repository, 'packages/sdk/typescript/dist'), join(sdk, 'dist'), { recursive: true })
+  await cp(join(repository, 'packages/sdk/typescript/package.json'), join(sdk, 'package.json'))
+  return root
+}
+
+function configurationWrite(): string {
+  return JSON.stringify({ type: 'tool_execution_start', toolName: 'write', toolCallId: 'configuration', args: { path: '.focused-spec/config.yaml', content: 'version: 5' } })
+}
+
+function contractTranscript(command: string, result: string, options: { complete?: boolean; failed?: boolean } = {}): string {
+  const events: object[] = [{ type: 'tool_execution_start', toolName: 'bash', toolCallId: 'contract', args: { command } }]
+  if (options.complete !== false) events.push({ type: 'tool_execution_end', toolName: 'bash', toolCallId: 'contract', isError: options.failed === true,
+    result: { content: [{ type: 'text', text: result }], details: { exitCode: options.failed === true ? 1 : 0 } } })
+  return events.map(event => JSON.stringify(event)).join('\n')
+}
+
 afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
 })
@@ -264,8 +305,179 @@ describe('agent eval harness', () => {
     if (task.name !== checkpointRetirement) return
     const root = await brownfieldFixture()
     const checkpoint = await judgeWorkingCheckpoint(root, brownfieldChange)
-    expect(checkpoint.gates.every(gate => gate.passed)).toBe(true)
+    expect(checkpoint.gates.filter(gate => !gate.passed)).toEqual([])
     retirementFixture = { root, checkpoint }
+  })
+
+  it('rejects unauthorized conversion of an existing integration', async () => {
+    const choice: IntegrationCase = { source: 'inline', mode: 'revise', cli: true }
+    const packages = ['focused-spec', '@focused-spec/format-inline', '@focused-spec/runner-go', '@focused-spec/runner-pytest']
+    const config = JSON.stringify({ version: 5, specifications: { formats: { inline: { package: '@focused-spec/format-inline' } } } })
+    const { root, baseline } = await boundaryFixture(packages, new Map([['specs/auth.md', '#### Scenario: Blocked\n- **ID**: `Opaque / Auth`\n- **EVIDENCE**: `go::target`\n- **WHEN** blocked\n- **THEN** rejected\n']]), config)
+    expect((await integrationBoundaryGates(root, choice, baseline)).find(gate => gate.name === 'integration-preserve-existing')).toMatchObject({ passed: true })
+    await put(root, '.focused-spec/config.yaml', config.replace('format-inline', 'format-registry'))
+    expect((await integrationBoundaryGates(root, choice, baseline)).find(gate => gate.name === 'integration-preserve-existing')).toMatchObject({ passed: false })
+    await put(root, '.focused-spec/config.yaml', config)
+    await put(root, 'node_modules/@focused-spec/format-registry/package.json', '{"name":"@focused-spec/format-registry","version":"0.9.2"}')
+    expect((await integrationBoundaryGates(root, choice, baseline)).find(gate => gate.name === 'integration-preserve-existing')).toMatchObject({ passed: false })
+  })
+
+  it('requires completed local integration guidance for composition selection', async () => {
+    const root = await activationFixture()
+    const content = '# Integration\n\nInspect the project before selecting capabilities.\n'
+    await put(root, 'node_modules/focused-spec/guidance/integration.md', content)
+    const command = `${JSON.stringify(process.execPath)} ${JSON.stringify(join(root, 'node_modules/focused-spec/dist/cli.js'))} instructions --protocol 1 --topic integration --json`
+    const response = { protocolVersion: 1, package: { name: 'focused-spec', version: '0.6.0' }, topic: 'integration', content }
+    const accepted = guidanceTranscript(root, { command, response })
+    expect(await integrationRoutingGate(root, [accepted + '\n' + configurationWrite()])).toMatchObject({ passed: true })
+    const hydration = JSON.stringify({ type: 'tool_execution_start', toolName: 'bash', toolCallId: 'hydrate', args: { command: 'npm install' } })
+    expect(await integrationRoutingGate(root, [hydration + '\n' + accepted])).toMatchObject({ passed: true })
+    const install = JSON.stringify({ type: 'tool_execution_start', toolName: 'bash', toolCallId: 'select-sdk', args: { command: 'npm install --save-dev @focused-spec/scenarios-typescript' } })
+    expect(await integrationRoutingGate(root, [install + '\n' + accepted])).toMatchObject({ passed: false })
+    for (const transcript of [
+      guidanceTranscript(root, { command, response, complete: false }),
+      guidanceTranscript(root, { command, response, failed: true }),
+      guidanceTranscript(root, { command, response: { ...response, topic: 'workflow' } }),
+      guidanceTranscript(root, { command, response: { ...response, package: { name: 'focused-spec', version: '0.5.0' } } }),
+      guidanceTranscript(root, { command, response: { ...response, content: content.slice(0, 12) } }),
+      guidanceTranscript(root, { command: 'focused-spec instructions --protocol 1 --topic integration --json', response }),
+      configurationWrite() + '\n' + accepted,
+    ]) expect(await integrationRoutingGate(root, [transcript])).toMatchObject({ passed: false })
+    const recovered = artifactGuidanceTranscript(root, { response }).replace('--topic workflow', '--topic integration')
+    expect(await integrationRoutingGate(root, [recovered])).toMatchObject({ passed: true })
+  })
+
+  it('rejects replacement of native acceptance items during integration', async () => {
+    for (const source of ['openspec', 'spec-kit'] as const) {
+      const path = source === 'openspec' ? 'openspec/specs/auth/spec.md' : 'specs/001-auth/spec.md'
+      const native = source === 'openspec' ? '#### Scenario: Blocked account\n- **WHEN** valid credentials belong to a blocked account\n- **THEN** login is rejected\n'
+        : '1. **Given** blocked status and valid credentials, **When** login is attempted, **Then** it is rejected.\n'
+      const { root, baseline } = await boundaryFixture(['focused-spec'], new Map([[path, native]]))
+      const choice: IntegrationCase = { source, mode: 'integrate', cli: true }
+      await put(root, path, `<!-- focused-spec:id=Auth / Blocked -->\n${native}`)
+      expect((await integrationBoundaryGates(root, choice, baseline)).find(gate => gate.name === 'integration-native-source')).toMatchObject({ passed: true })
+      await put(root, path, '#### Scenario: Blocked\n- **ID**: `replacement`\n- **EVIDENCE**: `go::target`\n- **WHEN** blocked\n- **THEN** rejected\n')
+      expect((await integrationBoundaryGates(root, choice, baseline)).find(gate => gate.name === 'integration-native-source')).toMatchObject({ passed: false })
+    }
+  })
+
+  it('judges standalone compositions against the requested canonical source', async () => {
+    const variants: readonly [IntegrationCase['source'], boolean, readonly string[]][] = [
+      ['inline', true, ['focused-spec', '@focused-spec/format-inline', '@focused-spec/runner-go', '@focused-spec/runner-pytest']],
+      ['typescript', false, ['focused-spec', '@focused-spec/scenarios-typescript']],
+      ['typescript', true, ['focused-spec', '@focused-spec/scenarios-typescript', '@focused-spec/format-scenarios-typescript', '@focused-spec/runner-scenarios-typescript']],
+      ['go', false, ['focused-spec']],
+      ['go', true, ['focused-spec', '@focused-spec/format-scenarios-go', '@focused-spec/runner-scenarios-go']],
+    ]
+    for (const [source, cli, packages] of variants) {
+      const choice: IntegrationCase = { source, cli, mode: 'integrate' }
+      const { root, baseline } = await boundaryFixture(packages)
+      expect((await integrationBoundaryGates(root, choice, baseline)).find(gate => gate.name === 'integration-composition')).toMatchObject({ passed: true })
+      await put(root, 'node_modules/@focused-spec/format-gherkin/package.json', '{"name":"@focused-spec/format-gherkin","version":"0.9.2"}')
+      expect((await integrationBoundaryGates(root, choice, baseline)).find(gate => gate.name === 'integration-composition')).toMatchObject({ passed: false })
+      await rm(join(root, 'node_modules/@focused-spec/format-gherkin'), { recursive: true })
+      if (!cli) {
+        await put(root, '.focused-spec/config.yaml', 'version: 5\n')
+        expect((await integrationBoundaryGates(root, choice, baseline)).find(gate => gate.name === 'integration-composition')).toMatchObject({ passed: false })
+      }
+    }
+  })
+
+  it('rejects configuration writes during recommendation or installation only', async () => {
+    for (const mode of ['recommend', 'install'] as const) {
+      const { root, baseline } = await boundaryFixture(['focused-spec'])
+      const choice: IntegrationCase = { source: 'inline', cli: false, mode }
+      expect((await integrationBoundaryGates(root, choice, baseline)).find(gate => gate.name === 'integration-phase-boundary')).toMatchObject({ passed: true })
+      await put(root, '.omp/skills/focused-spec/SKILL.md', 'loader')
+      expect((await integrationBoundaryGates(root, choice, baseline)).find(gate => gate.name === 'integration-phase-boundary')).toMatchObject({ passed: mode === 'install' })
+      await put(root, '.focused-spec/config.yaml', 'version: 5\n')
+      expect((await integrationBoundaryGates(root, choice, baseline)).find(gate => gate.name === 'integration-phase-boundary')).toMatchObject({ passed: false })
+      await rm(join(root, '.focused-spec'), { recursive: true })
+      await put(root, 'node_modules/@focused-spec/format-inline/package.json', '{"name":"@focused-spec/format-inline","version":"0.9.2"}')
+      expect((await integrationBoundaryGates(root, choice, baseline)).find(gate => gate.name === 'integration-phase-boundary')).toMatchObject({ passed: false })
+    }
+  })
+
+  it('requires selected installed contracts before integration configuration', async () => {
+    const root = await activationFixture()
+    await installFocusedPackage(root)
+    const names = ['@focused-spec/format-registry', '@focused-spec/format-markdown']
+    const transcripts: string[] = []
+    for (const name of names) {
+      await put(root, `node_modules/${name}/README.md`, `# ${name}\n\nInstalled public authoring contract.\n`)
+      const args = [join(root, 'node_modules/focused-spec/dist/cli.js'), 'plugin-docs', '--package', name, '--root', root, '--json']
+      const result = await runProcess(process.execPath, args, { cwd: root, timeoutMs: 10_000 })
+      expect(result.code, result.stderr).toBe(0)
+      const command = [process.execPath, ...args].map(value => JSON.stringify(value)).join(' ')
+      transcripts.push(contractTranscript(command, result.stdout))
+      expect(await selectedContractsGate(root, [transcripts[0]!], names)).toMatchObject({ passed: false })
+    }
+    const complete = transcripts.join('\n')
+    expect(await selectedContractsGate(root, [complete + '\n' + configurationWrite()], names)).toMatchObject({ passed: true })
+    expect(await selectedContractsGate(root, [transcripts[0]! + '\n' + configurationWrite() + '\n' + transcripts[1]!], names)).toMatchObject({ passed: false })
+    const altered = complete.replace('Installed public authoring contract.', 'stale contract')
+    expect(await selectedContractsGate(root, [altered], names)).toMatchObject({ passed: false })
+    expect(await selectedContractsGate(root, [complete.replaceAll('"exitCode":0', '"exitCode":1')], names)).toMatchObject({ passed: false })
+    expect(await selectedContractsGate(root, [complete.split('\n').filter(line => JSON.parse(line).type !== 'tool_execution_end').join('\n')], names)).toMatchObject({ passed: false })
+  })
+
+  it('rejects duplicate behavioral sources beside executable scenarios', async () => {
+    const root = await bankFixture()
+    const choice: IntegrationCase = { source: 'typescript', mode: 'author', cli: false }
+    expect(await executableSourceGate(root, choice)).toMatchObject({ passed: true })
+    await put(root, 'specs/account.md', '#### Scenario: Withdraw entire balance\n- **THEN** withdrawal is allowed\n')
+    expect(await executableSourceGate(root, choice)).toMatchObject({ passed: false })
+    await rm(join(root, 'specs'), { recursive: true })
+    await put(root, '.focused-spec/evidence/bank.yaml', 'scopes: {}\n')
+    expect(await executableSourceGate(root, choice)).toMatchObject({ passed: false })
+  })
+
+  it('rejects executable evidence disconnected from the mutated application', async () => {
+    const root = await bankFixture()
+    const choice: IntegrationCase = { source: 'typescript', mode: 'author', cli: false }
+    const path = 'specifications/account.driver.mjs'
+    const original = await readFile(join(root, path), 'utf8')
+    expect((await executableBehaviorGates(root, choice)).find(gate => gate.name === 'executable-application-sensitivity')).toMatchObject({ passed: true })
+    await put(root, path, "import suite from './account.scenarios.mjs';\nexport default {given: x=>x, when: (_subject, command)=>structuredClone(suite.scenarios.find(item=>JSON.stringify(item.when)===JSON.stringify(command)).expect)};\n")
+    expect((await executableBehaviorGates(root, choice)).find(gate => gate.name === 'executable-application-sensitivity')).toMatchObject({ passed: false })
+    await put(root, path, "export default {given: history=>history, when: (_subject, command)=>[{type:'MoneyWithdrawn', cents:command.cents}]};\n")
+    expect((await executableBehaviorGates(root, choice)).find(gate => gate.name === 'executable-application-sensitivity')).toMatchObject({ passed: false })
+    await put(root, path, original)
+    expect((await executableBehaviorGates(root, choice)).find(gate => gate.name === 'executable-application-sensitivity')).toMatchObject({ passed: true })
+  })
+
+  it('rejects observations that conceal the claimed application regression', async () => {
+    const root = await bankFixture()
+    const choice: IntegrationCase = { source: 'typescript', mode: 'author', cli: false }
+    const suitePath = 'specifications/account.scenarios.mjs', driverPath = 'specifications/account.driver.mjs'
+    const suite = await readFile(join(root, suitePath), 'utf8'), driver = await readFile(join(root, driverPath), 'utf8')
+    await put(root, suitePath, "import {defineSuite} from '@focused-spec/scenarios-typescript';\nimport {Account} from '../src/account.mjs';\nconst given=[{type:'AccountOpened'},{type:'MoneyDeposited',cents:5000}], when={type:'WithdrawMoney',cents:5000};\nexport default defineSuite({driver:'./account.driver.mjs',scenarios:[{id:'account.withdraw.entire-balance',name:'Withdrawing the entire balance is allowed',given,when,expect:Account.from(given).handle(when)}]});\n")
+    const derived = await executableBehaviorGates(root, choice)
+    expect(derived.find(gate => gate.name === 'executable-independent-expectation')).toMatchObject({ passed: false })
+    expect(derived.find(gate => gate.name === 'executable-application-sensitivity')).toMatchObject({ passed: false })
+    await put(root, suitePath, suite.replaceAll("expect: [{ type: 'MoneyWithdrawn', cents: 5000 }]", 'expect: []'))
+    await put(root, driverPath, "import {Account} from '../src/account.mjs';\nexport default {given: history=>Account.from(history), when: (account, command)=>{account.handle(command); return []}};\n")
+    expect((await executableBehaviorGates(root, choice)).find(gate => gate.name === 'executable-application-sensitivity')).toMatchObject({ passed: false })
+    await put(root, suitePath, suite); await put(root, driverPath, driver)
+    expect((await executableBehaviorGates(root, choice)).find(gate => gate.name === 'executable-application-sensitivity')).toMatchObject({ passed: true })
+  })
+
+  it('rejects diagnostic success when selected behavioral comparison fails', async () => {
+    const root = await bankFixture()
+    const choice: IntegrationCase = { source: 'typescript', mode: 'author', cli: false }
+    const path = 'specifications/account.driver.mjs', original = await readFile(join(root, path), 'utf8')
+    await put(root, path, "import {Account} from '../src/account.mjs';\nexport default {given: history=>Account.from(history), when: (account, command, context)=>{context.explain('Withdrawal allowed and codec roundtrip passed'); account.handle(command); return []}};\n")
+    const diagnostic = await executableBehaviorGates(root, choice)
+    expect(diagnostic.find(gate => gate.name === 'executable-native-execution')).toMatchObject({ passed: false })
+    expect(diagnostic.find(gate => gate.name === 'executable-application-sensitivity')).toMatchObject({ passed: false })
+    await put(root, path, "export default {given: value=>value, when: ()=>{throw new Error('runner setup failed')}};\n")
+    expect((await executableBehaviorGates(root, choice)).find(gate => gate.name === 'executable-application-sensitivity')).toMatchObject({ passed: false })
+    await put(root, path, original)
+    const wrapper = await readFile(join(root, 'test/account.node.mjs'), 'utf8')
+    await put(root, 'test/account.node.mjs', wrapper.replace('test(scenario.name,', 'test.skip(scenario.name,'))
+    expect((await executableBehaviorGates(root, choice)).find(gate => gate.name === 'executable-application-sensitivity')).toMatchObject({ passed: false })
+    await put(root, 'test/account.node.mjs', wrapper)
+    expect((await executableBehaviorGates(root, choice)).find(gate => gate.name === 'executable-application-sensitivity')).toMatchObject({ passed: true })
   })
 
   it('rejects lost scope-local evidence and tampered upgrade artifacts', async () => {

@@ -1,0 +1,27 @@
+scopes:
+  current:
+    execution-events.sdk-capture:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          observes actual verification through one event channel
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          observes actual Go verification through one event channel
+    execution-events.snapshots:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          isolates observation snapshots from driver observer and cleanup mutation
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          isolates Go observation snapshots from driver observer and cleanup
+          mutation
+    execution-events.portable-go:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          preserves exact Go verification outside portable JSON values
+    execution-events.bank-end-to-end:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          exposes the real bank execution across standalone detailed and JSON
+          output
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          exposes the real Go bank execution across standalone detailed and JSON
+          output

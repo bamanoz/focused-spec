@@ -8,7 +8,7 @@ Usage:
 
 Options:
   --protocol <version>  Loader protocol, independent of package/config/runner versions (default: 1)
-  --topic <topic>       workflow, formats or runners (default: workflow)
+  --topic <topic>       workflow, integration, formats or runners (default: workflow)
   --json                Print protocol, package identity, topic and complete Markdown as JSON
   -h, --help            Show this help
 
@@ -18,13 +18,14 @@ Guidance is not validation or executable evidence.
 
 Examples:
   focused-spec instructions --protocol 1 --json
+  focused-spec instructions --protocol 1 --topic integration --json
   focused-spec instructions --protocol 1 --topic formats --json
   focused-spec instructions --protocol 1 --topic runners --json
 `
 
 export async function instructions(argumentsList: readonly string[]): Promise<string> {
   let protocol = 1
-  let topic: 'workflow' | 'formats' | 'runners' = 'workflow'
+  let topic: 'workflow' | 'integration' | 'formats' | 'runners' = 'workflow'
   let json = false
   const seen = new Set<string>()
   for (let index = 0; index < argumentsList.length; index += 1) {
@@ -44,7 +45,7 @@ export async function instructions(argumentsList: readonly string[]): Promise<st
         }
         protocol = Number(value)
       } else {
-        if (value !== 'workflow' && value !== 'formats' && value !== 'runners') throw argumentError(`unknown guidance topic ${value}; choose workflow, formats or runners`, 'instructions')
+        if (value !== 'workflow' && value !== 'integration' && value !== 'formats' && value !== 'runners') throw argumentError(`unknown guidance topic ${value}; choose workflow, integration, formats or runners`, 'instructions')
         topic = value
       }
     } else throw argumentError(`unknown argument ${String(argument)}`, 'instructions')

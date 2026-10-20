@@ -1,0 +1,23 @@
+scopes:
+  current:
+    dotnet-sdk.independent:
+      evidence:
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > runs the packed SDK without focused-spec
+    dotnet-sdk.invalid-declaration:
+      evidence:
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > rejects invalid declarations before driver execution
+    dotnet-sdk.comparison:
+      evidence:
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > compares typed results exactly and isolates declarations
+    dotnet-sdk.cleanup:
+      evidence:
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > preserves execution and cleanup failures
+    dotnet-sdk.cancellation:
+      evidence:
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > retains cleanup after cancellation
+    dotnet-sdk.events:
+      evidence:
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > reports ordered execution events
+    dotnet-example.bank:
+      evidence:
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > runs the maintained xUnit bank consumer

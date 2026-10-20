@@ -9,7 +9,7 @@ export async function parseNativeDocument(projectRoot: string, path: string, sou
 }
 
 export function parseEvidenceReference(raw: string): EvidenceReference | { readonly error: string } {
-  const planned = raw.startsWith('planned:')
+  const planned = raw.startsWith('planned:') && !raw.startsWith('planned::')
   const value = planned ? raw.slice('planned:'.length) : raw
   const separator = value.indexOf('::')
   if (separator <= 0 || separator === value.length - 2) return { error: 'expected [planned:]<runner-id>::<selector>' }

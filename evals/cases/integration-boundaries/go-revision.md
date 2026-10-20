@@ -1,0 +1,1 @@
+Review the existing Go executable bank scenario protecting an entire-balance withdrawal and verify ordinary tests and its configured CLI integration, including application-regression sensitivity. Preserve the supported composition, authored expectations, suite identity, module ownership and sole code source; do not change application behavior.

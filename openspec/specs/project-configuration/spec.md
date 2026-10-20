@@ -7,11 +7,11 @@ Versioned runner configuration and specification source discovery.
 ## Requirements
 
 ### Requirement: Project configuration
-The CLI SHALL load a version-4 `.focused-spec/config.yaml` from the selected project root unless an explicit configuration path is supplied. It SHALL reject invalid document layout settings and runner definitions at the configuration boundary, including obsolete version-1, version-2 and version-3 formats.
+The CLI SHALL load a version-5 `.focused-spec/config.yaml` from the selected project root unless an explicit configuration path is supplied. It SHALL reject invalid document layout settings and runner definitions at the configuration boundary, including obsolete versions 1–4 and top-level evidence settings.
 
 <!-- focused-spec:id=config.document.invalid -->
 #### Scenario: Missing or invalid configuration
-- **WHEN** a project has no readable version-4 configuration with document layouts and runners map
+- **WHEN** a project has no readable version-5 configuration with document layouts and runners map
 - **THEN** validation exits nonzero with an actionable configuration violation
 
 <!-- focused-spec:id=config.runner.timeout-bound -->
@@ -31,18 +31,28 @@ The CLI SHALL load a version-4 `.focused-spec/config.yaml` from the selected pro
 
 <!-- focused-spec:id=config.format.version-three -->
 #### Scenario: Obsolete configuration requires explicit migration
-- **WHEN** a project uses config version 2 or 3
+- **WHEN** a project uses config version 1, 2, 3 or 4
 - **THEN** the CLI rejects it with native-format migration guidance
 
 <!-- focused-spec:id=config.registry.required -->
 #### Scenario: The registry file is required
-- **WHEN** the selected project has no evidence registry
-- **THEN** validation fails rather than falling back to inline evidence
+- **WHEN** the selected registry adapter cannot read its configured evidence source
+- **THEN** validation fails with its source diagnostic rather than switching format or falling back to inline evidence
 
 <!-- focused-spec:id=config.options.cyclic -->
 #### Scenario: Cyclic options fail at configuration boundary
 - **WHEN** format or runner options contain an active YAML alias cycle
 - **THEN** validation returns an actionable configuration violation without loading a plugin; repeated acyclic aliases remain valid
+
+<!-- focused-spec:id=config.evidence.adapter-owned -->
+#### Scenario: Evidence storage is selected through the format
+- **WHEN** a version-5 project selects inline without an evidence file or explicitly configures a registry-composing native adapter
+- **THEN** both authoring paths execute their own evidence without any top-level core evidence configuration, and top-level evidence is rejected
+
+<!-- focused-spec:id=config.format.api-cutover -->
+#### Scenario: Old format contracts have no fallback
+- **WHEN** a configured module exports Format API 1 rather than API 2
+- **THEN** validation rejects that export with local migration guidance, without parsing or executing through a compatibility shim
 
 ### Requirement: Specification sources
 The CLI SHALL discover focused scenarios from configured project-relative document patterns with explicitly registered format adapters without requiring a named SDD framework.
@@ -51,7 +61,7 @@ The CLI SHALL discover focused scenarios from configured project-relative docume
 #### Scenario: File globs match no specifications
 - **WHEN** configured document globs match no native specifications and no scope is selected
 - **THEN** validation reports zero scenarios, planned evidence, and targets without treating global absence as an error
-- **AND** Every pattern SHALL assign exactly one path-safe scope: either an arbitrary explicit `scope: <name>` without `{scope}`, or exactly one `{scope}` capture without an explicit scope. No scope name, including `baseline`, SHALL receive special behavior. Optional per-pattern exclusions SHALL narrow matches without creating fallback locations. Multiple patterns MAY contribute documents to the same scope. A document SHALL belong to exactly one configured location and scope. A required logical evidence registry SHALL bind every registered native item. Optional evidence.files SHALL explicitly select project-relative YAML files or patterns; omission SHALL select .focused-spec/evidence.yaml through the same loader. Configuration SHALL support nested capability specs, a spec adjacent to planning artifacts, and projects whose layouts match no documents. Configured documents and scopes MAY contain only unenrolled native scenarios alongside other scopes containing enrolled scenarios. An explicitly requested scope with no matching documents or no registered native items SHALL fail. If documents match an all-scope selection but none has an registered native item, validation and execution SHALL fail rather than reporting executable coverage. No pattern SHALL be silently widened when a configured location is absent.
+- **AND** Every pattern SHALL assign exactly one path-safe scope: either an arbitrary explicit `scope: <name>` without `{scope}`, or exactly one `{scope}` capture without an explicit scope. No scope name, including `baseline`, SHALL receive special behavior. Optional per-pattern exclusions SHALL narrow matches without creating fallback locations. Multiple patterns MAY contribute documents to the same scope. A document SHALL belong to exactly one configured location and scope. Selected formats SHALL provide each enrolled item’s own normalized evidence. Core SHALL NOT require or infer evidence files. External evidence options and any documented default SHALL belong only to the explicitly selected adapter. Configuration SHALL support nested capability specs, a spec adjacent to planning artifacts, and projects whose layouts match no documents. Configured documents and scopes MAY contain only unenrolled native scenarios alongside other scopes containing enrolled scenarios. An explicitly requested scope with no matching documents or no registered native items SHALL fail. If documents match an all-scope selection but none has an registered native item, validation and execution SHALL fail rather than reporting executable coverage. No pattern SHALL be silently widened when a configured location is absent.
 
 <!-- focused-spec:id=config.source.openspec-discovery -->
 #### Scenario: Explicit and captured scopes are discovered
@@ -119,3 +129,11 @@ Each document layout SHALL select one registered format by ID. Formats SHALL dec
 #### Scenario: Missing or conflicting format configuration
 - **WHEN** a layout omits its format or selects an unknown ID, or a plugin declares both package and module
 - **THEN** configuration fails before loading plugins or executing evidence
+
+### Requirement: Format responses survive transport without repair
+Format parsing and binding responses SHALL be JSON-compatible before serialization. Invalid values and fields SHALL NOT disappear or change into valid responses through transport. Rejection SHALL occur before runner resolution or execution; existing shape and global enrollment validation SHALL remain enforced.
+
+<!-- focused-spec:id=format.response.lossless -->
+#### Scenario: Serialization cannot conceal an invalid format response
+- **WHEN** a selected format returns a parse or bind response containing non-JSON values or a field that serialization would remove
+- **THEN** validation reports a format violation and no runner resolves or executes, while valid parse and bind responses retain their enrollments

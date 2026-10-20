@@ -66,3 +66,22 @@ scopes:
     execution.groups.failure:
       evidence:
         - vitest::test/integration.spec.ts::project-local TypeScript runners > reports grouped runner failures without claiming evidence passed
+    execution.events.attribution:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners >
+          attributes shared and independent target events without rerunning evidence
+    execution.result.native-context:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > preserves native run context
+          independently of target provenance
+    execution.events.presentation:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > renders compact detailed and
+          JSON events from the same execution contract
+    execution.events.preflight:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > does not execute unresolved
+          evidence when details are requested
+    execution.presentation.safe-text:
+      evidence:
+        - vitest::test/audit-runtime.spec.ts::audit runtime correctness > escapes opaque human output without changing execution or JSON

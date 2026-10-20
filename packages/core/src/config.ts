@@ -26,9 +26,24 @@ export function isJsonValue(value: unknown): value is JsonValue {
     if (active.has(candidate)) return false
     active.add(candidate)
     try {
-      if (Array.isArray(candidate)) return candidate.every(visit)
-      const record = object(candidate)
-      return record !== undefined && Object.values(record).every(visit)
+      const array = Array.isArray(candidate)
+      const prototype: unknown = Object.getPrototypeOf(candidate)
+      if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) return false
+      const keys = Reflect.ownKeys(candidate)
+      if (array) {
+        if (keys.length !== candidate.length + 1) return false
+        for (let index = 0; index < candidate.length; index += 1) {
+          const property = Object.getOwnPropertyDescriptor(candidate, String(index))
+          if (property === undefined || !property.enumerable || !('value' in property) || !visit(property.value)) return false
+        }
+        return true
+      }
+      for (const key of keys) {
+        if (typeof key !== 'string') return false
+        const property = Object.getOwnPropertyDescriptor(candidate, key)!
+        if (!property.enumerable || !('value' in property) || !visit(property.value)) return false
+      }
+      return true
     } finally {
       active.delete(candidate)
     }

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import runner from '../packages/runner-vitest/src/index.js'
+import runner from '../packages/runners/vitest/src/index.js'
 
 const roots: string[] = []
 afterEach(async () => {

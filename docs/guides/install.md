@@ -10,6 +10,8 @@ In a consuming Node.js 22.16.0+ project, install the format-neutral CLI as a dev
 npm install --save-dev focused-spec
 ```
 
+For agent-led composition selection, activate the installed loader and follow its local workflow. First integration or an explicitly reconsidered composition uses the same CLI's on-demand `integration` topic before optional packages are selected; selected installed contracts then govern configuration. The examples below illustrate choices, not another agent selection procedure. Installation-only work leaves configuration/evidence pending.
+
 These are independent installations. Core alone has no Markdown/Gherkin parser, inline dialect, registry loader, or test-framework runner. An inline project may install only `format-inline`; an external-evidence project installs `format-registry` plus the native parser it names. Omit packages the project does not configure. Test frameworks remain consumer-owned prerequisites. Adapter installation never selects a format or evidence source implicitly; [version-5 configuration](configuration.md) must register each package and name one format on every document layout.
 
 For example, a standalone inline Markdown project with existing Vitest tests needs only:
@@ -19,6 +21,10 @@ npm install --save-dev @focused-spec/format-inline @focused-spec/runner-vitest
 ```
 
 For native Markdown with external YAML evidence, choose `@focused-spec/format-registry` and `@focused-spec/format-markdown` instead of the inline adapter; Gherkin uses `@focused-spec/format-gherkin` as its native parser. Choose `@focused-spec/runner-go` or `@focused-spec/runner-pytest` only for evidence that uses those frameworks. The [configuration guide](configuration.md#public-format-contracts) maps the format contracts; the [runner guide](runners.md) owns framework requirements and selector syntax.
+
+For executable JS/TS scenarios without focused-spec, install only `@focused-spec/scenarios-typescript`; it has no runtime dependencies or focused-spec peer. For optional native discovery and direct execution, add `focused-spec`, `@focused-spec/format-scenarios-typescript` and `@focused-spec/runner-scenarios-typescript`. The format owns the TypeScript AST parser dependency; neither SDK nor core gains it. The [SDK contract](../../packages/sdk/typescript/README.md), [format contract](../../packages/formats/scenarios-typescript/README.md) and [bank example](configuration.md#standalone-executable-bank-specifications) document both paths.
+
+For independent Go scenarios, use the standard-library-only [Go SDK module](../../packages/sdk/go/README.md) with Go 1.23+; no Node.js or npm installation is needed. The checkout examples use an explicit local module replacement until a Go module version is published. Optional focused-spec integration additionally installs `focused-spec`, `@focused-spec/format-scenarios-go` and `@focused-spec/runner-scenarios-go` as npm development dependencies. Their consumer needs both Node.js 22.16.0+ and Go 1.23+ on PATH. The Go parser helper ships inside the format package; core gains no Go dependency. Read its [format contract](../../packages/formats/scenarios-go/README.md) and [runner contract](runners.md#direct-go-scenarios) before configuration.
 
 The executable is installed locally with the package; invoke it as `npx focused-spec validate` from the project root after configuring native documents and format-owned evidence, or use `focused-spec` in npm scripts. Run the commands here only after installing the project dependency, so npx selects that installation. Public types are exported from `focused-spec/format` and `focused-spec/runner`. Package installation does not install an agent skill, configure formats, or create evidence integration.
 
@@ -33,13 +39,13 @@ npm run build
 
 # consuming project
 npm install --save-dev /path/to/focused-spec/packages/core \
-  /path/to/focused-spec/packages/format-inline \
-  /path/to/focused-spec/packages/format-registry \
-  /path/to/focused-spec/packages/format-markdown \
-  /path/to/focused-spec/packages/runner-vitest
+  /path/to/focused-spec/packages/formats/inline \
+  /path/to/focused-spec/packages/formats/registry \
+  /path/to/focused-spec/packages/formats/markdown \
+  /path/to/focused-spec/packages/runners/vitest
 ```
 
-The workspace root is not a published package. Core source and output live at `packages/core/src` and `packages/core/dist`; root `src`/`dist` paths are obsolete. The eight packages—core, four formats, and three runners—pack independently. Packing runs each package's build/asset preparation; the core tarball contains its compiled CLI/types plus staged root `README.md`, `LICENSE`, `skills/`, and `guidance/`, while every adapter owns its compiled runtime, declarations, metadata, and README.
+The workspace root is not a published package. Packages are grouped by role: `packages/core`, `packages/sdk/<language>`, `packages/formats/<format>` and `packages/runners/<runner>`. All thirteen npm packages—core, the JS/TS SDK, six formats and five runners—pack independently. The Go SDK is a separate Go module, not an npm workspace. Build core and the JS/TS SDK before their scenario format/runner, and the Go format before its runner; install local tarballs together when verifying a clean consumer. Core source/output live at `packages/core/src` and `packages/core/dist`; root `src`/`dist` are obsolete. The core tarball contains compiled CLI/types plus staged root `README.md`, `LICENSE`, `skills/` and `guidance/`; every other npm package owns its compiled runtime, declarations, metadata and README.
 
 Official runner tarballs also include a public `README.md`, generated from the [runner guide](runners.md). It documents selector syntax, framework support and command options without requiring plugin implementation inspection.
 

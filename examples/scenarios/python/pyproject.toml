@@ -1,0 +1,11 @@
+[project]
+name = "focused-spec-python-bank-example"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["focused-spec-scenarios"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

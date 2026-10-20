@@ -7,7 +7,7 @@ Offline package-owned agent guidance with explicit loader compatibility and inst
 ## Requirements
 
 ### Requirement: Offline package-owned guidance
-The CLI SHALL provide `instructions [--protocol <version>] [--topic workflow|runners] [--json]` independently of project configuration, evidence registries, native documents, runners, and network access.
+The CLI SHALL provide `instructions [--protocol <version>] [--topic workflow|integration|formats|runners] [--json]` independently of project configuration, evidence registries, native documents, plugins, and network access.
 
 <!-- focused-spec:id=guidance.delivery.offline -->
 #### Scenario: Workflow is available before project setup
@@ -18,15 +18,27 @@ The CLI SHALL provide `instructions [--protocol <version>] [--topic workflow|run
 <!-- focused-spec:id=guidance.delivery.runners -->
 #### Scenario: Runner guidance is available on demand
 - **WHEN** the installed CLI is asked for the `runners` topic
-- **THEN** it returns the same package's complete runner authoring and verification guidance without requiring access to the focused-spec source repository
+- **THEN** it returns the same package's complete shared runner authoring and verification guidance without requiring access to the focused-spec source repository or bundling framework-specific contracts
+
+<!-- focused-spec:id=guidance.delivery.formats -->
+#### Scenario: Format guidance is available before project setup
+- **WHEN** an offline consumer requests `instructions --protocol 1 --topic formats` with invalid project configuration and no usable format plugins
+- **THEN** the CLI returns its own package's shared format selection, authoring, and verification guidance without loading project configuration or plugins, executing evidence, or writing project files
+- **AND** The guidance SHALL direct consumers to the selected installed plugins' public contracts through explicit documentation requests rather than bundling official-adapter reference syntax or dynamically aggregating plugin documentation.
 
 <!-- focused-spec:id=guidance.delivery.command-name -->
 #### Scenario: The previous command is not a compatibility alias
 - **WHEN** a consumer invokes the previous `agent-guide` command or requests its command-specific help
 - **THEN** the CLI rejects the invocation with a nonzero exit and no usable guidance while directing the consumer to current command help
 
+<!-- focused-spec:id=guidance.delivery.integration -->
+#### Scenario: Core alone supplies integration guidance
+- **WHEN** an offline consumer with only the packed core installed requests the integration topic beside absent or malformed project configuration and no installed plugins
+- **THEN** text and protocol-1 JSON output deliver the serving package's complete integration guidance without reading project configuration, resolving or importing plugins, downloading packages, executing evidence or writing files
+- **AND** The guidance SHALL provide a compact nonexclusive map of behavioral-source, evidence and execution choices, distinguish SDK-only execution from optional CLI integration, and refer concrete syntax and selectors to the selected package's public contract. It SHALL NOT require repository documentation or a network connection to understand the selection procedure.
+
 ### Requirement: Versioned guidance response
-For protocol 1, JSON output SHALL be one object with `protocolVersion: 1`, `package: { name: "focused-spec", version: <installed package version> }`, `topic: "workflow" | "runners"`, and nonempty Markdown `content`.
+For protocol 1, JSON output SHALL be one object with `protocolVersion: 1`, `package: { name: "focused-spec", version: <installed package version> }`, `topic: "workflow" | "integration" | "formats" | "runners"`, and nonempty Markdown `content`.
 
 <!-- focused-spec:id=guidance.delivery.compatible-update -->
 #### Scenario: An unchanged loader receives an updated package's guidance
@@ -55,10 +67,30 @@ If the requested authoritative guidance cannot be read or is empty, the command 
 - **WHEN** a consumer requests a guidance topic whose asset is absent from the installed package
 - **THEN** the CLI reports the incomplete installation and returns no replacement workflow from another source
 
+<!-- focused-spec:id=guidance.delivery.formats-incomplete -->
+#### Scenario: Missing format guidance cannot fall back to workflow or plugin documentation
+- **WHEN** the installed package lacks its formats guidance but workflow, runners, and project-local replacement documentation are available
+- **THEN** requesting formats exits nonzero with an incomplete-installation diagnostic and no usable guidance on stdout
+
+<!-- focused-spec:id=guidance.delivery.integration-incomplete -->
+#### Scenario: Integration guidance cannot be substituted
+- **WHEN** the installed package's integration guidance is missing or empty while other topics and project-local replacement instructions remain available
+- **THEN** requesting integration exits nonzero with an incomplete-installation diagnostic and empty stdout rather than substituting another source
+
 ### Requirement: Actionable obsolete-format guidance
-The CLI SHALL reject obsolete configuration and inline focused metadata with a concrete project-local protocol-1 workflow instruction command. Guidance SHALL remain available without loading the obsolete configuration or executing evidence.
+The CLI SHALL reject obsolete config/format APIs, unsupported REVISES and inline metadata selected through a non-inline format with a concrete project-local protocol-1 workflow command. Explicit API-2 inline ID/EVIDENCE SHALL be supported, not reported as obsolete. Guidance SHALL remain available without loading invalid configuration or executing evidence.
 
 <!-- focused-spec:id=guidance.upgrade.obsolete-format -->
 #### Scenario: Obsolete formats lead to usable instructions
-- **WHEN** a consumer validates version-2 configuration or inline ID/EVIDENCE/REVISES rows with the current CLI
-- **THEN** the diagnostic advertises a local instruction command which returns the serving package's complete workflow despite the obsolete project format
+- **WHEN** a consumer validates config versions 1–4, Format API 1, REVISES, or inline ID/EVIDENCE without selecting the inline adapter
+- **THEN** the diagnostic advertises a local instruction command which returns the serving package's complete workflow despite the invalid configuration, API or authoring-format selection
+
+
+### Requirement: Plugin-independent shared guidance
+The workflow, formats and runners topics SHALL retain shared core contracts and verification rules without bundled catalogs, dialects or framework-specific procedures. They SHALL direct agents to explicit installed plugin documentation with provenance; composed plugins remain responsible for explaining their own nested configuration, followed through separate agent requests rather than core discovery.
+
+<!-- focused-spec:id=guidance.plugins.public-contracts -->
+#### Scenario: Agent-facing contracts come from selected installed plugins
+- **WHEN** an agent uses the shared guidance to acquire documentation for a selected composing format and its parser
+- **THEN** the installed CLI supplies each package's independently owned complete contract through explicit requests without a core-maintained plugin allowlist, plugin imports, or automatic nested aggregation
+

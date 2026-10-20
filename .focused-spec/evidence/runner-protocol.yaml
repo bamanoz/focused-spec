@@ -70,7 +70,28 @@ scopes:
           preserves split UTF-8 stdout and stderr in the pytest process helper
         - vitest::test/official-runners.spec.ts::official framework runners >
           preserves split UTF-8 stdout and stderr in the Go process helper
-  fix-node-runtime-compatibility:
     runner.official.source-runtime:
       evidence:
-        - vitest::test/runner.spec.ts::project Vitest evidence runner > selects an exact listed test and rejects a controlled failing test
+        - vitest::test/runner.spec.ts::project Vitest evidence runner > selects an
+          exact listed test and rejects a controlled failing test
+    runner.events.optional:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners >
+          preserves event-capable and legacy runner results together
+    runner.events.invalid:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners >
+          rejects malformed execution events without claiming pass
+    runner.events.bounded:
+      evidence:
+        - vitest::test/integration.spec.ts::project-local TypeScript runners >
+          bounds valid target events with an explicit truncation marker
+    runner.events.failed-target:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > retains
+          direct runner events when bank verification fails
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          retains direct Go runner events when bank verification fails
+    runner.response.lossless:
+      evidence:
+        - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects lossy runner responses before transport

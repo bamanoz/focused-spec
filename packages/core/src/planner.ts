@@ -11,6 +11,8 @@ interface EvidenceUse {
   readonly path: string
   readonly line: number
   readonly scenarioId: string
+  readonly name: string
+  readonly source: PlannedScenario['source']
 }
 
 export interface PlanOptions {
@@ -42,7 +44,7 @@ export async function planEvidence(
         const reference = parseEvidenceReference(raw)
         if ('error' in reference || reference.planned) continue
         const location = scenario.evidenceLocations?.[index] ?? scenario.evidenceLocation
-        const use = { scope: document.scope, raw, runnerId: reference.runnerId, selector: reference.selector, path: location?.path ?? scenario.path, line: location?.line ?? scenario.line, scenarioId }
+        const use = { scope: document.scope, raw, runnerId: reference.runnerId, selector: reference.selector, path: location?.path ?? scenario.path, line: location?.line ?? scenario.line, scenarioId, name: scenario.name, source: { path: scenario.path, line: scenario.line } }
         let selectors = byRunner.get(use.runnerId)
         if (selectors === undefined) byRunner.set(use.runnerId, selectors = new Map())
         let selectorUses = selectors.get(use.selector)
@@ -124,7 +126,7 @@ export async function planEvidence(
       if (target === undefined) throw new Error(`planner lost resolved evidence ${use.raw}`)
       return { key: target.key, reference: use.raw }
     })
-    scenarios.push({ scope: first.scope, id: first.scenarioId, evidence })
+    scenarios.push({ scope: first.scope, id: first.scenarioId, name: first.name, source: first.source, evidence })
   }
   scenarios.sort((left, right) => left.scope.localeCompare(right.scope) || left.id.localeCompare(right.id))
 
@@ -181,7 +183,7 @@ export function projectExecutionPlan(
       })
       if (evidence.length === 0) continue
       selectedExecutableScenarioFound = true
-      scenarios.push({ scope: document.scope, id, evidence })
+      scenarios.push({ scope: document.scope, id, name: scenario.name, source: { path: scenario.path, line: scenario.line }, evidence })
     }
   }
 

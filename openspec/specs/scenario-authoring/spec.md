@@ -7,7 +7,7 @@ Native item identity, unique binding, and evidence-only registry.
 ## Requirements
 
 ### Requirement: Focused scenario identity
-Each bound native item SHALL have one lowercase dotted stable ID unique within its scope and SHALL identify one independently failing outcome. The same ID MAY occur independently in separate scopes, but every occurrence SHALL bind its own item and declare its own evidence without ownership, revision links, ancestry inference, or evidence inheritance.
+Each enrolled native item SHALL have one opaque stable string ID unique within its scope and identify one independently failing outcome. IDs SHALL retain exact case and value, contain a non-whitespace character and contain no control characters. Separate scopes SHALL independently bind their own items and evidence without ownership, revision ancestry or inheritance. Native formats own representation and escaping.
 
 <!-- focused-spec:id=scenario.identity.duplicate-document -->
 #### Scenario: Duplicate identity binds two native items
@@ -21,17 +21,22 @@ Each bound native item SHALL have one lowercase dotted stable ID unique within i
 
 <!-- focused-spec:id=scenario.identity.explicit-evidence -->
 #### Scenario: Evidence cannot be inherited
-- **WHEN** a selected marked item lacks its own registration while another scope registers the same ID
+- **WHEN** a selected marked item lacks its own evidence enrollment while another scope registers the same ID
 - **THEN** validation rejects the selected occurrence without inheriting evidence
 
+<!-- focused-spec:id=scenario.identity.opaque -->
+#### Scenario: Opaque identities retain exact selection semantics
+- **WHEN** selected native outcomes declare auth-login, 123, case-distinct, Unicode, spaced or path-looking IDs
+- **THEN** binding, CLI selection and results retain each exact value without renaming, normalization or path interpretation
+
 ### Requirement: Evidence rows
-Evidence SHALL live only in the required logical evidence registry composed from configured YAML files, keyed by scope and stable ID.
+Each enrolled occurrence SHALL obtain its own explicit nonempty evidence from its selected format. Core SHALL validate normalized references independently of storage syntax or location; it SHALL NOT require, discover or load a YAML evidence registry. References SHALL use [planned:]<runner-id>::<opaque selector>; every reference SHALL be checked and multiple references SHALL form an AND contract.
 
 <!-- focused-spec:id=scenario.evidence.required -->
 #### Scenario: Every occurrence needs explicit evidence
-- **WHEN** a native marker has no own scope-local registry evidence
+- **WHEN** a native marker has no own scope-local evidence
 - **THEN** validation rejects that occurrence even when another scope has evidence
-- **AND** The registry SHALL contain only a scopes mapping; entries SHALL contain a nonempty evidence list and optional external source mapping containing exactly path and nativeId. Unknown or duplicate fields and behavioral text fields SHALL fail validation. References SHALL use [planned:]<runner-id>::<opaque selector>; every reference SHALL be checked and multiple references form an AND contract.
+- **AND** The explicitly selected registry adapter SHALL accept only a scopes mapping; entries SHALL contain a nonempty evidence list and optional external source mapping containing exactly path and nativeId. Unknown or duplicate fields and behavioral text fields SHALL fail validation. References SHALL use [planned:]<runner-id>::<opaque selector>; every reference SHALL be checked and multiple references form an AND contract.
 
 <!-- focused-spec:id=scenario.evidence.malformed-row -->
 #### Scenario: Malformed evidence cannot be hidden by valid evidence
@@ -40,7 +45,7 @@ Evidence SHALL live only in the required logical evidence registry composed from
 
 <!-- focused-spec:id=scenario.evidence.opaque-selector -->
 #### Scenario: Opaque selector keeps internal separators
-- **WHEN** a registry reference contains planned evidence and additional selector separators
+- **WHEN** a normalized reference contains planned evidence and additional selector separators
 - **THEN** only the first separator splits the runner ID and the remaining selector is preserved
 
 <!-- focused-spec:id=native.registry.closed-schema -->
@@ -48,14 +53,19 @@ Evidence SHALL live only in the required logical evidence registry composed from
 - **WHEN** registry YAML repeats a key or includes an unsupported behavioral field
 - **THEN** the registry is rejected rather than treating it as another behavior source
 
+<!-- focused-spec:id=scenario.enrollment.competing -->
+#### Scenario: Competing evidence does not merge
+- **WHEN** inline and external adapters enroll the same actual native item or two items with the same ID in one selected scope
+- **THEN** validation rejects the competing enrollments even when their evidence lists agree, without precedence or execution
+
 ### Requirement: Native scenario enrollment
-Behavior SHALL remain solely in the host native checkable item.
+Behavior SHALL remain solely in its native checkable item. Selected formats SHALL own evidence acquisition and native-ID resolution, while core validates normalized enrollment against its discovered catalog. Explicit plain Markdown SHALL NOT infer the inline authoring dialect; explicitly selected inline Markdown SHALL be supported.
 
 <!-- focused-spec:id=scenario.enrollment.mixed-document -->
 #### Scenario: Registered evidence beside untouched native content
 - **WHEN** a document contains one marked item and unrelated unmarked native content
 - **THEN** only the registered item executes and receives a focused result
-- **AND** Editable Markdown SHALL bind one heading, paragraph, or list item through an adjacent focused-spec HTML marker placed before the item, or inline at the end of a paragraph/list item. At most one blank line is permitted; intervening structural nodes and larger gaps detach the marker. Markers inside code examples SHALL NOT enroll an item. Gherkin focused tags SHALL bind only Scenario or Scenario Outline, not inherited Feature/Rule/Examples tags. Generated or unmarked items MAY use an explicit registry source.path and source.nativeId declaration; resolution SHALL be unique within that exact configured document, never inferred from headings, lines, or wording. Every marker SHALL have a registry entry and every registration SHALL uniquely bind one native item. Obsolete inline focused rows SHALL be rejected. Host behavioral meaning and native-format validity SHALL NOT be certified by focused-spec.
+- **AND** Editable Markdown SHALL bind one heading, paragraph, or list item through an adjacent focused-spec HTML marker placed before the item, or inline at the end of a paragraph/list item. At most one blank line is permitted; intervening structural nodes and larger gaps detach the marker. Markers inside code examples SHALL NOT enroll an item. Gherkin focused tags SHALL bind only Scenario or Scenario Outline, not inherited Feature/Rule/Examples tags. Generated or unmarked items MAY use an explicit registry source.path and source.nativeId declaration; resolution SHALL be unique within that exact configured document, never inferred from headings, lines, or wording. Every selected marker SHALL have its own format-provided evidence and every enrollment SHALL uniquely bind one native item. Inline focused rows SHALL require the explicitly selected inline format and SHALL NOT be a plain-Markdown fallback. Host behavioral meaning and native-format validity SHALL NOT be certified by focused-spec.
 
 <!-- focused-spec:id=native.binding.markdown.heading -->
 #### Scenario: Marker binds the following native heading
@@ -99,8 +109,8 @@ Behavior SHALL remain solely in the host native checkable item.
 
 <!-- focused-spec:id=native.binding.obsolete.inline -->
 #### Scenario: Legacy rows are not a fallback
-- **WHEN** a document contains legacy focused ID or EVIDENCE rows
-- **THEN** validation rejects the obsolete format instead of interpreting it
+- **WHEN** a document selected as plain Markdown contains inline focused ID or EVIDENCE rows
+- **THEN** validation rejects the unsupported dialect with explicit-format guidance rather than silently interpreting it
 
 <!-- focused-spec:id=native.binding.markdown.trailing -->
 #### Scenario: Inline marker must trail the permitted item
@@ -113,7 +123,7 @@ Behavior SHALL remain solely in the host native checkable item.
 - **THEN** binding fails instead of measuring adjacency from the enclosing list start
 
 ### Requirement: Normalized format parsing
-Explicit format adapters SHALL return native structural names, positive line locations, direct focused IDs, explicit native IDs and diagnostics without taking ownership of document scope or path. The core SHALL validate returned data before binding evidence. Unknown document extensions SHALL be usable through an explicitly selected adapter.
+Format API 2 SHALL return native items, exact normalized evidence and diagnostics while core retains document path and scope. Catalog binding SHALL address actual document/item identities, not source lines. Core SHALL reject malformed or forged results, duplicate enrollments and overlapping opaque source claims before execution. Explicit adapters SHALL support otherwise unknown document extensions.
 
 <!-- focused-spec:id=format.contract.normalized -->
 #### Scenario: Third-party native format binds evidence
@@ -130,10 +140,36 @@ Explicit format adapters SHALL return native structural names, positive line loc
 - **WHEN** an adapter returns two distinct native items on the same source line with independent bindings
 - **THEN** both bind and execute while two registrations claiming the same actual item fail
 
+<!-- focused-spec:id=format.contract.storage-independent -->
+#### Scenario: Storage-independent adapter enrolls evidence
+- **WHEN** a project format acquires evidence without any YAML registry and returns normalized native items and references
+- **THEN** core validates, resolves and executes the supplied evidence without inspecting its storage or opening diagnostic origin paths
+
+<!-- focused-spec:id=format.contract.catalog -->
+#### Scenario: Catalog binding cannot forge or multiply claim items
+- **WHEN** a binder returns an absent document/item, a conflicting marker identity, a forged scope/path or a second enrollment of one item
+- **THEN** core fails before evidence runs while distinct valid items sharing source coordinates remain independent
+
+<!-- focused-spec:id=format.contract.source-claims -->
+#### Scenario: Overlapping opaque sources fail across adapters
+- **WHEN** two selected format adapters claim the same opaque evidence source identity
+- **THEN** validation rejects the overlapping claims with their supplied provenance instead of interpreting or merging their storage
+
+<!-- focused-spec:id=format.binding.catalog-errors -->
+#### Scenario: External binding sees the whole native catalog
+- **WHEN** a registry adapter binds items parsed by different explicit formats, has no own matching documents or finds a selected dangling registration
+- **THEN** valid mixed-format enrollments execute and selected dangling registrations fail rather than disappearing with an empty parse set
+
 ### Requirement: Bounded isolated format execution
-Format parsing SHALL execute outside the CLI process with bounded lifetimes and output. A selected adapter that hangs synchronously, crashes or fails to export its declared interface SHALL produce an actionable violation rather than hanging the CLI or falling back to another parser.
+Format parsing and catalog binding SHALL execute outside the CLI process with bounded lifetimes and output. A selected adapter that hangs synchronously, crashes or fails to export its declared interface SHALL produce an actionable violation rather than hanging the CLI or falling back to another parser.
 
 <!-- focused-spec:id=format.lifecycle.timeout -->
 #### Scenario: Non-responsive native parser fails closed
 - **WHEN** a selected format adapter blocks its host process beyond its configured timeout
 - **THEN** validation terminates the host and returns a format violation without execution
+
+<!-- focused-spec:id=format.lifecycle.bind-timeout -->
+#### Scenario: Non-responsive evidence binder fails closed
+- **WHEN** an API-2 binder blocks its isolated host after document parsing completes
+- **THEN** the CLI terminates the host, reports a format violation and starts no evidence execution; existing parse timings remain completed rather than being rewritten as a failed parse
+

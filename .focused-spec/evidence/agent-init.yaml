@@ -94,10 +94,7 @@ scopes:
     init.global.reporting:
       evidence:
         - vitest::test/package.spec.ts::package distribution > reports canonical home destinations and completed global writes
-  improve-cli-discovery-and-inspection:
-    init.output.json:
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > reports actual init actions and conflicts as one JSON document"
     init.output.invalid-invocation:
       evidence:
-        - "vitest::test/cli-discovery.spec.ts::CLI discovery and transport > separates invalid init invocation errors from valid installation reports"
+        - vitest::test/cli-discovery.spec.ts::CLI discovery and transport >
+          separates invalid init invocation errors from valid installation reports

@@ -4,12 +4,16 @@
 
 The portable workflow owns identity/evidence invariants and verification, not a fixed plugin catalog. Acquire the selected installed plugin's complete public document and provenance with the project-local CLI before choosing syntax or options: use `plugin-docs --format <id> --json` for a configured adapter, or `plugin-docs --package <specifier> --root <path> --json` before registration. Compatible third-party packages and project-contained modules follow the same workflow; official packages below are human-facing examples, not an allowlist.
 
+For a first integration or an explicitly requested composition change, the installed workflow first acquires the same local CLI's `instructions --protocol 1 --topic integration --json`. That offline core-owned topic orients selection before optional packages exist; this page documents concrete configurations, not a competing portable selection procedure. Ordinary revisions retain supported existing compositions.
+
 | Official package | Public contract |
 | --- | --- |
-| `@focused-spec/format-inline` | [Scenario-local Markdown identity and evidence](../../packages/format-inline/README.md) |
-| `@focused-spec/format-registry` | [External YAML evidence, parser composition, binding, and source ownership](../../packages/format-registry/README.md) |
-| `@focused-spec/format-markdown` | [Structural Markdown items, focused markers, and explicit native IDs](../../packages/format-markdown/README.md) |
-| `@focused-spec/format-gherkin` | [Gherkin scenarios, focused tags, and native tag IDs](../../packages/format-gherkin/README.md) |
+| `@focused-spec/format-inline` | [Scenario-local Markdown identity and evidence](../../packages/formats/inline/README.md) |
+| `@focused-spec/format-registry` | [External YAML evidence, parser composition, binding, and source ownership](../../packages/formats/registry/README.md) |
+| `@focused-spec/format-markdown` | [Structural Markdown items, focused markers, and explicit native IDs](../../packages/formats/markdown/README.md) |
+| `@focused-spec/format-gherkin` | [Gherkin scenarios, focused tags, and native tag IDs](../../packages/formats/gherkin/README.md) |
+| `@focused-spec/format-scenarios-typescript` | [Literal JS/TS suites, static discovery, and directly derived execution references](../../packages/formats/scenarios-typescript/README.md) |
+| `@focused-spec/format-scenarios-go` | [Literal Go suites, static discovery, and directly derived execution references](../../packages/formats/scenarios-go/README.md) |
 
 Each package ships its own README, which is also the default document returned by `plugin-docs`; a package may select another Markdown file with manifest `focusedSpec.documentation`. The examples below illustrate those specific contracts; they are not core authoring or storage requirements. Core configuration and evidence semantics remain shared.
 
@@ -155,7 +159,7 @@ Each selected occurrence supplies its own evidence. Same-ID occurrences in other
 
 ## Selection and verification
 
-Evidence uses `[planned:]<runner-id>::<opaque selector>`; only the first `::` separates the runner ID. While a selected reference remains planned:
+Evidence uses `[planned:]<runner-id>::<opaque selector>`; only the first `::` separates the runner ID. `planned` is a valid runner ID: `planned::selector` is concrete, while `planned:planned::selector` is deferred. The selector suffix is never rewritten. While a selected reference remains planned:
 
 ```sh
 npx focused-spec validate --scope add-auth --syntax-only
@@ -190,6 +194,69 @@ npx focused-spec run --root examples/openspec
 | [Standalone worktree consumer](../../examples/worktree-consumer/) | Marker on its native scenario through the registry adapter | Commit the example as a separate Git repository, add a worktree, then run `npm ci` and `npm run evidence` there |
 
 The examples retain real tests and explicitly installed adapters/runners. Each fresh standalone worktree needs its own `npm ci`.
+
+### Standalone executable bank specifications
+
+The bank examples keep the same six executable Given/When/Expect outcomes in separate native suites:
+
+- [TypeScript](../../examples/scenarios/typescript/) uses the independent [`@focused-spec/scenarios-typescript` SDK](../../packages/sdk/typescript/README.md). Its suite is [`specifications/account.scenarios.mjs`](../../examples/scenarios/typescript/specifications/account.scenarios.mjs).
+- [Go](../../examples/scenarios/go/) uses the standard-library-only [`scenarios` Go SDK](../../packages/sdk/go/README.md). Its suite is [`specifications/account.scenarios.go`](../../examples/scenarios/go/specifications/account.scenarios.go), with integer-cent commands and events and complete event-history replay.
+
+Each suite restores the real account, executes one command and compares exactly the newly emitted events. Ordinary tests and readable demonstrations need no focused-spec configuration or Markdown companion. TypeScript needs only its SDK package; Go needs only Go and the SDK module, with no Node.js or npm. The optional language-specific formats and direct runners discover and execute the same native objects. Go inspection requires Go 1.23+ because the format invokes its distributed standard-library parser helper; execution imports trusted consumer packages and can run their initializers.
+
+From this repository root, install and build the workspace for the optional focused-spec commands:
+
+```sh
+npm ci
+npm run build
+
+# TypeScript standalone and optional focused execution
+npm --prefix examples/scenarios/typescript test
+npm --prefix examples/scenarios/typescript start
+./node_modules/.bin/focused-spec list --root examples/scenarios/typescript
+./node_modules/.bin/focused-spec show account.withdraw.entire-balance --root examples/scenarios/typescript
+./node_modules/.bin/focused-spec validate --root examples/scenarios/typescript --syntax-only
+./node_modules/.bin/focused-spec validate --root examples/scenarios/typescript --strict
+./node_modules/.bin/focused-spec run --root examples/scenarios/typescript --scenario account.withdraw.entire-balance
+./node_modules/.bin/focused-spec run --root examples/scenarios/typescript
+./node_modules/.bin/focused-spec run --root examples/scenarios/typescript --scenario account.withdraw.insufficient-funds --details
+./node_modules/.bin/focused-spec run --root examples/scenarios/typescript --scenario account.withdraw.insufficient-funds --json
+
+# Go standalone (only Go and the local SDK replacement are required)
+go -C examples/scenarios/go test ./...
+go -C examples/scenarios/go run ./cmd/demo
+
+# Optional Go focused execution
+./node_modules/.bin/focused-spec list --root examples/scenarios/go
+./node_modules/.bin/focused-spec show account.withdraw.entire-balance --root examples/scenarios/go
+./node_modules/.bin/focused-spec validate --root examples/scenarios/go --syntax-only
+./node_modules/.bin/focused-spec validate --root examples/scenarios/go --strict
+./node_modules/.bin/focused-spec run --root examples/scenarios/go --scenario account.withdraw.entire-balance
+./node_modules/.bin/focused-spec run --root examples/scenarios/go
+./node_modules/.bin/focused-spec run --root examples/scenarios/go --scenario account.withdraw.insufficient-funds --details
+./node_modules/.bin/focused-spec run --root examples/scenarios/go --scenario account.withdraw.insufficient-funds --details --json
+```
+
+The TypeScript `npm test` command uses the optional `node:test` wrapper at `test/account.node.mjs`; its business checks add no behavior and neither the demo nor focused-spec uses that wrapper. The Go wrapper at `specifications/account_test.go` likewise loops over the same exported suite. Both demos render SDK execution events rather than reconstructing Actual from Expect: Given, When, Expect, real bank decision explanations, valid Actual and each result. The insufficient-funds scenario records requested 4000 cents, available 3000 cents and the actual decline reason. Domain handlers accept a callback without depending on either SDK; drivers forward it to the execution-local observer. Available events survive ordinary verification failure; capture is bounded and not a global log.
+
+Both ordinary test commands and demos also call their consumer-owned serialization helper: `serialization.mjs` (TypeScript) or `specifications/serialization.go` (Go). It traverses every Given event, the When command and every Expect event from the same six declarations, comparing exact bank-message roundtrips with scenario/section/index diagnostics without invoking a business driver or rewriting declarations. The codecs live in `src/messages.mjs` and `bank/messages.go`, not SDK/core. Go uses typed command/event decoding to preserve integer cents.
+
+Demos display a separate roundtrip result and exit nonzero on either business or codec failure; serialization failure does not relabel in-memory business verification. These illustrative current-message/current-codec checks do not certify historical payload compatibility or detect every symmetric wire mistake. Focused business execution remains independent of the serialization helper.
+
+List, show and syntax-only validation parse native declarations without loading drivers. Strict validation also checks exact selectors and canonical driver containment without importing application code. Only `run` executes the selected driver. A TypeScript consumer can install its SDK alone; the Go example's `go.mod` uses the repository-local `replace github.com/bamanoz/focused-spec/packages/sdk/go => ../../../packages/sdk/go` because the module has not been published. Optional focused-spec integration additionally installs core and the selected format/runner packages.
+
+Python and .NET consumers use their native test frameworks directly; these SDKs add no focused-spec formats or runners. From the repository root, use the local SDK packages during development:
+
+```sh
+uv run --no-project --with pytest --with-editable ./packages/sdk/python python -m pytest packages/sdk/python/tests -q
+uv run --no-project --with pytest --with-editable ./packages/sdk/python python -m pytest examples/scenarios/python/tests -q
+uv run --no-project --with pytest --with-editable ./packages/sdk/python python examples/scenarios/python/demo.py
+dotnet test packages/sdk/dotnet/FocusedSpec.Scenarios.Tests/FocusedSpec.Scenarios.Tests.csproj
+dotnet test examples/scenarios/dotnet/ScenarioBank.Tests/ScenarioBank.Tests.csproj
+dotnet run --project examples/scenarios/dotnet/ScenarioBank.Demo/ScenarioBank.Demo.csproj
+```
+
+The package README files define independent installation and SDK APIs. The example projects intentionally use the checkout SDKs; a released consumer installs the Python distribution from its Python package index or the .NET SDK from NuGet, then installs pytest/xUnit separately as its test dependency.
 
 ## Migrate older configurations
 

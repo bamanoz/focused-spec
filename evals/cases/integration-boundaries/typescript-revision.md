@@ -1,0 +1,1 @@
+Review the existing executable bank scenario protecting an entire-balance withdrawal and verify it through ordinary tests and its configured CLI integration, including application-regression sensitivity. Keep the supported composition, authored expectations, suite identity and sole code source; do not change application behavior.

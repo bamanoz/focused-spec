@@ -96,6 +96,8 @@ The core public `Scenario` keeps `path`/`line` at the actual native item. Its op
 
 Core validates every response shape and global invariant before runner resolution. Invalid lines, names, IDs, location-array lengths, references, catalog targets, duplicate `(scope, ID)` values, competing enrollments, overlapping source claims, crashes, timeouts, and generic host failures are violations. Selection-aware bind diagnostics carry known `scope`/`focusedId`; structural/source diagnostics remain blocking. Format API 1 is rejected without a compatibility shim.
 
+Parse and bind responses must already be JSON-compatible before transport. Core rejects values that serialization would remove or transform: `undefined` (omit absent optional fields instead), nonfinite numbers, functions, symbols or symbol keys, sparse arrays, extra array properties, cycles, accessors, non-enumerable fields and non-plain objects such as `Date` or `Map`. Plain objects (including null-prototype objects), dense arrays and shared acyclic data are accepted. Receiver-side response validation still applies; serialization never repairs an invalid response.
+
 IDs are opaque: core requires a nonblank string without control characters and preserves its exact case and value. Representation and escaping belong to the format. Source `line` values are diagnostic coordinates, not item identity; distinct items may share one line and remain independently addressable by catalog index.
 
 Formats supply normalized evidence but never execute it. Core retains discovery, document scope/path, response validation, selection, reference validation, resolution, and execution. A package/subpath resolves from the consuming project using ESM import conditions; a project module stays inside the selected root. Core has no built-in Markdown/Gherkin/inline parser, evidence registry, or format inference.
@@ -137,10 +139,17 @@ export interface RunRequest extends RunnerContext {
 
 export type TargetStatus = 'pass' | 'fail' | 'skip'
 
+export interface ExecutionEvent {
+  readonly kind: string
+  readonly message: string
+  readonly data?: JsonValue
+}
+
 export interface TargetResult {
   readonly targetId: string
   readonly status: TargetStatus
   readonly diagnostic?: string
+  readonly events?: readonly ExecutionEvent[]
 }
 
 export type ExecutionGroup =
@@ -162,6 +171,29 @@ export interface RunnerPlugin {
 `resolve` returns `{ targets, errors }`; `run` returns `{ results }`. The host validates that every requested selector and every resolved target is represented exactly once.
 
 Malformed host envelopes fail through ordinary runner errors, never a caller crash or a truthy success discriminator. Timeout settlement waits for host termination but is bounded independently of descendants retaining output pipes; plugins remain responsible for their own subprocess cleanup.
+
+Resolve, partition and run responses must already be JSON-compatible under the same lossless rules as format responses above, including opaque target and event `data`. Invalid values fail the invocation before transport; rejected resolution or partition results cannot reach execution. Valid JSON values retain their original meaning, and receiver-side shape/cardinality checks still apply.
+
+### Execution events
+
+`events` is an optional ordered diagnostic channel, not a source of pass status. Omission means no events were provided; the host does not invent an empty list for legacy runners. Every record has a nonblank string `kind`, a nonblank string `message` and optional JSON-compatible `data`, including JSON `null`. Kinds are producer-defined and opaque to core: no allowlist, SDK semantics or kind-specific rendering applies. Unknown envelope fields, invalid arrays, blank/missing fields and non-JSON data reject the invocation through the existing runner ERROR path. Every supplied record is validated, even beyond the retained prefix; unrelated runner invocations remain independent.
+
+Core retains at most 256 records and 65,536 UTF-8 bytes of the encoded event array, including delimiters and its overflow notice. Collection reserves a marker slot and byte space. Overflow retains whole records in prefix order and appends `{ kind: 'truncated', message: 'Additional execution events omitted' }`; it does not change the target's actual status or fabricate missing observations. A producer's `truncated` kind is just another event, not a command to stop collection or reject later records. `createEventCollector()` provides this bounded synchronous sink for trusted generic event producers; `retainExecutionEvents(unknown)` validates and bounds a complete supplied report. Both are exported from `focused-spec/runner`.
+
+The budget bounds retained diagnostics, not arbitrary transport input. Existing IPC/process/report limits still apply independently and can reject an oversized report before event retention. Direct scenario runners translate SDK-owned observation/explanation types into this generic envelope before collection and transport; observations use their name as `message` and `{ value: ... }` or `{ text: ... }` as `data`. Core has no SDK dependency and interprets neither kinds nor payloads. A crash before a buffered result does not expose partial callbacks. SDK diagnostic representation remains separate from application wire codecs.
+
+For example, a real target may return:
+
+```ts
+{ targetId: 'withdrawal', status: 'pass', events: [
+  { kind: 'explanation', message: 'Withdrawal declined', data: { requestedCents: 4000, availableCents: 3000 } },
+  { kind: 'observation', message: 'Actual', data: { value: [{ type: 'WithdrawalDeclined', reason: 'insufficient-funds' }] } },
+] }
+```
+
+These values are diagnostic examples, not a replacement for executing and verifying an actual application. Events may contain sensitive application data; capture does not imply redaction or safe publication.
+
+### Execution groups
 
 `partition` is optional and keeps `apiVersion: 1`. It receives the unique **selected** resolved targets after strict validation, only when `execution.maxConcurrentGroups` exceeds 1. With the default limit of 1 the host calls `run` once per runner and never calls `partition`. Without `partition`, a runner remains one exclusive invocation; its work cannot overlap other groups.
 

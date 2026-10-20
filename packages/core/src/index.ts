@@ -18,6 +18,7 @@ export type {
   Violation,
 } from './model.js'
 export type {
+  ExecutionEvent,
   ResolveRequest,
   ResolveResponse,
   ResolvedTarget,

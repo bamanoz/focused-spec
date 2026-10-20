@@ -11,9 +11,9 @@ The agent workflow SHALL keep an OpenSpec proposal planning-only and SHALL requi
 
 <!-- focused-spec:id=agent.proposal.planning-only -->
 #### Scenario: Proposal does not start implementation
-- **WHEN** an agent proposal creates a runner, product implementation, configuration, or executable evidence registry before the apply turn
+- **WHEN** an agent proposal creates a runner, product implementation, configuration, executable evidence registry or inline executable evidence integration before the apply turn
 - **THEN** the proposal checkpoint fails even if planning artifacts exist and registry references are planned
-- **AND** A planning-only turn SHALL record intended exact evidence in planning artifacts and SHALL NOT create or modify executable evidence registries, configuration, runners, or product implementation, including setup containing planned references. Existing permitted native-format checks MAY run without creating integration setup.
+- **AND** A planning-only turn SHALL record intended exact evidence in planning artifacts and SHALL NOT create or modify executable evidence registries, inline evidence integration, configuration, runners, or product implementation, including setup containing planned references. Existing permitted native-format checks MAY run without creating integration setup.
 
 <!-- focused-spec:id=agent.apply.mutation-sensitive -->
 #### Scenario: Apply requires independent executable evidence
@@ -24,6 +24,11 @@ The agent workflow SHALL keep an OpenSpec proposal planning-only and SHALL requi
 #### Scenario: Proposal integrity is checked before apply
 - **WHEN** a proposal modifies product code or tests and the apply turn would restore them
 - **THEN** the proposal checkpoint rejects the violation before apply executes
+
+<!-- focused-spec:id=agent.proposal.inline-boundary -->
+#### Scenario: Planning inline evidence does not authorize integration
+- **WHEN** an agent writes executable inline EVIDENCE during a planning-only proposal rather than recording intended references in design/tasks
+- **THEN** the independent proposal checkpoint rejects integration before apply without confusing fenced authoring examples with executable enrollment
 
 ### Requirement: New and changed evidence detects the claimed outcome
 The agent workflow SHALL prove behavioral sensitivity for each new or changed evidence reference, selected assertion, or claimed product outcome.
@@ -100,7 +105,7 @@ The agent workflow SHALL bind new or changed native outcomes without bulk-conver
 #### Scenario: Untouched native outcomes remain untouched
 - **WHEN** an agent enrolls one changed outcome in a project with native historical scenarios
 - **THEN** unrelated native scenarios remain present and unreported as passed
-- **AND** The native host SHALL own publication, movement, regeneration, archive and removal. Still-relevant enrolled occurrences SHALL retain explicit scope-local native bindings and executable registry evidence without owner/revision links or evidence inherited from a disappearing scope. After the host operation and required cleanup, the workflow SHALL validate the final selection and execute surviving evidence, distinguishing passing registered outcomes from unverified native history. It SHALL NOT require transition commands, plans, snapshots or replacement checkpoint artifacts. State-only production validation SHALL NOT claim historical loss detection when both a native item and its registration disappear consistently. Independent lifecycle evaluators MAY still compare actual evidence they execute before and after a host operation.
+- **AND** The native host SHALL own publication, movement, regeneration, archive and removal. Still-relevant enrolled occurrences SHALL retain explicit scope-local native bindings and exact format-owned evidence without owner/revision links or evidence inherited from a disappearing scope. After the host operation and required cleanup, the workflow SHALL validate the final selection and execute surviving evidence, distinguishing passing registered outcomes from unverified native history. It SHALL NOT require transition commands, plans, snapshots or replacement checkpoint artifacts. State-only production validation SHALL NOT claim historical loss detection when both a native item and its registration disappear consistently. Independent lifecycle evaluators MAY still compare actual evidence they execute before and after a host operation.
 
 <!-- focused-spec:id=agent.adoption.surviving-evidence -->
 #### Scenario: Surviving evidence outlives a working document
@@ -111,6 +116,11 @@ The agent workflow SHALL bind new or changed native outcomes without bulk-conver
 #### Scenario: Independent evaluation rejects lost outcome evidence
 - **WHEN** an independently observed host lifecycle drops or redirects evidence for an enrolled changed outcome
 - **THEN** the evaluator rejects completion instead of accepting transient passing evidence as proof of the surviving outcome
+
+<!-- focused-spec:id=agent.adoption.inline-continuity -->
+#### Scenario: Inline evidence survives native lifecycle operations
+- **WHEN** an explicitly inline-authored outcome is revised and published while its working document leaves discovery
+- **THEN** the surviving occurrence retains its opaque identity and every exact AND reference in the chosen inline representation, independently executes and remains mutation-sensitive without a forced YAML conversion
 
 ### Requirement: Scoped evaluation judgment
 Evaluation gates SHALL inspect the expected scenario within its configured selected scope and SHALL honor document discovery and exclusions. Same-ID occurrences in other scopes SHALL NOT be counted as duplicate selected items. Missing or duplicate expected occurrences within the selected scope SHALL fail the scenario contract.
@@ -233,13 +243,13 @@ The focused-spec loader SHALL obtain protocol-1 JSON workflow guidance from the 
 - **THEN** the second step reloads the authoritative workflow from that installation rather than relying solely on instructions retained from the first step
 
 ### Requirement: Self-guided authorized project upgrades
-An explicitly requested focused-spec update SHALL include the project-local package, its installed agent integration, fresh authoritative guidance, and any required project-format migration. It SHALL preserve still-relevant native behavior, scope-local identities, exact evidence references, AND contracts, and runner/execution configuration, without automatic conversion or legacy runtime support.
+An explicit update SHALL upgrade the local package/integration, load fresh guidance and migrate config/format APIs. It SHALL preserve behavior, exact opaque scope-local IDs, evidence, AND obligations and runner settings. Explicit adapter selection MAY retain inline authoring; REVISES SHALL be removed without inheritance, identity loss or forced YAML conversion. Legacy APIs SHALL NOT remain runtime fallbacks.
 
 <!-- focused-spec:id=agent.upgrade.preserve-project -->
 #### Scenario: A bare update request completes a legacy project upgrade
 - **WHEN** an agent receives only a request to update focused-spec in a runnable version-2 project with a legacy full-text skill
-- **THEN** it upgrades the local package and installed loader, acquires fresh package-owned instructions, migrates each still-relevant occurrence to an explicit native binding and registry entry, and successfully validates and executes all migrated evidence
-- **AND** repeated IDs retain independent scope-local evidence rather than inherited REVISES relationships; unrelated product, tests, runners, and integrations remain unchanged
+- **THEN** it upgrades the local package and installed loader, acquires fresh package-owned instructions, migrates each still-relevant occurrence to config 5 and Format API 2 with explicit format-owned evidence, retaining inline ID/EVIDENCE when selected, and successfully validates and executes all migrated evidence
+- **AND** repeated IDs retain independent scope-local evidence rather than inherited REVISES relationships, which are removed after all still-relevant evidence has been inventoried; unrelated product, tests, runners, and integrations remain unchanged
 
 ### Requirement: Independently bounded upgrade evaluation
 A blind upgrade evaluation SHALL start with a genuine published legacy package and skill and obtain the candidate through ordinary package-manager installation. Legitimate package/integration replacement SHALL be judged against an independently owned candidate artifact rather than exempted from integrity checks. Ordinary non-upgrade evaluations SHALL retain their existing protections.
@@ -250,12 +260,12 @@ A blind upgrade evaluation SHALL start with a genuine published legacy package a
 - **THEN** independent upgrade gates reject completion even if its remaining focused evidence passes
 
 ### Requirement: Specification review reconciles enrolled evidence
-An authorized enrolled specification revision SHALL reconcile its identity, binding and every evidence assertion with the revised outcome in existing registry ownership. Still-relevant outcomes and AND obligations SHALL survive. Retained green evidence SHALL NOT certify revised behavior without exact execution and changed-outcome sensitivity; completion SHALL validate the final selection.
+An authorized enrolled specification revision SHALL reconcile its identity, binding and every evidence assertion with the revised outcome in its existing format-owned evidence location. Still-relevant outcomes and AND obligations SHALL survive. Retained green evidence SHALL NOT certify revised behavior without exact execution and changed-outcome sensitivity; completion SHALL validate the final selection.
 
 <!-- focused-spec:id=agent.review.evidence-sync -->
 #### Scenario: Revised behavior cannot retain stale green evidence
 - **WHEN** an already-enrolled blocked-login outcome is revised to explicitly reject valid credentials but its registered tests still cover only invalid credentials
-- **THEN** evaluation rejects unchanged green evidence and accepts the preserved identity only after both exact valid-credential tests are registered in the owning shard, execute and fail under the matching product regression, while unrelated registrations survive
+- **THEN** evaluation rejects unchanged green evidence and accepts the preserved identity only after both exact valid-credential tests are declared in the owning inline scenario or registry shard, execute and fail under the matching product regression, while unrelated registrations survive
 
 ### Requirement: Evidence reconciliation respects review phases
 Read-only review SHALL report evidence gaps without writes. Planning-only work SHALL record deferred exact evidence changes without writing executable integration or claiming synchronization complete.
@@ -263,4 +273,77 @@ Read-only review SHALL report evidence gaps without writes. Planning-only work S
 <!-- focused-spec:id=agent.review.phase-boundaries -->
 #### Scenario: Review and planning do not authorize integration writes
 - **WHEN** a read-only review or planning-only revision identifies necessary evidence changes
-- **THEN** the workflow reports or plans those changes without writing registry, configuration, tests or product implementation, and does not claim the revised integration complete
+- **THEN** the workflow reports or plans those changes without writing registry, inline evidence integration, configuration, tests or product implementation, and does not claim the revised integration complete
+
+
+### Requirement: On-demand integration selection
+The universal workflow SHALL direct first integration and explicitly requested composition changes to the same installation's integration topic. It SHALL reuse supported configured choices for ordinary work instead of selecting a new architecture on every task. Topic responses SHALL receive the same complete-response, package, version and protocol checks as workflow guidance.
+
+<!-- focused-spec:id=agent.integration.preserve-existing -->
+#### Scenario: An ordinary task does not replace the configured composition
+- **WHEN** an agent revises one outcome in an already configured supported inline, registry-backed or executable-scenario project
+- **THEN** it preserves the canonical behavioral source and unaffected configuration, identities and evidence ownership instead of converting to its preferred format or reinstalling a different workflow
+
+<!-- focused-spec:id=agent.integration.route-selection -->
+#### Scenario: Missing integration leads to the package-owned selection procedure
+- **WHEN** an agent is asked to choose a first focused-spec composition or explicitly reconsider an existing one, including adding an independent scenario SDK for SDK-only execution without focused configuration or CLI plugins
+- **THEN** it acquires and validates the local CLI's complete integration topic before selecting a composition rather than guessing from a host name or requiring every plugin to be installed
+
+### Requirement: Project-grounded composition choices
+Integration guidance SHALL separate host process, canonical behavioral source, evidence ownership and execution runtime. Agents SHALL inspect project context and user intent before recommending the smallest compatible composition. Existing supported registrations take precedence; a host's name SHALL NOT mandate a parser, registry, inline dialect or SDK.
+
+<!-- focused-spec:id=agent.integration.native-source -->
+#### Scenario: Native acceptance items remain the source
+- **WHEN** a project uses OpenSpec or Spec Kit native acceptance items and existing tests, without an authorized representation change
+- **THEN** integration preserves those items and chooses compatible binding and execution capabilities without rewriting them into the inline dialect or copying them into SDK scenarios
+
+<!-- focused-spec:id=agent.integration.standalone-choice -->
+#### Scenario: Standalone needs do not require a host framework
+- **WHEN** a project without a host framework requests standalone text scenarios or executable TypeScript or Go scenarios
+- **THEN** the recommendation distinguishes inline text with test evidence from an independent language SDK, selects the path matching the requested source and runtime, and adds optional CLI format/runner packages only when CLI discovery and execution are requested
+- **AND** The capability map SHALL remain illustrative rather than an allowlist. Compatible project-owned or third-party plugins SHALL remain eligible through their public contracts. Generated or metadata-hostile sources require a documented stable native identity; an unsupported binding SHALL be reported rather than guessed.
+
+### Requirement: Phase-correct integration handoff
+Reading integration guidance SHALL NOT authorize installation, configuration, migration or authoring. An installation-only request SHALL stop at verified core/agent setup with integration explicitly pending. Planning SHALL record the proposed composition and exact intended evidence without executable setup; authorized implementation SHALL obtain each selected installed package's public contract before configuration.
+
+<!-- focused-spec:id=agent.integration.phase-boundaries -->
+#### Scenario: Installation and recommendation do not silently configure evidence
+- **WHEN** the agent is authorized only to install the CLI/agent integration or to recommend a composition
+- **THEN** it makes no unauthorized plugin, configuration, specification, test or evidence changes and does not claim behavioral verification from guidance retrieval or installation
+
+<!-- focused-spec:id=agent.integration.selected-contracts -->
+#### Scenario: Orientation precedes selected package contracts
+- **WHEN** integration requires a plugin not yet installed
+- **THEN** the agent uses the core topic for preliminary orientation, installs only within authorization, acquires that installed package's exact public documentation before configuring it, and follows any explicitly documented composed-package dependency through a separate request
+- **AND** Missing contracts or incompatible capabilities SHALL cause a revised recommendation or an explicit blocker, not invented syntax, implementation inspection, automatic package enumeration or silent fallback to another representation.
+
+### Requirement: One canonical independently checkable source
+The strengthened workflow SHALL treat native text items and executable code scenarios as alternative canonical sources, preserving one independently failing outcome per item. Evidence, drivers, wrappers and diagnostics SHALL NOT become duplicate behavioral specifications. A representation change SHALL require explicit authorization and preserve surviving identity and evidence obligations.
+
+<!-- focused-spec:id=agent.workflow.single-source -->
+#### Scenario: Executable scenarios do not acquire a Markdown copy
+- **WHEN** an authorized task adds or revises an independently executable scenario suite
+- **THEN** behavior remains in that suite, ordinary test wrappers and optional focused execution reuse it, and no companion Markdown specification or registry is created merely to satisfy a text-oriented workflow
+
+### Requirement: Application-grounded observations and independent expectations
+The workflow SHALL identify the actual application boundary and an expected outcome authored independently of the observed execution. A driver SHALL prepare, invoke and observe the application rather than reimplement its decision or return the expectation. Deterministic observation projections SHALL preserve every claimed observable distinction; identical observations for correct and incorrect behavior SHALL NOT certify the claim.
+
+<!-- focused-spec:id=agent.workflow.application-boundary -->
+#### Scenario: A driver cannot replace the product under verification
+- **WHEN** a driver reproduces the product rule locally or returns a preconstructed expected result while the real application violates the selected outcome
+- **THEN** workflow completion is rejected until selected execution exercises the real application and a controlled regression of that application causes the selected behavioral assertion to fail
+
+<!-- focused-spec:id=agent.workflow.independent-oracle -->
+#### Scenario: Observed output cannot define its own expectation
+- **WHEN** a proposed scenario derives its expected result from the same execution being verified or projects away the changed outcome
+- **THEN** the agent repairs the authorized expectation or observation to protect the native claim and proves product-regression sensitivity without weakening the assertion or changing the selected identity to obtain a pass
+
+### Requirement: Diagnostic output does not substitute for proof
+The workflow SHALL distinguish discovery, validation, execution, comparison, explanations and codec checks. Native claims and application assertions determine proof; events and explanations do not. A codec roundtrip alone SHALL NOT certify application behavior or historical wire compatibility. Existing exact-evidence, AND, phase, sensitivity and host-lifecycle requirements remain applicable.
+
+<!-- focused-spec:id=agent.workflow.proof-not-diagnostics -->
+#### Scenario: Plausible explanations do not override a failed comparison
+- **WHEN** an execution emits expected-looking explanations or passes a message roundtrip while the real selected application observation is wrong
+- **THEN** the workflow reports the behavioral failure and does not claim completion from those diagnostic or serialization results
+- **AND** SDK-only work SHALL execute its selected native suite without requiring focused-spec installation. When CLI integration is requested, selected focused evidence and the completed configured scope SHALL also execute. Sensitivity remains exact PASS, selected behavioral FAIL under a reversible product regression, then restored PASS; runner errors, missing targets, skips and unrelated failures SHALL NOT count.
+

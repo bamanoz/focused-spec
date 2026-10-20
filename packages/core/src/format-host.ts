@@ -1,4 +1,5 @@
 import { pluginUrl } from './plugin-module.js'
+import { isJsonValue } from './config.js'
 import type { FormatPlugin } from './format-api.js'
 import type { JsonValue } from './runner-api.js'
 
@@ -43,6 +44,7 @@ process.on('message', async message => {
       if (!Array.isArray(request.documents) || typeof request.selection !== 'object' || request.selection === null) throw new Error('format host received an invalid bind request')
       value = await plugin.bind({ projectRoot: request.projectRoot, documents: request.documents, selection: request.selection, options: request.options, signal: AbortSignal.timeout(request.timeoutMs) } as Parameters<NonNullable<FormatPlugin['bind']>>[0])
     }
+    if (!isJsonValue(value)) throw new Error('format response must be JSON-compatible before transport')
     const json = JSON.stringify(value)
     if (json === undefined || json.length > 8_000_000) throw new Error('format response exceeded the JSON output limit')
     process.send?.({ id: request.id, ok: true, hasBind: plugin.bind !== undefined, json })

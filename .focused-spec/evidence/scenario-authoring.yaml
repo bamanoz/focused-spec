@@ -81,118 +81,59 @@ scopes:
         - vitest::test/runner.spec.ts::native item evidence execution > rejects two
           external registrations claiming the same actual native item through
           different native IDs
-  make-format-evidence-storage-agnostic:
-    "inline.authoring.execution":
+    inline.authoring.execution:
       evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > runs inline ID and EVIDENCE without any registry file"
-    "inline.authoring.metadata-errors":
+        - vitest::test/cli.spec.ts::focused-spec CLI > runs inline ID and EVIDENCE
+          without any registry file
+    inline.authoring.metadata-errors:
       evidence:
-        - "vitest::test/core.spec.ts::inline specification parsing > rejects missing duplicate and malformed inline metadata"
-    "inline.authoring.provenance":
+        - vitest::test/core.spec.ts::inline specification parsing > rejects missing
+          duplicate and malformed inline metadata
+    inline.authoring.provenance:
       evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > reports inline binding failures at their metadata lines"
-    "inline.authoring.literal-examples":
+        - vitest::test/cli.spec.ts::focused-spec CLI > reports inline binding
+          failures at their metadata lines
+    inline.authoring.literal-examples:
       evidence:
-        - "vitest::test/core.spec.ts::inline specification parsing > ignores literal inline scenario examples"
-    "inline.authoring.no-revises":
+        - vitest::test/core.spec.ts::inline specification parsing > ignores literal
+          inline scenario examples
+    inline.authoring.no-revises:
       evidence:
-        - "vitest::test/core.spec.ts::inline specification parsing > rejects REVISES without inventing ancestry"
-    "inline.authoring.selected-isolation":
+        - vitest::test/core.spec.ts::inline specification parsing > rejects REVISES
+          without inventing ancestry
+    inline.authoring.selected-isolation:
       evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > isolates selected inline errors without inheriting evidence"
-    "inline.authoring.planned-policy":
+        - vitest::test/cli.spec.ts::focused-spec CLI > isolates selected inline
+          errors without inheriting evidence
+    inline.authoring.planned-policy:
       evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > validates inline planned evidence without loading runners"
-    "scenario.identity.duplicate-document":
+        - vitest::test/cli.spec.ts::focused-spec CLI > validates inline planned
+          evidence without loading runners
+    scenario.identity.opaque:
       evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects one marker ID bound to multiple native items"
-    "scenario.identity.independent-scopes":
+        - vitest::test/cli.spec.ts::focused-spec CLI > preserves opaque IDs through
+          selection and results
+    scenario.enrollment.competing:
       evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > accepts the same ID in independent scopes"
-    "scenario.identity.explicit-evidence":
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects competing inline and
+          external enrollments
+    format.contract.storage-independent:
       evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > does not inherit evidence from another scope with the same ID"
-    "scenario.identity.opaque":
+        - vitest::test/plugins.spec.ts::plugin architecture > accepts normalized
+          evidence from a storage-independent format
+    format.contract.catalog:
       evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > preserves opaque IDs through selection and results"
-    "scenario.evidence.required":
+        - vitest::test/plugins.spec.ts::plugin architecture > rejects forged and
+          multiply bound catalog targets
+    format.contract.source-claims:
       evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > does not inherit evidence from another scope with the same ID"
-    "scenario.evidence.malformed-row":
+        - vitest::test/plugins.spec.ts::plugin architecture > rejects overlapping
+          opaque evidence source claims
+    format.binding.catalog-errors:
       evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects malformed evidence alongside valid evidence before execution"
-    "scenario.evidence.opaque-selector":
+        - vitest::test/plugins.spec.ts::plugin architecture > reports adapter
+          binding errors instead of dropping registrations
+    format.lifecycle.bind-timeout:
       evidence:
-        - "vitest::test/core.spec.ts::evidence registry parsing > parses planned evidence and opaque runner selectors"
-    "native.registry.closed-schema":
-      evidence:
-        - "vitest::test/core.spec.ts::evidence registry parsing > rejects unknown and duplicate registry keys"
-    "scenario.enrollment.competing":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects competing inline and external enrollments"
-    "scenario.enrollment.mixed-document":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > runs marked outcomes beside untouched native content"
-    "native.binding.markdown.heading":
-      evidence:
-        - "vitest::test/core.spec.ts::native specification parsing > binds a marker to the immediately following Markdown item"
-    "native.binding.markdown.items":
-      evidence:
-        - "vitest::test/core.spec.ts::native specification parsing > binds markers to Markdown paragraphs and list items"
-    "native.binding.markdown.detached":
-      evidence:
-        - "vitest::test/core.spec.ts::native specification parsing > rejects detached and duplicate Markdown markers"
-    "native.binding.markdown.fenced":
-      evidence:
-        - "vitest::test/core.spec.ts::native specification parsing > ignores marker-looking text in fenced code blocks"
-    "native.binding.gherkin.tags":
-      evidence:
-        - "vitest::test/core.spec.ts::native specification parsing > attaches Gherkin tags only to Scenario and Scenario Outline"
-    "native.binding.gherkin.selected-error":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects inherited Gherkin tags for the selected ID without blocking unrelated IDs"
-    "native.binding.external.unique":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > requires external native IDs to resolve uniquely"
-    "native.binding.registry.dangling":
-      evidence:
-        - "vitest::test/cli.spec.ts::focused-spec CLI > rejects a dangling registry entry"
-    "native.binding.obsolete.inline":
-      evidence:
-        - "vitest::test/core.spec.ts::native specification parsing > rejects obsolete focused rows instead of interpreting the legacy format"
-    "native.binding.markdown.trailing":
-      evidence:
-        - "vitest::test/core.spec.ts::native specification parsing > rejects inline focused markers on Markdown headings"
-        - "vitest::test/core.spec.ts::native specification parsing > rejects inline focused markers before later list-item paragraphs"
-    "native.binding.markdown.list-gap":
-      evidence:
-        - "vitest::test/core.spec.ts::native specification parsing > measures list-contained preceding marker adjacency from the neighboring paragraph"
-    "format.contract.normalized":
-      evidence:
-        - "vitest::test/plugins.spec.ts::plugin architecture > binds a project-native format without extension inference"
-    "format.contract.malformed":
-      evidence:
-        - "vitest::test/plugins.spec.ts::plugin architecture > rejects malformed format responses"
-    "format.contract.same-line":
-      evidence:
-        - "vitest::test/runner.spec.ts::native item evidence execution > binds distinct same-line native items independently through direct identities and executes AND evidence"
-        - "vitest::test/runner.spec.ts::native item evidence execution > binds distinct same-line native items independently through external identities and executes AND evidence"
-        - "vitest::test/runner.spec.ts::native item evidence execution > rejects two external registrations claiming the same actual native item through different native IDs"
-    "format.contract.storage-independent":
-      evidence:
-        - "vitest::test/plugins.spec.ts::plugin architecture > accepts normalized evidence from a storage-independent format"
-    "format.contract.catalog":
-      evidence:
-        - "vitest::test/plugins.spec.ts::plugin architecture > rejects forged and multiply bound catalog targets"
-    "format.contract.source-claims":
-      evidence:
-        - "vitest::test/plugins.spec.ts::plugin architecture > rejects overlapping opaque evidence source claims"
-    "format.binding.catalog-errors":
-      evidence:
-        - "vitest::test/plugins.spec.ts::plugin architecture > reports adapter binding errors instead of dropping registrations"
-    "format.lifecycle.timeout":
-      evidence:
-        - "vitest::test/plugins.spec.ts::plugin architecture > terminates a blocking format host"
-    "format.lifecycle.bind-timeout":
-      evidence:
-        - "vitest::test/plugins.spec.ts::plugin architecture > terminates a blocking format binder"
+        - vitest::test/plugins.spec.ts::plugin architecture > terminates a blocking
+          format binder

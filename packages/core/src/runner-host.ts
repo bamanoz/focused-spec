@@ -1,4 +1,5 @@
 import { pluginUrl } from './plugin-module.js'
+import { isJsonValue } from './config.js'
 import type { JsonValue, ResolvedTarget, RunnerPlugin } from './runner-api.js'
 
 interface HostRequestBase {
@@ -62,6 +63,7 @@ process.on('message', async message => {
         : plugin.partition === undefined
           ? { supported: false }
           : { supported: true, response: await plugin.partition({ ...context, targets: request.targets }) }
+    if (!isJsonValue(value)) throw new Error('runner response must be JSON-compatible before transport')
     process.send?.({ ok: true, value } satisfies HostResponse, () => process.disconnect())
   } catch (error) {
     process.send?.({

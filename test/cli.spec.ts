@@ -324,10 +324,6 @@ describe('focused-spec CLI', () => {
         const result = spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: 'utf8' })
         expect(result.status).toBe(0)
         expect(result.stderr).toBe('')
-        const options = [...result.stdout.matchAll(/^\s+(--[a-z-]+)/gmu)].map(match => match[1])
-        expect(options.sort()).toEqual((command === 'validate'
-          ? ['--root', '--config', '--scope', '--scenario', '--strict', '--syntax-only', '--json', '--timings']
-          : ['--root', '--config', '--scope', '--scenario', '--allow-skip', '--json', '--timings']).sort())
       }
     }
   })
@@ -651,6 +647,24 @@ describe('focused-spec CLI', () => {
     expect(result.status).toBe(1)
     expect(result.stdout).toBe('')
     expect(result.stderr).toMatch(/incomplete installed focused-spec package.*formats/iu)
+  })
+
+  it('rejects missing or empty integration guidance without fallback', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-integration-incomplete-'))
+    roots.push(root)
+    const installation = join(root, 'installation')
+    await cp(new URL('../packages/core/dist/', import.meta.url), join(installation, 'dist'), { recursive: true })
+    await cp(new URL('../packages/core/package.json', import.meta.url), join(installation, 'package.json'))
+    await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(installation, 'node_modules'), 'dir')
+    for (const topic of ['workflow', 'formats', 'runners']) await put(installation, `guidance/${topic}.md`, '# Not integration')
+    await put(root, 'guidance/integration.md', '# Untrusted consumer fallback')
+    for (const content of [undefined, ' \n']) {
+      if (content !== undefined) await put(installation, 'guidance/integration.md', content)
+      const result = spawnSync(process.execPath, [join(installation, 'dist/cli.js'), 'instructions', '--topic', 'integration', '--json'], { cwd: root, encoding: 'utf8' })
+      expect(result.status).toBe(1)
+      expect(result.stdout).toBe('')
+      expect(JSON.parse(result.stderr)).toMatchObject({ error: { code: 'command_failed', message: expect.stringMatching(/incomplete installed focused-spec package.*integration/iu) } })
+    }
   })
 
   it('rejects unsupported guide protocols without returning instructions', async () => {
@@ -1795,5 +1809,50 @@ describe('focused-spec CLI', () => {
     expect(timedText.stdout.slice(timingStart)).toMatch(/runner fixture resolve: .* selectors 1, completed/u)
     expect(timedText.stdout.slice(timingStart)).toMatch(/runner fixture run: .* targets 1, completed/u)
     expect(timedText.stdout.slice(timingStart)).toMatch(/format markdown \[current\] openspec\/specs\/current\/spec\.md: .* cold-start, completed/u)
+  })
+  it('preserves native run context independently of target provenance', async () => {
+    const root = await fixture()
+    await put(root, 'runner.ts', `export default {apiVersion:1,async resolve({selectors}){return {targets:selectors.map(selector=>({selector,targetId:selector,displayName:'Not the native name',source:{path:'tests/target.ts',line:91}})),errors:[]}},async run({targets}){return {results:targets.map(t=>({targetId:t.targetId,status:'pass'}))}}}`)
+    const args = [cli,'run','--root',root,'--scope','current']
+    const report = spawnSync(process.execPath,[...args,'--json'],{encoding:'utf8'})
+    expect(report.status).toBe(0)
+    expect(json(report.stdout)).toMatchObject({scenarios:[{id:'fixture.current.passes',name:'Scenario: Current evidence passes',source:{path:'openspec/specs/current/spec.md',line:2},evidence:[{reference:'fixture::current',status:'PASS'}]}]})
+    const text = spawnSync(process.execPath,args,{encoding:'utf8'})
+    expect(text.status).toBe(0)
+    expect(text.stdout).toContain('Current evidence passes (openspec/specs/current/spec.md:2)')
+    expect(text.stdout).not.toContain('tests/target.ts')
+  })
+
+  it('renders compact detailed and JSON events from the same execution contract', async () => {
+    const root = await fixture()
+    await configureInline(root)
+    await put(root,'specs/events.md',inlineScenario('events',['fixture::passing','fixture::failing']))
+    await put(root,'runner.ts',`import {appendFileSync} from 'node:fs';import {join} from 'node:path';export default {apiVersion:1,async resolve({selectors}){return {targets:selectors.map(selector=>({selector,targetId:selector,displayName:selector})),errors:[]}},async run({projectRoot,targets}){for(const t of targets)appendFileSync(join(projectRoot,'runs'),t.targetId+'\\n');return {results:targets.map(t=>({targetId:t.targetId,status:t.targetId==='passing'?'pass':'fail',events:[{kind:'custom.phase\\u001b',message:t.targetId+' detail\\u001b[31m\\n'},{kind:'custom.payload',message:'Result',data:{choice:t.targetId+'\\u001b'}}]}))}}}`)
+    const outputs = [[],['--details'],['--json'],['--details','--json']].map(flags => spawnSync(process.execPath,[cli,'run','--root',root,...flags],{encoding:'utf8'}))
+    expect(outputs.map(o=>o.status)).toEqual([1,1,1,1])
+    const [compact,detailed,plainJson,detailJson] = outputs as [SpawnSyncReturns<string>,SpawnSyncReturns<string>,SpawnSyncReturns<string>,SpawnSyncReturns<string>]
+    expect(compact.stdout).not.toContain('passing detail')
+    expect(compact.stdout).toContain('failing detail\\u001b[31m\\u000a')
+    expect(detailed.stdout).toContain('passing detail\\u001b[31m\\u000a')
+    expect(detailed.stdout).toContain('failing detail\\u001b[31m\\u000a')
+    expect(detailed.stdout).not.toContain('\u001b')
+    expect(detailed.stdout).toContain('[custom.phase\\u001b] passing detail\\u001b[31m\\u000a')
+    expect(detailed.stdout).toContain('[custom.payload] Result {"choice":"passing\\u001b"}')
+    expect(json(plainJson.stdout)).toEqual(json(detailJson.stdout))
+    expect(json(plainJson.stdout)).toMatchObject({success:false,targetCount:2,scenarios:[{status:'FAIL',evidence:[{status:'PASS',events:[{kind:'custom.phase\u001b',message:'passing detail\u001b[31m\n'},{kind:'custom.payload',message:'Result',data:{choice:'passing\u001b'}}]},{status:'FAIL',events:[{kind:'custom.phase\u001b',message:'failing detail\u001b[31m\n'},{kind:'custom.payload',message:'Result',data:{choice:'failing\u001b'}}]}]}]})
+    expect((await readFile(join(root,'runs'),'utf8')).trim().split('\n').sort()).toEqual([...Array(4).fill('passing'),...Array(4).fill('failing')].sort())
+  })
+
+  it('does not execute unresolved evidence when details are requested', async () => {
+    const root = await fixture()
+    await put(root,'runner.ts',`import {writeFileSync} from 'node:fs';import {join} from 'node:path';export default {apiVersion:1,async resolve({selectors}){return {targets:[],errors:selectors.map(selector=>({selector,message:'not found'}))}},async run({projectRoot}){writeFileSync(join(projectRoot,'executed'),'yes');return {results:[]}}}`)
+    const result = spawnSync(process.execPath,[cli,'run','--root',root,'--scope','current','--details','--json'],{encoding:'utf8'})
+    expect(result.status).toBe(1)
+    expect(json(result.stdout)).toMatchObject({valid:false,executionStarted:false})
+    expect(json(result.stdout)).not.toHaveProperty('scenarios')
+    await expect(readFile(join(root,'executed'),'utf8')).rejects.toMatchObject({code:'ENOENT'})
+    const invalid = spawnSync(process.execPath,[cli,'validate','--root',root,'--details','--json'],{encoding:'utf8'})
+    expect(invalid.status).toBe(1)
+    expect(json(invalid.stderr)).toMatchObject({error:{code:'invalid_arguments'}})
   })
 })

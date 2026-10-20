@@ -9,11 +9,11 @@ focused-spec version [--json]
 focused-spec --version
 focused-spec -V
 focused-spec validate [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--strict] [--syntax-only] [--json] [--timings]
-focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--json] [--timings]
+focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--details] [--json] [--timings]
 focused-spec list [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--json]
 focused-spec show <id> [--root <path>] [--config <path>] [--scope <name>] [--json]
 focused-spec plugin-docs (--format <id> | --runner <id> | --package <specifier>) [--root <path>] [--config <path>] [--json]
-focused-spec instructions [--protocol <version>] [--topic workflow|formats|runners] [--json]
+focused-spec instructions [--protocol <version>] [--topic workflow|integration|formats|runners] [--json]
 focused-spec init [path] [--tools <comma-separated IDs>] [--dry-run] [--json] [--replace] [--no-animation]
 ```
 
@@ -197,9 +197,17 @@ npx focused-spec init --tools minimax-code --dry-run --json
 
 ## Package-owned agent guidance
 
-`instructions` reads static authoritative shared guidance from the invoked `focused-spec` package: the general workflow (default topic), format guidance (`--topic formats`), or runner guidance (`--topic runners`). The format and runner topics contain plugin-independent API obligations and consumer verification, not installed-plugin catalogs, dialects, selectors, or framework procedures. They work offline before project setup, create no project or agent files, and perform no validation or evidence execution. Invoke the consuming project's explicit installed CLI, not an unverified global binary or a downloading `npx` invocation.
+`instructions` reads authoritative guidance from the invoked `focused-spec` package: general workflow (default), composition selection (`--topic integration`), format obligations (`--topic formats`), or runner obligations (`--topic runners`). Integration is available from core alone before optional packages or configuration exist. Its compact nonexclusive capability map is orientation, not a plugin manual, allowlist or host compatibility matrix. Exact syntax/selectors come from selected installed plugin documents. All topics work offline, create no files, and perform no validation or evidence execution. Invoke the consuming project's explicit installed CLI, not an unverified global binary or downloading `npx` invocation.
 
-The previous `agent-guide` command is not an alias. Refresh the installed loader when moving to `instructions`; protocol 1, existing topic names, and response fields remain compatible. `formats` is an additional on-demand topic, not a new protocol version.
+The previous `agent-guide` command is not an alias. Refresh the installed loader when moving to `instructions`; protocol 1, existing topic names, and response fields remain compatible. Additional on-demand topics do not change the loader protocol.
+
+For example, from the established local installation root:
+
+```sh
+./node_modules/.bin/focused-spec instructions --protocol 1 --topic integration --json
+```
+
+The workflow routes absent or explicitly reconsidered integration to this topic, preserves supported existing choices for ordinary tasks, and retains its upgrade procedure for incompatible setups. Guidance retrieval does not authorize installation, configuration or migration.
 
 Loader protocol defaults to 1; it is independent of package versions, configuration version 5, Format API version 2, and Runner API version 1. The loader requests it explicitly. Protocol-1 JSON is:
 
@@ -326,7 +334,20 @@ execution selection: selected scope add-search, scenario search.results.empty
 
 Completed JSON retains `executionStarted`, `validationScope`, `executionSelection`, `success`, the `scenarios` result array, and `targetCount`. Both context objects use `scopes: { "mode": "all" }` for all-scope execution or `scopes: { "mode": "selected", "name": "<scope>" }` for one scope. When `--scenario` is present, both also contain that scenario ID.
 
-Every scenario result includes its `scope`. Multi-scope text rows include `[<scope>]`; selected-scope rows omit that prefix. No execution output includes an unverified native-item count.
+Every scenario result includes its `scope`, native `name` and `source: { path, line }`. Native provenance comes from the selected item, not a target's display name, test location or evidence registry. Text shows that name/source beneath its identity. Multi-scope text rows include `[<scope>]`; selected-scope rows omit that prefix. No execution output includes an unverified native-item count.
+
+Each evidence result retains its exact `reference`, actual `status`, optional `diagnostic` and optional ordered `events` from that target's [execution report](runner-api.md#execution-events). Shared targets execute once and their events appear under each citing evidence reference; separate target streams are never merged into a scenario-wide log. Legacy runners that omit events remain unchanged.
+
+`run --details` renders retained events beneath every evidence result. Compact human output renders only non-PASS evidence events; JSON always contains all supplied retained events, including passing evidence, independently of this flag. `run --details --json` is valid and returns the same JSON contract as `run --json`. Rendering never changes collection, selection, target count or status and does not rerun targets. Every producer-defined kind uses the same `[kind] message` presentation followed by JSON `data` when supplied; there are no specialized observation/explanation renderers. Human-rendered kinds, messages and data escape terminal control characters; JSON preserves their real values through JSON encoding. Events can contain sensitive application data and are not automatically redacted.
+
+Human execution, validation, inspection and command-error output applies the same escaping to opaque identities, names, paths, references and diagnostics: terminal control characters, Unicode format characters and Unicode line/paragraph separators appear as `\uXXXX` text rather than acting on the terminal. Diagnostic newlines may remain as host-indented lines. This is presentation-only; JSON values and selectors delivered to runners are unchanged. Instruction and plugin-document bodies remain intentional document output.
+
+```sh
+./node_modules/.bin/focused-spec run --root examples/scenarios/typescript --scenario account.withdraw.insufficient-funds --details
+./node_modules/.bin/focused-spec run --root examples/scenarios/go --scenario account.withdraw.insufficient-funds --details --json
+```
+
+`--details` is run-only. It does not bypass strict preflight: a rejected run has no synthetic execution events or native execution rows. Help, validation and inspection remain non-executing.
 
 If configuration, format parsing or binding, selected evidence resolution, or strict validation fails before execution, text says `execution did not start`. JSON reports `valid: false`, `executionStarted: false`, actual selection context, and `violations`, and omits execution result fields. A scenario ID absent from the selected scope or scopes follows this failure contract. Scope-wide validation is not implied by a successful scenario-only run.
 

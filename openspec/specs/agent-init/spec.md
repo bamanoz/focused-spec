@@ -134,13 +134,19 @@ Init SHALL use canonical existing selected project/home roots, never infer or cr
 - **THEN** init fails before any integration writes and does not substitute content from another installation or network source
 
 ### Requirement: Observable initialization result
-Init SHALL exit 0 for successful install/no-op/preview, otherwise 1. Human output SHALL distinguish installation from activation/evidence and give native hints. JSON SHALL emit one `{ root, tools, dryRun, files, errors }` object: canonical project root or null, distinct canonical tools, preview flag, project-relative or absolute MiniMax paths, truthful actions/errors. Only completed writes SHALL be applied, retained after later failure.
+Init SHALL exit 0 for successful install/no-op/preview, otherwise 1. Human output SHALL distinguish installation from activation/evidence and give native hints. After valid invocation, JSON SHALL retain `{ root, tools, dryRun, files, errors }` with truthful actions/errors and only completed writes marked applied. Invalid invocation SHALL instead use the shared CLI error transport before installation starts.
 
 <!-- focused-spec:id=init.output.json -->
 #### Scenario: Machine-readable output distinguishes writes and conflicts
 - **WHEN** a scripted consumer installs, previews, or encounters a destination conflict using `--json` and explicit targets
 - **THEN** stdout contains one parseable result document with the actual actions, applied writes and errors, and the exit status distinguishes success from failure without claiming evidence execution
 - **AND** files use `{ path, action, applied }`, actions are `install`, `unchanged`, `replace` or `conflict`, and errors use `{ path?, message }`; only completed writes have `applied: true`
+- **AND** root remains canonical or null, tools remain distinct canonical IDs, dryRun reports preview, project paths remain relative and MiniMax paths absolute; completed writes remain reported after later I/O failure
+
+<!-- focused-spec:id=init.output.invalid-invocation -->
+#### Scenario: Invalid invocation is not an installation report
+- **WHEN** JSON initialization receives invalid arguments or omits required noninteractive target selection
+- **THEN** it exits 1 with empty stdout and one `invalid_arguments` stderr object with init help, before any integration write
 
 ### Requirement: Complete target catalog
 The installer SHALL support the following complete OpenSpec 1.14.1 target set at these fixed focused-spec destinations, without a runtime dependency on OpenSpec. `~` denotes the canonical existing user home; other paths are relative to the selected project. A missing command entry denotes skills-only delivery.

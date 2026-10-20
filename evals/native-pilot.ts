@@ -110,12 +110,12 @@ async function installPackedFocusedSpec(workspace: string, includeGherkin: boole
   const cache = await mkdtemp(join(tmpdir(), 'focused-native-package-'))
   const packageNames = [
     'core',
-    'format-markdown',
-    ...(includeGherkin ? ['format-gherkin'] : []),
-    'format-inline',
-    'format-registry',
-    'runner-go',
-    'runner-pytest',
+    'formats/markdown',
+    ...(includeGherkin ? ['formats/gherkin'] : []),
+    'formats/inline',
+    'formats/registry',
+    'runners/go',
+    'runners/pytest',
   ]
   try {
     const packages = await Promise.all(packageNames.map(name => packWorkspacePackage(cache, join(root, 'packages', name))))

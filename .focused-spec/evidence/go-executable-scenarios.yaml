@@ -1,0 +1,66 @@
+scopes:
+  current:
+    go-sdk.independent:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          executes the Go SDK without Node dependencies
+    go-sdk.invalid-declaration:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          rejects invalid Go declarations before preparation
+    go-sdk.comparison:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          reports real Go observation mismatches
+    go-sdk.input-isolation:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          preserves Go declarations against driver mutation
+    go-sdk.cleanup:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          preserves primary and cleanup failures
+    go-sdk.cancellation:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          releases prepared resources after cancellation
+    go-format.static-discovery:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          inspects Go scenarios without running initializers
+    go-format.dynamic-rejected:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          rejects dynamic Go scenarios without evaluation
+    go-format.direct-enrollment:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          executes native Go scenarios without a registry
+    go-runner.exact-selection:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          executes only the exact selected Go identity
+    go-runner.missing-target:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          rejects a removed Go target
+    go-runner.transport:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          rejects a missing selected execution report
+    go-runner.containment:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          rejects escaped Go driver sources without execution
+    go-distribution.consumer:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          runs distributed Go assets outside the checkout
+    go-example.typescript-move:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          detects the bank withdrawal boundary regression
+    go-example.bank:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          detects the Go bank withdrawal boundary regression

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parseDocument } from 'yaml'
 
-type GuideTopic = 'workflow' | 'formats' | 'runners'
+type GuideTopic = 'workflow' | 'integration' | 'formats' | 'runners'
 
 interface PackageIdentity {
   readonly name: string
@@ -195,10 +195,10 @@ beforeAll(async () => {
   await mkdir(consumer)
   await writeFile(join(consumer, 'package.json'), '{"name":"consumer","private":true,"type":"module"}\n')
   packedTarball = packPackage(join(repository, 'packages/core'), root)
-  markdownTarball = packPackage(join(repository, 'packages/format-markdown'), root)
-  vitestRunnerTarball = packPackage(join(repository, 'packages/runner-vitest'), root)
-  inlineTarball = packPackage(join(repository, 'packages/format-inline'), root)
-  registryTarball = packPackage(join(repository, 'packages/format-registry'), root)
+  markdownTarball = packPackage(join(repository, 'packages/formats/markdown'), root)
+  vitestRunnerTarball = packPackage(join(repository, 'packages/runners/vitest'), root)
+  inlineTarball = packPackage(join(repository, 'packages/formats/inline'), root)
+  registryTarball = packPackage(join(repository, 'packages/formats/registry'), root)
   installPackage(consumer, packedTarball)
   installedEntries = await readdir(consumer)
 }, 300_000)
@@ -214,7 +214,7 @@ describe('package distribution', () => {
     for (const name of ['tsconfig.json', 'package.json', 'README.md', 'LICENSE']) await cp(join(repository, name), join(checkout, name))
     await put(join(checkout, 'docs/guides/runners.md'), await readFile(join(repository, 'docs/guides/runners.md'), 'utf8'))
     await symlink(join(repository, 'node_modules'), join(checkout, 'node_modules'), 'dir')
-    for (const name of ['core', 'format-markdown', 'format-gherkin', 'format-inline', 'format-registry', 'runner-vitest', 'runner-pytest', 'runner-go']) await mkdir(join(checkout, 'packages', name), { recursive: true })
+    for (const name of ['core', 'sdk/typescript', 'sdk/go', 'formats/markdown', 'formats/gherkin', 'formats/inline', 'formats/registry', 'formats/scenarios-typescript', 'formats/scenarios-go', 'runners/vitest', 'runners/pytest', 'runners/go', 'runners/scenarios-typescript', 'runners/scenarios-go']) await mkdir(join(checkout, 'packages', name), { recursive: true })
     const packageRoot = join(checkout, 'packages/core')
     await cp(join(repository, 'packages/core'), packageRoot, { recursive: true })
     const prepared = join(packageRoot, 'dist/prepared-only.js')
@@ -231,7 +231,7 @@ describe('package distribution', () => {
     for (const name of ['scripts', 'skills', 'guidance']) await cp(join(repository, name), join(checkout, name), { recursive: true })
     await put(join(checkout, 'docs/guides/runners.md'), await readFile(join(repository, 'docs/guides/runners.md'), 'utf8'))
     for (const name of ['README.md', 'LICENSE']) await cp(join(repository, name), join(checkout, name))
-    for (const name of ['core', 'format-markdown', 'format-gherkin', 'format-inline', 'format-registry', 'runner-vitest', 'runner-pytest', 'runner-go']) await mkdir(join(checkout, 'packages', name), { recursive: true })
+    for (const name of ['core', 'sdk/typescript', 'sdk/go', 'formats/markdown', 'formats/gherkin', 'formats/inline', 'formats/registry', 'formats/scenarios-typescript', 'formats/scenarios-go', 'runners/vitest', 'runners/pytest', 'runners/go', 'runners/scenarios-typescript', 'runners/scenarios-go']) await mkdir(join(checkout, 'packages', name), { recursive: true })
     const stage = () => spawnSync(process.execPath, ['scripts/stage-assets.mjs'], { cwd: checkout, encoding: 'utf8' })
     await put(join(checkout, 'skills/retired/SKILL.md'), 'retired loader')
     await put(join(checkout, 'guidance/retired.md'), 'retired guidance')
@@ -251,10 +251,13 @@ describe('package distribution', () => {
     await cp(join(repository, 'package.json'), join(checkout, 'package.json'))
     await cp(join(repository, 'scripts'), join(checkout, 'scripts'), { recursive: true })
     await symlink(join(repository, 'node_modules'), join(checkout, 'node_modules'), 'dir')
-    for (const name of ['core', 'format-markdown', 'format-gherkin', 'format-inline', 'format-registry', 'runner-vitest', 'runner-pytest', 'runner-go']) {
+    for (const name of ['core', 'sdk/typescript', 'formats/markdown', 'formats/gherkin', 'formats/inline', 'formats/registry', 'formats/scenarios-typescript', 'formats/scenarios-go', 'runners/vitest', 'runners/pytest', 'runners/go', 'runners/scenarios-typescript', 'runners/scenarios-go']) {
       const packageRoot = join(checkout, 'packages', name)
       await mkdir(packageRoot, { recursive: true })
       for (const asset of ['src', 'package.json', 'tsconfig.json']) await cp(join(repository, 'packages', name, asset), join(packageRoot, asset), { recursive: true })
+      if (name === 'formats/scenarios-go') {
+        for (const asset of ['go', 'build.mjs']) await cp(join(repository, 'packages', name, asset), join(packageRoot, asset), { recursive: true })
+      }
       const retiredSource = join(packageRoot, 'src/audit-retired-runtime.ts')
       await put(retiredSource, 'export const retired = true\n')
       const build = () => spawnSync('npm', ['run', 'build'], { cwd: packageRoot, encoding: 'utf8', timeout: 60000 })
@@ -308,7 +311,7 @@ describe('package distribution', () => {
 
   it('executes independently packed inline and registry formats', async () => {
     const project = await createPackedConsumer('storage-formats-')
-    const otherTarballs = ['format-gherkin', 'runner-go', 'runner-pytest'].map(name => packPackage(join(repository, 'packages', name), root))
+    const otherTarballs = ['formats/gherkin', 'runners/go', 'runners/pytest'].map(name => packPackage(join(repository, 'packages', name), root))
     await installConsumerFramework(project, packedTarball, markdownTarball, inlineTarball, registryTarball, vitestRunnerTarball, ...otherTarballs)
     const references = ['vitest::test/behavior.spec.ts::consumer > rejects blocked', 'vitest::test/behavior.spec.ts::consumer > permits active']
     await put(join(project, 'auth.mjs'), 'export const authenticate = blocked => !blocked\n')
@@ -370,8 +373,8 @@ describe('package distribution', () => {
 
   it('executes selectors discovered from packed runner documentation', async () => {
     const project = await createPackedConsumer('runner-documentation-')
-    const pytestTarball = packPackage(join(repository, 'packages/runner-pytest'), root)
-    const goTarball = packPackage(join(repository, 'packages/runner-go'), root)
+    const pytestTarball = packPackage(join(repository, 'packages/runners/pytest'), root)
+    const goTarball = packPackage(join(repository, 'packages/runners/go'), root)
     await installConsumerFramework(project, packedTarball, registryTarball, markdownTarball, vitestRunnerTarball, pytestTarball, goTarball)
     const evidence: string[] = []
     for (const framework of ['vitest', 'pytest', 'go']) {
@@ -562,6 +565,23 @@ describe('package distribution', () => {
     } finally {
       await rm(guideConsumer, { recursive: true, force: true })
     }
+  }, 300_000)
+
+  it('serves integration guidance from core alone offline', async () => {
+    const project = await createPackedConsumer('integration-guidance-')
+    await put(join(project, 'guidance/integration.md'), '# Consumer instructions must not win')
+    await put(join(project, '.focused-spec/config.yaml'), 'invalid: [')
+    const paths = await readdir(project, { recursive: true })
+    const before = await Promise.all(paths.map(async path => [path, (await stat(join(project, path))).isFile() ? await readFile(join(project, path), 'utf8') : null]))
+    await expectInstalledGuide(project, 'integration')
+    const result = spawnSync(process.execPath, [join(project, 'node_modules/focused-spec/dist/cli.js'), 'instructions', '--protocol', '1', '--topic', 'integration', '--json'], {
+      cwd: project, encoding: 'utf8', env: { ...process.env, npm_config_offline: 'true', HTTPS_PROXY: 'http://127.0.0.1:1', HTTP_PROXY: 'http://127.0.0.1:1' },
+    })
+    expect(result.status, result.stderr).toBe(0)
+    expect(JSON.parse(result.stdout).content).toBe(await readFile(join(project, 'node_modules/focused-spec/guidance/integration.md'), 'utf8'))
+    await expect(stat(join(project, 'node_modules/@focused-spec'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readdir(project, { recursive: true })).toEqual(paths)
+    expect(await Promise.all(paths.map(async path => [path, (await stat(join(project, path))).isFile() ? await readFile(join(project, path), 'utf8') : null]))).toEqual(before)
   }, 300_000)
 
   it('refreshes guidance after a compatible package replacement', async () => {

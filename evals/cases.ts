@@ -6,6 +6,27 @@ const ALL_SKILLS = [...FOCUSED, ...OPEN_SPEC_SKILLS]
 const EXPECTED_SELECTORS = ['TestBlockedAccount', 'test_blocked_account'] as const
 
 export const EVAL_CASES: readonly EvalCase[] = [
+  ...([
+    ['integration-native-openspec', 'openspec', 'integrate', true, 'integration-native/openspec.md'],
+    ['integration-native-spec-kit', 'spec-kit', 'integrate', true, 'integration-native/spec-kit.md'],
+    ['integration-standalone-inline', 'inline', 'integrate', true, 'integration-standalone/inline.md'],
+    ['integration-standalone-typescript-sdk', 'typescript', 'integrate', false, 'integration-standalone/typescript-sdk.md'],
+    ['integration-standalone-typescript-cli', 'typescript', 'integrate', true, 'integration-standalone/typescript-cli.md'],
+    ['integration-standalone-go-sdk', 'go', 'integrate', false, 'integration-standalone/go-sdk.md'],
+    ['integration-standalone-go-cli', 'go', 'integrate', true, 'integration-standalone/go-cli.md'],
+    ['integration-boundaries-recommend', 'typescript', 'recommend', false, 'integration-boundaries/recommend.md'],
+    ['integration-boundaries-install', 'inline', 'install', false, 'integration-boundaries/install.md'],
+    ['integration-boundaries-inline-revision', 'inline', 'revise', true, 'integration-boundaries/inline-revision.md'],
+    ['integration-boundaries-typescript-revision', 'typescript', 'revise', true, 'integration-boundaries/typescript-revision.md'],
+    ['integration-boundaries-go-revision', 'go', 'revise', true, 'integration-boundaries/go-revision.md'],
+    ['executable-authoring-sdk', 'typescript', 'author', false, 'executable-authoring/sdk.md'],
+    ['executable-authoring-cli', 'typescript', 'author', true, 'executable-authoring/cli.md'],
+  ] as const).map(([id, source, mode, cli, prompt]) => ({
+    id, description: `${mode} ${source} composition with ${cli ? 'CLI' : 'independent'} execution and independently judged side effects.`,
+    source: 'files' as const, integration: { source, mode, cli },
+    turns: [{ promptPath: `cases/${prompt}`, skills: FOCUSED }],
+    expectedEvidenceCount: 0, expectedSelectorFragments: [],
+  })), 
   {
     id: 'project-upgrade',
     description: 'Updates genuine version 0.5.0 and its legacy full-text skill through a blind request while preserving every scope-local native outcome and exact evidence.',

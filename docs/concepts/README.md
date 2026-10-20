@@ -16,14 +16,17 @@ Version 5 discovers documents through explicit layouts and parses each with an e
 
 Normalized scenarios retain their canonical native `path` and `line`. Evidence coordinates are separate: optional `evidenceLocation` supplies the enrollment origin, and parallel `evidenceLocations` supplies each reference's origin. Diagnostics use the reference origin, then enrollment origin, then native item; metadata storage cannot redirect the behavioral source.
 
-A format enrolls an item by supplying its ID and evidence directly during parsing or by binding against the complete discovered catalog. Core validates the resulting item identity, scope, evidence references, enrollment uniqueness, and diagnostics independent of the adapter's storage. This gives projects two official authoring paths:
+A format enrolls an item by supplying its ID and evidence directly during parsing or by binding against the complete discovered catalog. Core validates the resulting item identity, scope, evidence references, enrollment uniqueness, and diagnostics independent of the adapter's storage. Official authoring paths include:
 
 - `@focused-spec/format-inline` owns a Markdown scenario dialect whose `ID` and repeated `EVIDENCE` rows enroll the scenario directly, with no registry file;
 - `@focused-spec/format-registry` composes an explicit native parser such as `@focused-spec/format-markdown` or `@focused-spec/format-gherkin`, then binds YAML registry entries against the complete catalog.
+- `@focused-spec/format-scenarios-typescript` statically reads literal JS/TS suites and derives exact execution references; code scenarios are the native specification, with no Markdown companion or registry.
 
 For editable Markdown, the native parser binds an ID with `<!-- focused-spec:id=<id> -->` adjacent to one heading, paragraph, or list item. For Gherkin, it binds `@focused.<id>` on one `Scenario` or `Scenario Outline`. These are representation syntaxes, not core ID policy. Generated or metadata-hostile documents can instead use the registry adapter's `source.path` and explicit host-owned `source.nativeId`; headings, lines, and behavior wording are never guessed as identity.
 
 An enrollment is invalid when it is missing evidence, claims a nonexistent item, binds more than one item, conflicts with a marked identity, duplicates a selected `(scope, ID)`, or competes with another adapter for the same item. Unmarked native content remains outside focused execution: it is neither an error nor an arbitrary count reported as verified.
+
+The independent [`@focused-spec/scenarios-typescript` SDK](../../packages/sdk/typescript/README.md) prepares an application from Given, performs When and compares actual observations with Expect, including awaited cleanup. It needs neither focused-spec nor a test framework. The optional [JS/TS format](../../packages/formats/scenarios-typescript/README.md) and [scenario runner](../guides/runners.md#direct-jsts-scenarios) integrate those same scenarios through the existing plugin APIs. Static integration accepts only the documented literal grammar; standalone SDK callers may construct suites programmatically. Other languages require their own SDK/parser/runtime implementations.
 
 ## Identity and evidence semantics
 

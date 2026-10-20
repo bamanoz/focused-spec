@@ -42,25 +42,11 @@ For a hoisted workspace, run npx in the established installation root and pass t
 
 Read the installed package manifest and compare the version response with that same installation: package name/version, canonical executable path, runtime, and supported contract versions. Stop if npx did not resolve that installation. A successful version command identifies the CLI; it does not validate project configuration or evidence. After installation, the skill resolves and invokes the explicit local executable itself; do not substitute npx for its workflow-guidance calls.
 
-### Select only necessary plugins
+### Defer composition to the installed workflow
 
-Core contains no document parser, evidence registry, or test-framework runner. Install only the plugins selected for the requested integration; package installation does not register them automatically.
+Core contains no document parser, evidence store or test runner. Do not select plugins from this installation page. Finish core/agent setup, activate the installed loader, and follow its workflow. When project integration is requested, that workflow acquires the same local CLI's `integration` topic before selecting packages, including a first SDK-only choice with no focused configuration or CLI plugins, then each selected installed package's public contract before configuration. SDK-only execution and optional CLI integration are distinct paths.
 
-| Project need | Official format packages |
-| --- | --- |
-| Standalone inline Markdown scenarios with `ID` and `EVIDENCE` | `@focused-spec/format-inline` |
-| Existing native Markdown items with external YAML evidence | `@focused-spec/format-registry` + `@focused-spec/format-markdown` |
-| Native Gherkin scenarios with external YAML evidence | `@focused-spec/format-registry` + `@focused-spec/format-gherkin` |
-
-Choose runners for the evidence actually needed: `@focused-spec/runner-vitest`, `@focused-spec/runner-pytest`, or `@focused-spec/runner-go`. Existing compatible project runners need not be replaced. Vitest, Python/pytest, and Go remain consumer-owned prerequisites; do not add every framework. Consult [configuration](configuration.md#public-format-contracts) and the [runner guide](./runners.md) for other choices.
-
-For example, **only when inline Markdown and existing Vitest tests are the chosen path**:
-
-```sh
-npm install --save-dev @focused-spec/format-inline @focused-spec/runner-vitest
-```
-
-If this task is only CLI/agent installation, plugin choice and configuration may remain explicitly pending. Do not invent a test stack to finish setup.
+An installation-only task leaves plugin choice, configuration and evidence explicitly pending; do not invent a test stack or convert an existing source to finish setup.
 
 ## 3. Preview and initialize the chosen integration
 

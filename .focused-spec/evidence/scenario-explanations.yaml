@@ -1,0 +1,26 @@
+scopes:
+  current:
+    scenario-explanations.application-decision:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          explains the actual bank withdrawal decision
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          explains the actual Go bank withdrawal decision
+    scenario-explanations.isolation:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          isolates explanations across concurrent executions
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          isolates Go explanations across concurrent executions
+    scenario-explanations.failure:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
+          retains explanations when exact comparison fails
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          retains Go explanations when exact comparison fails
+    scenario-explanations.optional:
+      evidence:
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > runs a
+          packed SDK scenario without focused-spec
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
+          executes the Go SDK without Node dependencies

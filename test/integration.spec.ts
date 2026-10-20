@@ -8,6 +8,7 @@ import { loadConfig } from '../packages/core/dist/config.js'
 import { executePlan } from '../packages/core/dist/executor.js'
 import { planEvidence } from '../packages/core/dist/planner.js'
 import { resolveRunnerTargets, runRunnerTargets } from '../packages/core/dist/runner-client.js'
+import { retainExecutionEvents } from '../packages/core/dist/runner-api.js'
 import { validateFocusedSpecs } from '../packages/core/dist/validate.js'
 import type { ExecutionPlan, RunnerConfig } from '../packages/core/dist/model.js'
 
@@ -99,8 +100,7 @@ function executionPlan(root: string, runners: readonly TestRunner[]): ExecutionP
     scenarios: targets.map(target => ({
       scope: 'current',
       id: `${target.runnerId}.${target.target.targetId}`,
-      path: `specs/${target.runnerId}.md`,
-      line: 1,
+      source: { path: `specs/${target.runnerId}.md`, line: 1 },
       name: target.target.displayName,
       evidence: [{ key: target.key, reference: target.references[0] as string }],
     })),
@@ -764,5 +764,55 @@ describe('project-local TypeScript runners', () => {
         { id: 'mixed.good', status: 'PASS', evidence: [{ status: 'PASS' }] },
       ],
     })
+  })
+  it('preserves event-capable and legacy runner results together', async () => {
+    const root = await fixture()
+    await put(root, 'runner.ts', `export default { apiVersion:1, async resolve(){return {targets:[],errors:[]}}, async run({runnerId,targets}) { return {results:targets.map(t=>({targetId:t.targetId,status:'pass',...(runnerId==='legacy'?{}:{events:[{kind:'http.response',message:'received',data:{status:201}},{kind:'truncated',message:'producer label',data:null},{kind:'custom.metric',message:'elapsed',data:3}]})}))} } }`)
+    const result = await executePlan(executionPlan(root, [{ id: 'modern', module: './runner.ts', targetIds: ['one'] }, { id: 'legacy', module: './runner.ts', targetIds: ['two'] }]))
+    expect(result.success).toBe(true)
+    expect(result.scenarios.find(s => s.id === 'modern.one')?.evidence[0]).toMatchObject({status:'PASS',events:[{kind:'http.response',message:'received',data:{status:201}},{kind:'truncated',message:'producer label',data:null},{kind:'custom.metric',message:'elapsed',data:3}]})
+    expect(result.scenarios.find(s => s.id === 'legacy.two')?.evidence[0]).not.toHaveProperty('events')
+  })
+
+  it('rejects malformed execution events without claiming pass', async () => {
+    expect(() => retainExecutionEvents([{kind:'custom',message:'nonfinite',data:Infinity}])).toThrow(/execution event/u)
+    const root = await fixture()
+    await put(root, 'valid.ts', `export default {apiVersion:1,async resolve(){return {targets:[],errors:[]}},async run({targets}){return {results:targets.map(t=>({targetId:t.targetId,status:'pass'}))}}}`)
+    const badReports: unknown[] = [null, [null], [{kind:'http.response'}], [{kind:' ',message:'received'}], [{kind:1,message:'received'}], [{kind:'http.response',message:' '}], [{kind:'http.response',message:1}], [{kind:'http.response',message:'received',name:'extra'}], [...Array.from({length:300},()=>({kind:'custom',message:'valid'})),{kind:'custom'}]]
+    for (const events of badReports) {
+      await put(root, 'runner.ts', `export default {apiVersion:1,async resolve(){return {targets:[],errors:[]}},async run({targets}){return {results:targets.map(t=>({targetId:t.targetId,status:'pass',events:${JSON.stringify(events)}}))}}}`)
+      const result = await executePlan(executionPlan(root, [{id:'bad',module:'./runner.ts',targetIds:['one']},{id:'valid',module:'./valid.ts',targetIds:['two']}]))
+      expect(result.success).toBe(false)
+      expect(result.scenarios[0]?.evidence[0]).toMatchObject({status:'ERROR',diagnostic:expect.stringMatching(/execution event/u)})
+      expect(result.scenarios[1]?.evidence[0]).toEqual({reference:'valid::two',status:'PASS'})
+    }
+  })
+
+  it('bounds valid target events with an explicit truncation marker', async () => {
+    const root = await fixture()
+    for (const events of [Array.from({length:300},(_,i)=>({kind:'custom.metric',message:'item',data:i})), [{kind:'custom.phase',message:'retained'},{kind:'custom.payload',message:'huge',data:'界'.repeat(30_000)}]]) {
+      await put(root, 'runner.ts', `export default {apiVersion:1,async resolve(){return {targets:[],errors:[]}},async run({targets}){return {results:targets.map(t=>({targetId:t.targetId,status:'pass',events:${JSON.stringify(events)}}))}}}`)
+      const result = await executePlan(executionPlan(root, [{id:'verbose',module:'./runner.ts',targetIds:['one']}]))
+      const retained = result.scenarios[0]?.evidence[0]?.events ?? []
+      expect(result.success).toBe(true)
+      expect(retained.length).toBe(events.length > 256 ? 256 : 2)
+      expect(Buffer.byteLength(JSON.stringify(retained))).toBeLessThanOrEqual(65_536)
+      expect(retained.at(-1)).toMatchObject({kind:'truncated'})
+      expect(retained.slice(0,-1)).toEqual(events.slice(0,retained.length-1))
+      expect(retained[0]).toEqual(events[0])
+    }
+  })
+
+  it('attributes shared and independent target events without rerunning evidence', async () => {
+    const root = await fixture()
+    await put(root, 'runner.ts', `import {appendFileSync} from 'node:fs';import {join} from 'node:path';export default {apiVersion:1,async resolve(){return {targets:[],errors:[]}},async run({projectRoot,targets}) {for(const t of targets)appendFileSync(join(projectRoot,'executed'),t.targetId+'\\n');return {results:targets.map(t=>({targetId:t.targetId,status:'pass',events:[{kind:'explanation',message:t.targetId}]}))}}}`)
+    const plan = executionPlan(root,[{id:'fixture',module:'./runner.ts',targetIds:['shared','independent']}])
+    const shared = plan.scenarios[0]!, independent = plan.scenarios[1]!
+    const result = await executePlan({...plan,scenarios:[shared,{...independent,evidence:[...shared.evidence,...independent.evidence]}]})
+    expect(await readFile(join(root,'executed'),'utf8')).toBe('shared\nindependent\n')
+    expect(result.scenarios.map(s=>s.evidence.map(e=>({reference:e.reference,events:e.events})))).toEqual([
+      [{reference:'fixture::shared',events:[{kind:'explanation',message:'shared'}]}],
+      [{reference:'fixture::shared',events:[{kind:'explanation',message:'shared'}]},{reference:'fixture::independent',events:[{kind:'explanation',message:'independent'}]}],
+    ])
   })
 })
