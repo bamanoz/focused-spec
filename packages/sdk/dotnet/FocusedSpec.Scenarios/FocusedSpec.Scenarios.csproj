@@ -4,7 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PackageId>FocusedSpec.Scenarios</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.10.0</Version>
     <Description>Independent typed Given/When/Expect scenario execution.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

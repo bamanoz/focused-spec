@@ -10,7 +10,7 @@ This repository prepares thirteen independently published npm packages from one 
 
 The Python and .NET SDKs are framework-independent. Their pytest/xUnit bank consumers are repository verification projects, not runtime dependencies of the SDKs. Publishing each native SDK requires its own authorized registry account and exact package verification.
 
-The coordinated npm manifests use version `0.10.0`; that source version is not evidence that any package has been published. A source-only GitHub Release may precede explicitly deferred package publication, but its notes must state that registry publication is pending. It is not a completed npm suite release. Publishing requires an authorized npm account and every registry verification below.
+The CLI, all thirteen npm packages, and the Go, Python, and .NET SDKs share one release version, currently `0.10.0`. SDKs remain runtime-independent; an unchanged package still receives the coordinated release version. Configuration, guidance, format, and runner protocol versions remain separate compatibility contracts. Source versions are not proof of registry publication: source-only or partially published GitHub Releases must identify the exact pending distributions.
 
 There is no automated release workflow. An npm suite release is complete only when all thirteen exact npm versions are available from the registry, the remote `v<version>` tag identifies the built source commit, and a published (not draft) GitHub Release exists for that tag. npm publication and Git tags do not create a GitHub Release. Go, Python, and .NET SDKs have their own native publication gates.
 
@@ -38,9 +38,9 @@ npm view @focused-spec/format-scenarios-go version
 npm view @focused-spec/runner-scenarios-go version
 ```
 
-Choose one `X.Y.Z` for the coordinated npm suite. Core-facing changes include the CLI/API under `packages/core/src`, packaged root `skills/` or `guidance/`, the staged root `README.md`/`LICENSE`, and core package metadata. Keep all thirteen npm packages at the coordinated version and every adapter's `focused-spec` peer range compatible with it; framework packages remain peer/consumer dependencies rather than core runtime dependencies. The JS/TS SDK has no focused-spec peer or runtime dependency; only its optional format owns the TypeScript parser dependency. The Go format ships a standard-library helper; the Go SDK is a separate standard-library-only module, not an npm package.
+Choose one `X.Y.Z` for the CLI, all npm packages, Python's `project.version`, .NET's project `Version`, and the Go SDK's `packages/sdk/go/vX.Y.Z` tag. Core-facing changes include the CLI/API under `packages/core/src`, packaged root `skills/` or `guidance/`, the staged root `README.md`/`LICENSE`, and core package metadata. Keep every adapter's `focused-spec` peer range compatible with the coordinated version; framework packages remain peer/consumer dependencies rather than core runtime dependencies. The JS/TS SDK has no focused-spec peer or runtime dependency; only its optional format owns the TypeScript parser dependency. The Go format ships a standard-library helper; the Go SDK is a separate standard-library-only module, not an npm package.
 
-Update all thirteen workspace manifests and the root lockfile without creating a tag. Confirm every `X.Y.Z` is unused before continuing; npm versions are immutable. Versioned manifests are preparation only—do not publish them as part of implementation or validation without release authorization.
+Update all thirteen workspace manifests, the root lockfile, Python and .NET SDK manifests, and version-pinned distribution consumers before tagging. Confirm every exact version is unused in its registry; published versions and tags are immutable. Versioned manifests are preparation only—do not publish them as part of implementation or validation without release authorization. If alignment is approved after a source tag exists, commit and push native SDK metadata separately, keep the existing source tag fixed, and identify both source revisions in the release notes; never rebuild or overwrite already published npm artifacts.
 
 ## Build and inspect separate tarballs
 
@@ -150,6 +150,7 @@ gh release view vX.Y.Z --json url,tagName,isDraft,isPrerelease,publishedAt,body
 - [ ] All thirteen npm `X.Y.Z` versions are visible in the registry; a clean consumer can install the published packages.
 - [ ] Remote tag `vX.Y.Z` resolves to that exact release commit; it was not moved to repair a partial publish.
 - [ ] GitHub Release `vX.Y.Z` exists for that tag, has reviewed notes, is published (not draft), and is not marked prerelease for a stable version.
+- [ ] Go, Python, and .NET SDKs use the same `X.Y.Z` and each passes its native publication and clean-registry-consumer gate. Missing credentials leave that distribution explicitly pending, not released.
 - [ ] Report the npm version, Git commit, remote tag and **GitHub Release URL** together; never call a tag page or npm publication alone a completed release.
 
 ## Separate Go SDK module

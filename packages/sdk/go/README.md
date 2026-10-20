@@ -2,19 +2,18 @@
 
 Typed, dependency-free Given/When/Expect scenarios for Go 1.23 and later. This module uses only the Go standard library. Running a specification does not require Node.js, npm, focused-spec, OpenSpec, or a test framework; optional discovery and focused execution are separate plugins.
 
-## Use the module from this checkout
+## Install the module
 
-The module is not published yet. Use an explicit local replacement rather than a fake registry installation:
+Create a Go consumer and install the SDK at the coordinated CLI/SDK release version:
 
 ```sh
 mkdir scenario-consumer
 cd scenario-consumer
 go mod init example.com/scenario-consumer
-go mod edit -require=github.com/bamanoz/focused-spec/packages/sdk/go@v0.0.0
-go mod edit -replace=github.com/bamanoz/focused-spec/packages/sdk/go=/absolute/path/to/focused-spec/packages/sdk/go
+go get github.com/bamanoz/focused-spec/packages/sdk/go@v0.10.0
 ```
 
-Commit a repository-relative replacement when the consumer lives in the same repository. A future published release will require a `packages/sdk/go/vX.Y.Z` module tag; until such a tag exists, do not use or document `go get` as an available installation path.
+The Go module has its own `packages/sdk/go/vX.Y.Z` tag, with the same version as the CLI and other SDKs. Repository examples retain an explicit repository-relative replacement to test checkout source without requiring a registry release.
 
 ## Runnable standalone example
 
