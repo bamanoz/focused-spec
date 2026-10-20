@@ -1,6 +1,6 @@
 # Install focused-spec with an AI agent
 
-This page is for a coding agent asked to install focused-spec **in a consuming project**. Install the local CLI and the integration for the agent that will author specifications; verify the result, then hand off to the installed loader. You do not need this repository's source code to install it.
+This page is for a coding agent asked to install focused-spec **in a consuming project**. Install the local CLI and the integration for the agent that will author specifications; verify the result, then hand off to the installed loader. The user continues their normal specification workflow afterward; loading the skill and invoking the CLI are the agent's responsibility, not commands the user must remember. You do not need this repository's source code to install it.
 
 Installation is not specification authoring or evidence verification. Do not create specifications, rewrite native requirements, register plugins, or migrate existing evidence merely to make installation look complete. If the user also requested project integration, continue that authorized work through the installed skill after setup.
 
@@ -44,7 +44,7 @@ Read the installed package manifest and compare the version response with that s
 
 ### Defer composition to the installed workflow
 
-Core contains no document parser, evidence store or test runner. Do not select plugins from this installation page. Finish core/agent setup, activate the installed loader, and follow its workflow. When project integration is requested, that workflow acquires the same local CLI's `integration` topic before selecting packages, including a first SDK-only choice with no focused configuration or CLI plugins, then each selected installed package's public contract before configuration. SDK-only execution and optional CLI integration are distinct paths.
+Core contains no document parser, evidence store or test runner. Do not select plugins from this installation page. Finish core/agent setup; for subsequent authorized specification work, load the installed skill and follow its workflow without waiting for a dedicated user invocation. When project integration is requested, that workflow acquires the same local CLI's `integration` topic before selecting packages, including a first SDK-only choice with no focused configuration or CLI plugins, then each selected installed package's public contract before configuration. SDK-only execution and optional CLI integration are distinct paths.
 
 An installation-only task leaves plugin choice, configuration and evidence explicitly pending; do not invent a test stack or convert an existing source to finish setup.
 
@@ -74,18 +74,18 @@ npx --no-install focused-spec init --tools claude --json
 - Targets are project-local **except `minimax-code`**, which writes the global home loader. Select it only when the user explicitly requests that global integration; preview its absolute destination first. Never infer home-directory permission from an existing directory.
 - Init installs bundled loader assets and native wrappers where supported. It does **not** create configuration, evidence, specifications, runner registrations, global settings, or `AGENTS.md`.
 
-## 4. Verify installation and activate the loader
+## 4. Verify installation and skill discovery
 
 Check the actual initialization result, not just its exit code:
 
 - Root and target IDs match the requested project and authoring agent.
 - Reported files exist at the returned destinations and contain the installed loader or wrapper. Read them; do not assume every host gets command files. Codex, for example, receives the shared `.agents/skills/focused-spec/SKILL.md` loader without a command wrapper.
 - Report conflicts and partial writes honestly. A failed installation may have completed some writes; do not claim rollback.
-- Tell the user the host-specific invocation and any reload/configuration hint printed by init. Typical chat invocations are `/focused-spec <task>` on native command hosts and `$focused-spec` in Codex; other hosts use their native skill selector or the [documented invocation](install.md#bundled-agent-integration).
+- Check any host reload or external-directory configuration hint printed by init. Explain the normal handoff: the user continues the host specification workflow, and the agent must load focused-spec when its description applies. A native wrapper or explicit skill invocation is an optional entrypoint, not a required user step.
 
-A loader on disk is discoverable, not necessarily active. Select and read the installed skill alongside the host specification workflow. **The installed loader, not this page, owns subsequent guidance acquisition.** Follow it to obtain a complete protocol-1 workflow response from the same local CLI in a standalone tool command before each specification step. Do not combine that response with installation output or substitute retained repository instructions. Selected plugin contracts are acquired separately as the loader directs.
+A loader on disk is discoverable, not necessarily loaded. Read the installed skill and its description. It requires loading before every SDD step that reviews, creates, revises, publishes, moves, or completes behavioral requirements or scenarios, even when the user does not name focused-spec. Do not turn that agent obligation into an instruction for the user to invoke the skill before each task. **The installed loader, not this page, owns subsequent guidance acquisition.** During authorized specification work, follow it alongside the host workflow; an installation-only task does not authorize specification or evidence changes.
 
-If the host cannot activate the loader in this session, say so and provide the exact invocation/reload step. Do not claim activation from file existence alone or silently modify the project's agent rules to enforce loading.
+If the host cannot discover or load the installed skill in this session, report the precise discovery/reload/configuration limitation. Do not claim loading from file existence alone, promise automatic host compliance from `MUST-LOAD`, or silently modify the project's agent rules. Use the [discovery and troubleshooting guidance](install.md#skill-discovery-and-troubleshooting); explicit invocation may diagnose routing but does not replace the intended agent-owned loading.
 
 ## 5. Report the boundary reached
 
@@ -93,7 +93,7 @@ Return a short factual report:
 
 - Project root, dependency owner, package-manager command, installed CLI version and executable.
 - Selected plugins, target IDs, created/unchanged integration paths, and any conflicts or limitations.
-- Whether the loader was actually read/activated and current workflow guidance acquired, or the precise remaining activation step.
+- Whether skill discovery and an actual loader read were observed, whether current workflow guidance was acquired for any authorized specification work, and any remaining host discovery/reload limitation. Do not report required per-task user invocation as normal setup.
 - Whether project configuration/evidence already exists, was integrated under separate authorization, or remains pending.
 
 Do not run `validate` or `run` in an unconfigured project as an installation check. When configuration and evidence integration are also authorized, follow the installed workflow and [configuration guide](configuration.md), then execute the selected evidence. `validate --strict` resolves exact targets but does not run them; only actual execution supplies test results. Neither installation success nor an empty selection proves behavioral coverage.

@@ -47,11 +47,13 @@ Use this project's package manager, initialize only the agent integration I use,
 and report what you verified and what still needs configuration.
 ```
 
+After setup, continue your normal specification workflow. **You do not need to invoke focused-spec or its skill yourself.** Before each SDD step that reviews, creates, revises, publishes, moves, or completes behavioral requirements or scenarios, the agent must load the installed focused-spec skill alongside the host workflow—even when your request does not mention focused-spec. The agent obtains current instructions and runs the local CLI as the workflow requires, respecting read-only and planning boundaries.
+
 ### For AI agents
 
 Read the [agent installation guide](docs/guides/agent-install.md). It covers project inspection, local package installation, explicit target selection, safe initialization, and verification before handing off to the installed skill. Installing the CLI or loader alone is not evidence that a specification passes.
 
-## Optional CLI integration
+## Set up agent integration
 
 Requires **Node.js 22.16.0+**. Run in the consuming project, not a clone of this repository:
 
@@ -62,6 +64,12 @@ npx focused-spec init --tools claude
 
 Replace `claude` with your [agent target ID](docs/reference/cli.md#agent-initialization), such as `codex` or `oh-my-pi`; use comma-separated IDs for multiple agents. Preview with `--dry-run`. The CLI also works without an agent integration.
 
+**Initialization does not create configuration or evidence.** During authorized project integration, the agent follows the installed workflow to select only necessary packages, read their public contracts, configure evidence, and execute it. Installation alone does not prove the host has loaded the skill; see [discovery and troubleshooting](docs/guides/install.md#skill-discovery-and-troubleshooting) if it does not.
+
+### Optional manual CLI use
+
+The CLI is also available for direct use and CI; the following commands are not steps users must run during agent-led specification work.
+
 Install only the formats and runners you need. For **standalone inline Markdown with existing Vitest tests**:
 
 ```sh
@@ -69,8 +77,6 @@ npm install --save-dev @focused-spec/format-inline @focused-spec/runner-vitest
 ```
 
 For existing native Markdown or Gherkin, choose the registry adapter plus its native parser instead. Go and pytest runners are available separately; test frameworks remain project prerequisites. See [installation options](docs/guides/install.md).
-
-In your agent's chat, load focused-spec alongside your host specification workflow: `/focused-spec <task>` on native command hosts, `$focused-spec` in Codex, or the host's skill selector. Ask it to integrate one native outcome with real evidence. **Initialization does not create configuration or evidence.** The installed loader obtains current workflow guidance; first integration uses its on-demand integration topic to choose only necessary packages before reading their installed contracts.
 
 For manual setup, follow the [configuration guide](docs/guides/configuration.md). Once configuration and evidence are in place:
 

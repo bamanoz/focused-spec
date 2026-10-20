@@ -1,6 +1,6 @@
 # CLI reference
 
-The binary is `focused-spec`; after installing it locally, run the shell examples with `npx focused-spec`. The command grammar below omits the launcher. The installed skill resolves the explicit local CLI itself rather than using npx for workflow guidance.
+The binary is `focused-spec`. During agent-led specification work, the agent loads the installed skill when its description applies and invokes the explicit project-local CLI; the user does not need to call the skill or CLI separately. The shell examples here are for optional manual/CI use after local installation, with `npx focused-spec` as launcher. The command grammar below omits the launcher. The installed skill resolves the explicit local CLI itself rather than using npx for workflow guidance.
 
 ## Commands
 
@@ -169,7 +169,7 @@ All selected assets and destinations across both canonical roots are checked bef
 
 `--dry-run` performs the same checks without creating or modifying files; interactive mode shows the checked review but has no write confirmation. `--replace --dry-run` previews replacement, and conflicts still exit 1. Successful install/no-op/preview exits 0; failures and cancellation exit 1. Later I/O failures may leave completed or partially written files: results retain completed writes, with the failed path in `errors`; no rollback is promised.
 
-Human output distinguishes installation from evidence readiness, skill activation and execution. Native command-file hosts generally use `/focused-spec <task>`; Amazon Q uses `@focused-spec`, Codex `$focused-spec`, Kimi `/skill:focused-spec`, and Continue its prompt selector. Devin workflows apply to Desktop; Local uses the skill. Skills-only/universal hosts use their native skill invocation or a natural-language request. Hermes needs the project’s `.hermes/skills` directory in `skills.external_dirs`; init prints the hint but never edits configuration. Copilot prompt files target IDEs, not Copilot CLI/cloud setup. Host routing and permissions remain authoritative; init does not certify the loader’s later local-CLI resolution.
+Human output distinguishes installation from evidence readiness, skill loading and execution. The installed skill's description requires the agent to load it for matching specification workflows even without an explicit user invocation; installation alone does not certify that a host complies. Printed invocation hints describe optional direct entrypoints or troubleshooting: native command-file hosts generally use `/focused-spec <task>`; Amazon Q uses `@focused-spec`, Codex `$focused-spec`, Kimi `/skill:focused-spec`, and Continue its prompt selector. Devin workflows apply to Desktop; Local uses the skill. Skills-only/universal hosts expose their native skill mechanism. Hermes needs the project’s `.hermes/skills` directory in `skills.external_dirs`; init prints the hint but never edits configuration. Copilot prompt files target IDEs, not Copilot CLI/cloud setup. Host routing and permissions remain authoritative; init does not certify the loader’s later local-CLI resolution.
 
 After a valid invocation, `--json` emits one installation-result document on stdout with no progress prose. Installation conflicts and I/O failures remain business results in this shape; JSON mode omits redundant plaintext stderr:
 
