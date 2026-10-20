@@ -53,6 +53,55 @@ Node.js 22.16 and 22.17 need the experimental type-stripping flag to load projec
 
 Repository verification additionally uses Python 3.11+ (`tomllib`) to parse installed native TOML wrappers and Python's standard-library PTY for POSIX terminal checks. These are development-check prerequisites, not CLI/installer runtime dependencies; Windows terminal interaction remains uncertified.
 
+## .NET SDK from GitHub Releases
+
+The independent `FocusedSpec.Scenarios` SDK requires .NET 9+. Version `0.10.0` is distributed as a public [GitHub Release asset](https://github.com/bamanoz/focused-spec/releases/download/v0.10.0/FocusedSpec.Scenarios.0.10.0.nupkg), **not on nuget.org**. No Microsoft account, GitHub login, Node.js, or focused-spec CLI is required to install it.
+
+From your consuming project or solution root, download the exact package into a local feed (macOS/Linux):
+
+```sh
+mkdir -p .nuget/local-feed
+curl --fail --location --output .nuget/local-feed/FocusedSpec.Scenarios.0.10.0.nupkg \
+  https://github.com/bamanoz/focused-spec/releases/download/v0.10.0/FocusedSpec.Scenarios.0.10.0.nupkg
+```
+
+On Windows PowerShell, use:
+
+```powershell
+New-Item -ItemType Directory -Force .nuget/local-feed | Out-Null
+Invoke-WebRequest -Uri 'https://github.com/bamanoz/focused-spec/releases/download/v0.10.0/FocusedSpec.Scenarios.0.10.0.nupkg' -OutFile '.nuget/local-feed/FocusedSpec.Scenarios.0.10.0.nupkg'
+```
+
+The package's SHA-256 is `1e11a05d5d6fd7d9d699b07e06eb8e7f7da02aa5ae11687133a775e1b8330276`. Check it with `shasum -a 256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.0.nupkg` on macOS, `sha256sum` on Linux, or `Get-FileHash -Algorithm SHA256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.0.nupkg` in PowerShell. Stop if it differs.
+
+Create `NuGet.Config` beside `.nuget/` for a new project:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="focused-spec-local" value=".nuget/local-feed" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+  </packageSources>
+</configuration>
+```
+
+For an existing configuration, merge the local source into its `packageSources`; do not replace custom feeds or add `clear`. If package source mapping is enabled, map `FocusedSpec.Scenarios` to `focused-spec-local` there too. The feed path is relative to `NuGet.Config`, not the shell's current directory.
+
+Add the pinned dependency from the directory containing your `.csproj` (or pass the project path explicitly):
+
+```sh
+dotnet add package FocusedSpec.Scenarios --version 0.10.0
+dotnet restore
+```
+
+Keep `NuGet.Config` and the generated `PackageReference` in version control. On another machine or in CI, repeat the download into the configured local feed **before** `dotnet restore`; alternatively, commit the `.nupkg` if your repository permits vendored dependencies. A developer's global NuGet cache is not a distribution source. For an upgrade, download the matching versioned asset and update the package reference and checksum together. Do not use the GitHub download URL as a NuGet HTTP feed.
+
+See the [SDK API and executable example](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md). This delivery path does not imply publication on nuget.org; that remains pending separately.
+
+For coding agents, the same pinned distribution procedure is bundled in the local CLI's `integration` topic (`instructions --protocol 1 --topic integration --json`); activate the installed loader and load its workflow first. This guidance update requires a newly built or later published CLI package; the already published npm `focused-spec@0.10.0` is immutable and does not acquire it from this repository.
+
 ## Agent skill
 
 The CLI can validate and run manually bound native items without an installed skill. For agent-led specification authoring and evidence verification, install the skill for the agent doing that work; npm installation alone does not activate it.

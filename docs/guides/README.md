@@ -13,5 +13,6 @@
 - [Read the standalone Go SDK contract](../../packages/sdk/go/README.md), [native Go scenario format](../../packages/formats/scenarios-go/README.md), and [direct Go runner](runners.md#direct-go-scenarios)
 - [Use the standalone Python SDK with pytest](../../packages/sdk/python/README.md)
 - [Use the standalone .NET SDK with xUnit](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md)
+- [Install the .NET SDK from a GitHub Release without a Microsoft account](install.md#net-sdk-from-github-releases)
 
 For exact flags and response shapes, use the [CLI reference](../reference/cli.md) and [Plugin API reference](../reference/runner-api.md).

@@ -15,6 +15,8 @@
 
 - Product model and evidence semantics: [Concepts](concepts/README.md)
 - Installation and skill setup: [Installation guide](guides/install.md)
+- .NET SDK download, local NuGet feed, pinned dependency, and CI restore: [GitHub Release installation](guides/install.md#net-sdk-from-github-releases).
+- Offline agent .NET installation procedure: the installed CLI's `integration` topic, authored in [integration guidance](../guidance/integration.md#install-the-net-sdk-from-a-github-release), includes the versioned artifact, checksum, local feed, and CI restore obligations.
 - Agent-led consumer setup and installation verification: [Agent installation guide](guides/agent-install.md); hands off to the installed loader rather than defining another specification workflow.
 - Explicit bundled initialization for all 50 agent targets, native wrappers and global-only MiniMax: [installation guide](guides/install.md#bundled-agent-integration), [CLI catalog and safety contract](reference/cli.md#agent-initialization), and [agent initialization behavioral contract](../openspec/specs/agent-init/spec.md).
 - Version-5 configuration, explicit inline/registry formats, opaque identities, and historical migration: [Configuration guide](guides/configuration.md)

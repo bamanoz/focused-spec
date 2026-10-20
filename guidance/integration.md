@@ -26,6 +26,44 @@ Go, Python and .NET SDKs are native distributions, not npm packages. Check their
 
 Python and .NET SDKs currently provide no focused-spec native-discovery format or direct scenario runner. Do not invent `format-scenarios-python`, `runner-scenarios-python`, .NET counterparts, or a bundled xUnit runner. Keep their native execution path unless CLI integration is requested. Python pytest wrappers can then use the existing pytest runner's public exact-selector contract; .NET wrappers require a compatible installed/project runner before CLI binding can be claimed. Neither case authorizes copying the code scenarios into Markdown.
 
+## Install the .NET SDK from a GitHub Release
+
+`FocusedSpec.Scenarios` version `0.10.0` is available as a public GitHub Release `.nupkg`, not on nuget.org. Use this explicit distribution for that SDK version; do not guess registry availability from the CLI version. The SDK requires .NET 9+ but no Microsoft account, GitHub login, Node.js, or focused-spec runtime. This procedure is included here so the installed CLI works without repository documentation. It authorizes no download or project mutation outside the user's installation/implementation scope.
+
+1. Inspect the consuming solution/project, existing `NuGet.Config` hierarchy, package source mapping, package references, and CI restore procedure. Preserve custom sources and mappings. Select a project-owned local feed; the following example uses `.nuget/local-feed` relative to the solution's `NuGet.Config`.
+2. When installation is authorized, create that directory and download the pinned public artifact. From the solution root on macOS/Linux:
+
+   ```sh
+   mkdir -p .nuget/local-feed
+   curl --fail --location --output .nuget/local-feed/FocusedSpec.Scenarios.0.10.0.nupkg \
+     https://github.com/bamanoz/focused-spec/releases/download/v0.10.0/FocusedSpec.Scenarios.0.10.0.nupkg
+   ```
+
+   On Windows PowerShell:
+
+   ```powershell
+   New-Item -ItemType Directory -Force .nuget/local-feed | Out-Null
+   Invoke-WebRequest -Uri 'https://github.com/bamanoz/focused-spec/releases/download/v0.10.0/FocusedSpec.Scenarios.0.10.0.nupkg' -OutFile '.nuget/local-feed/FocusedSpec.Scenarios.0.10.0.nupkg'
+   ```
+
+3. Verify SHA-256 equals `1e11a05d5d6fd7d9d699b07e06eb8e7f7da02aa5ae11687133a775e1b8330276` before installing. Use `shasum -a 256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.0.nupkg` on macOS, `sha256sum` on Linux, or `Get-FileHash -Algorithm SHA256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.0.nupkg` in PowerShell. A missing artifact, failed download, or checksum mismatch blocks this path; do not substitute another version or claim success.
+4. Register the directory in project-local `NuGet.Config`. For a new configuration beside `.nuget/`:
+
+   ```xml
+   <?xml version="1.0" encoding="utf-8"?>
+   <configuration>
+     <packageSources>
+       <clear />
+       <add key="focused-spec-local" value=".nuget/local-feed" />
+       <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+     </packageSources>
+   </configuration>
+   ```
+
+   For an existing configuration, merge only the local source; never replace custom sources or add `clear`. When source mapping is enabled, map `FocusedSpec.Scenarios` to `focused-spec-local` too. Paths are relative to the configuration file. A GitHub download URL is not a NuGet HTTP feed.
+5. From the selected `.csproj` directory, run `dotnet add package FocusedSpec.Scenarios --version 0.10.0` and `dotnet restore`, or pass that project path explicitly. Read the SDK's public README included in the downloaded package for scenario and driver contracts before writing evidence; the CLI's npm `plugin-docs` does not acquire native NuGet contracts. Execute a real SDK consumer and check the actual result. Installation alone proves neither application behavior nor CLI integration.
+6. Retain `NuGet.Config` and the pinned `PackageReference`. Arrange the same verified download before restore on other machines and CI, or explicitly vendor the `.nupkg` if the project permits it. A global developer cache is insufficient. Verify restore with a fresh `NUGET_PACKAGES` directory and run the consumer. Updates require the matching versioned asset, package reference and verified checksum together; this `0.10.0` recipe does not promise assets for other versions. Report GitHub/local-feed installation separately from nuget.org publication, which remains pending.
+
 ## Select, acquire contracts, then integrate
 
 1. Recommend the smallest compatible composition. Identify the retained source, evidence owner, execution path, required packages/prerequisites, and what will deliberately remain uninstalled. Do not add every package or infer a storage conversion from an installation request.

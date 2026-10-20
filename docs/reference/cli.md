@@ -209,6 +209,8 @@ For example, from the established local installation root:
 
 The workflow routes absent or explicitly reconsidered integration to this topic, preserves supported existing choices for ordinary tasks, and retains its upgrade procedure for incompatible setups. Guidance retrieval does not authorize installation, configuration or migration.
 
+The `integration` topic also carries the pinned .NET SDK `0.10.0` GitHub Release installation procedure: public artifact URL, SHA-256, project-local NuGet feed, preserved custom sources/mapping, and repeatable CI restore. The procedure is served offline without a checkout; performing the download and installation requires network access and authorization. It does not claim nuget.org publication or add a .NET CLI runner. See the human-facing [installation guide](../guides/install.md#net-sdk-from-github-releases).
+
 Loader protocol defaults to 1; it is independent of package versions, configuration version 5, Format API version 2, and Runner API version 1. The loader requests it explicitly. Protocol-1 JSON is:
 
 ```json
@@ -220,7 +222,7 @@ Loader protocol defaults to 1; it is independent of package versions, configurat
 }
 ```
 
-The response's `topic` is exactly the requested `workflow`, `formats`, or `runners`; the default remains `workflow`. Every topic ships with core, independently of whether adapter packages are installed. The thin loader acquires shared format/runner guidance from the same project-local installation only when the workflow calls for that work, then acquires each selected plugin's document through a separate [`plugin-docs`](#installed-plugin-documentation) request.
+The response's `topic` is exactly the requested `workflow`, `integration`, `formats`, or `runners`; the default remains `workflow`. Every topic ships with core, independently of whether adapter packages are installed. The thin loader acquires shared format/runner guidance from the same project-local installation only when the workflow calls for that work, then acquires each selected plugin's document through a separate [`plugin-docs`](#installed-plugin-documentation) request.
 
 Acquire each response with a standalone tool command. Do not chain it with `init --json`, installation, help or another guidance request: combined stdout is not the single protocol object. If this happens, request guidance again by itself; extracting one object from concatenated output is not accepted acquisition.
 

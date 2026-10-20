@@ -162,3 +162,13 @@ An authorized Go release requires a distinct `packages/sdk/go/vX.Y.Z` tag pointi
 For the Python SDK, build a wheel and sdist from `packages/sdk/python`, install each artifact in a clean Python consumer, run the standalone example and pytest contract suite, then verify the exact PyPI project/version before claiming publication. Do not make the Python bank example depend on a registry release during repository checks; use the explicit local editable SDK path.
 
 For the .NET SDK, run `dotnet pack packages/sdk/dotnet/FocusedSpec.Scenarios/FocusedSpec.Scenarios.csproj` from the verified source commit, install the exact `.nupkg` into a clean consumer using a local NuGet source, run the standalone example and xUnit contract suite, then verify the exact NuGet package/version before claiming publication. xUnit remains a consumer/test dependency and is not included in the SDK package.
+
+### GitHub delivery when nuget.org access is unavailable
+
+The verified `.nupkg` may also be distributed as a public asset on the existing coordinated GitHub Release. This is a local-feed distribution, not nuget.org publication; keep the registry gate pending and state that distinction in release notes. Upload the already verified artifact without rebuilding or replacing an existing asset:
+
+```sh
+gh release upload vX.Y.Z path/to/FocusedSpec.Scenarios.X.Y.Z.nupkg
+```
+
+Download the asset through its public release URL without authentication, compare its SHA-256 with the verified build, and install it in a clean consumer with a fresh `NUGET_PACKAGES` cache. Execute the SDK example and repeat restore using the documented project-local feed. Keep the [installation instructions](../guides/install.md#net-sdk-from-github-releases), SDK README link, version, checksum, release notes, and CLI-owned [integration guidance](../../guidance/integration.md#install-the-net-sdk-from-a-github-release) consistent. A guidance change requires a new core package release to reach installed consumers; never overwrite an existing npm version. Preserve existing source and module tags; publishing a download does not authorize moving them.
