@@ -1,6 +1,6 @@
 {
   "name": "@focused-spec/format-scenarios-go",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Static native Go scenario format for focused-spec",
   "repository": {
     "type": "git",
@@ -30,7 +30,7 @@
     "node": ">=22.16.0"
   },
   "peerDependencies": {
-    "focused-spec": "^0.10.0"
+    "focused-spec": "^0.10.1"
   },
   "license": "MIT"
 }

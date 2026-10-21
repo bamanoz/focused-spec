@@ -1,6 +1,6 @@
 {
   "name": "@focused-spec/format-markdown",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Markdown format adapter for focused-spec",
   "repository": {"type": "git", "url": "git+https://github.com/bamanoz/focused-spec.git", "directory": "packages/formats/markdown"},
   "type": "module",
@@ -8,7 +8,7 @@
   "files": ["dist"],
   "scripts": {"build": "node ../../../scripts/build-package.mjs"},
   "engines": {"node": ">=22.16.0"},
-  "peerDependencies": {"focused-spec": "^0.10.0"},
+  "peerDependencies": {"focused-spec": "^0.10.1"},
   "dependencies": {"mdast-util-from-markdown": "^2.1.0"},
   "license": "MIT"
 }

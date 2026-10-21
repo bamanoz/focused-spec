@@ -2,7 +2,12 @@
 
 ## Focused specification
 
-A focused specification protects the smallest product-boundary outcome that can fail independently. The owning framework's native checkable item remains the only behavioral text. `focused-spec` adds only:
+A focused specification protects the smallest product-boundary outcome that can fail independently. There are two independent paths:
+
+- **Executable BDD scenarios:** keep Given/When/Expect in code; a thin driver invokes the real application and the language SDK compares its actual observation with independently authored expectations. JavaScript/TypeScript, Go, Python, and .NET SDKs execute natively without an SDD framework, Markdown companion, registry, or focused-spec CLI.
+- **Native requirement binding:** keep an existing requirement or acceptance item in its owning format and bind it to exact executable tests. The framework retains approval and lifecycle ownership when present.
+
+Optional CLI integration discovers and executes code scenarios through the JS/TS or Go plugins, or binds native text through compatible formats and runners. For CLI-integrated items, `focused-spec` adds only:
 
 - one opaque stable ID bound to that item;
 - one or more exact evidence references supplied by the selected format;
@@ -26,7 +31,15 @@ For editable Markdown, the native parser binds an ID with `<!-- focused-spec:id=
 
 An enrollment is invalid when it is missing evidence, claims a nonexistent item, binds more than one item, conflicts with a marked identity, duplicates a selected `(scope, ID)`, or competes with another adapter for the same item. Unmarked native content remains outside focused execution: it is neither an error nor an arbitrary count reported as verified.
 
-The independent [`@focused-spec/scenarios-typescript` SDK](../../packages/sdk/typescript/README.md) prepares an application from Given, performs When and compares actual observations with Expect, including awaited cleanup. It needs neither focused-spec nor a test framework. The optional [JS/TS format](../../packages/formats/scenarios-typescript/README.md) and [scenario runner](../guides/runners.md#direct-jsts-scenarios) integrate those same scenarios through the existing plugin APIs. Static integration accepts only the documented literal grammar; standalone SDK callers may construct suites programmatically. Other languages require their own SDK/parser/runtime implementations.
+The independent [JS/TS](../../packages/sdk/typescript/README.md), [Go](../../packages/sdk/go/README.md), [Python](../../packages/sdk/python/README.md), and [.NET](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md) SDKs prepare the application from Given, perform When, and compare actual observations with Expect, with execution-local cleanup. A test wrapper executes that same suite without becoming another behavioral source. Optional native discovery/direct CLI execution exists for JS/TS and Go; Python and .NET retain native SDK/test execution. Static CLI discovery accepts the selected format's documented grammar rather than every dynamically constructed suite.
+
+## Agent-owned loading
+
+The installed skill applies to BDD/executable-scenario and application-driver work as well as SDD requirements, even without a framework or a request naming focused-spec. The agent loads it and current local guidance without requiring a user invocation; it follows the host workflow when present and preserves read-only/planning boundaries. Its project-local CLI is guidance tooling, not an SDK runtime dependency. SDK-only work does not thereby require CLI plugins, configuration, or enrollment. See [installation and discovery](../guides/install.md#agent-skill); a discoverable loader does not guarantee host compliance.
+
+An authorized revision to a native item selected by existing CLI configuration includes resolving missing identity, binding, or evidence before claiming completion, subject to host approval. A missing enrollment is not an implied prose-only boundary; unrelated native content remains unenrolled. Ordinary direct-test success does not complete configured evidence verification.
+
+Integrating evidence for an existing native text item retains that item and connects its tests; it is not SDK-only scenario authoring. The installed integration guidance owns composition selection, and selected plugin contracts govern their syntax and selectors. A language's lack of native code-scenario discovery does not prevent binding its ordinary tests as evidence through a compatible runner.
 
 ## Identity and evidence semantics
 

@@ -24,7 +24,7 @@ For native Markdown with external YAML evidence, choose `@focused-spec/format-re
 
 For executable JS/TS scenarios without focused-spec, install only `@focused-spec/scenarios-typescript`; it has no runtime dependencies or focused-spec peer. For optional native discovery and direct execution, add `focused-spec`, `@focused-spec/format-scenarios-typescript` and `@focused-spec/runner-scenarios-typescript`. The format owns the TypeScript AST parser dependency; neither SDK nor core gains it. The [SDK contract](../../packages/sdk/typescript/README.md), [format contract](../../packages/formats/scenarios-typescript/README.md) and [bank example](configuration.md#standalone-executable-bank-specifications) document both paths.
 
-For independent Go scenarios, use the standard-library-only [Go SDK module](../../packages/sdk/go/README.md) with Go 1.23+; no Node.js or npm installation is needed. Install the coordinated release with `go get github.com/bamanoz/focused-spec/packages/sdk/go@v0.10.0` inside a Go module. Checkout examples retain an explicit local module replacement to exercise repository source. Optional focused-spec integration additionally installs `focused-spec`, `@focused-spec/format-scenarios-go` and `@focused-spec/runner-scenarios-go` as npm development dependencies. Their consumer needs both Node.js 22.16.0+ and Go 1.23+ on PATH. The Go parser helper ships inside the format package; core gains no Go dependency. Read its [format contract](../../packages/formats/scenarios-go/README.md) and [runner contract](runners.md#direct-go-scenarios) before configuration.
+For independent Go scenarios, use the standard-library-only [Go SDK module](../../packages/sdk/go/README.md) with Go 1.23+; no Node.js or npm installation is needed. Install the coordinated release with `go get github.com/bamanoz/focused-spec/packages/sdk/go@v0.10.1` inside a Go module. Checkout examples retain an explicit local module replacement to exercise repository source. Optional focused-spec integration additionally installs `focused-spec`, `@focused-spec/format-scenarios-go` and `@focused-spec/runner-scenarios-go` as npm development dependencies. Their consumer needs both Node.js 22.16.0+ and Go 1.23+ on PATH. The Go parser helper ships inside the format package; core gains no Go dependency. Read its [format contract](../../packages/formats/scenarios-go/README.md) and [runner contract](runners.md#direct-go-scenarios) before configuration.
 
 The executable is installed locally with the package. During agent-led specification work, the agent resolves and invokes that local installation; users do not need to run CLI commands themselves. For optional manual or CI use after configuring native documents and format-owned evidence, invoke `npx focused-spec validate` from the project root or use `focused-spec` in npm scripts. Run the shell examples here only after installing the project dependency, so npx selects that installation. Public types are exported from `focused-spec/format` and `focused-spec/runner`. Package installation does not install an agent skill, configure formats, or create evidence integration.
 
@@ -55,24 +55,24 @@ Repository verification additionally uses Python 3.11+ (`tomllib`) to parse inst
 
 ## .NET SDK from GitHub Releases
 
-The independent `FocusedSpec.Scenarios` SDK requires .NET 9+. Version `0.10.0` is distributed as a public [GitHub Release asset](https://github.com/bamanoz/focused-spec/releases/download/v0.10.0/FocusedSpec.Scenarios.0.10.0.nupkg), **not on nuget.org**. No Microsoft account, GitHub login, Node.js, or focused-spec CLI is required to install it.
+The independent `FocusedSpec.Scenarios` SDK requires .NET 9+. Version `0.10.1` is distributed as a public [GitHub Release asset](https://github.com/bamanoz/focused-spec/releases/download/v0.10.1/FocusedSpec.Scenarios.0.10.1.nupkg), **not on nuget.org**. No Microsoft account, GitHub login, Node.js, or focused-spec CLI is required to install it.
 
 From your consuming project or solution root, download the exact package into a local feed (macOS/Linux):
 
 ```sh
 mkdir -p .nuget/local-feed
-curl --fail --location --output .nuget/local-feed/FocusedSpec.Scenarios.0.10.0.nupkg \
-  https://github.com/bamanoz/focused-spec/releases/download/v0.10.0/FocusedSpec.Scenarios.0.10.0.nupkg
+curl --fail --location --output .nuget/local-feed/FocusedSpec.Scenarios.0.10.1.nupkg \
+  https://github.com/bamanoz/focused-spec/releases/download/v0.10.1/FocusedSpec.Scenarios.0.10.1.nupkg
 ```
 
 On Windows PowerShell, use:
 
 ```powershell
 New-Item -ItemType Directory -Force .nuget/local-feed | Out-Null
-Invoke-WebRequest -Uri 'https://github.com/bamanoz/focused-spec/releases/download/v0.10.0/FocusedSpec.Scenarios.0.10.0.nupkg' -OutFile '.nuget/local-feed/FocusedSpec.Scenarios.0.10.0.nupkg'
+Invoke-WebRequest -Uri 'https://github.com/bamanoz/focused-spec/releases/download/v0.10.1/FocusedSpec.Scenarios.0.10.1.nupkg' -OutFile '.nuget/local-feed/FocusedSpec.Scenarios.0.10.1.nupkg'
 ```
 
-The package's SHA-256 is `1e11a05d5d6fd7d9d699b07e06eb8e7f7da02aa5ae11687133a775e1b8330276`. Check it with `shasum -a 256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.0.nupkg` on macOS, `sha256sum` on Linux, or `Get-FileHash -Algorithm SHA256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.0.nupkg` in PowerShell. Stop if it differs.
+The package's SHA-256 is `4c0689d653dd2f2d28ea1ebe37f30ce31578dbc318efe9b6ecbcd60f4c5392a9`. Check it with `shasum -a 256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.1.nupkg` on macOS, `sha256sum` on Linux, or `Get-FileHash -Algorithm SHA256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.1.nupkg` in PowerShell. Stop if it differs.
 
 Create `NuGet.Config` beside `.nuget/` for a new project:
 
@@ -92,7 +92,7 @@ For an existing configuration, merge the local source into its `packageSources`;
 Add the pinned dependency from the directory containing your `.csproj` (or pass the project path explicitly):
 
 ```sh
-dotnet add package FocusedSpec.Scenarios --version 0.10.0
+dotnet add package FocusedSpec.Scenarios --version 0.10.1
 dotnet restore
 ```
 
@@ -100,11 +100,13 @@ Keep `NuGet.Config` and the generated `PackageReference` in version control. On 
 
 See the [SDK API and executable example](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md). This delivery path does not imply publication on nuget.org; that remains pending separately.
 
-For coding agents, the same pinned distribution procedure is bundled in the local CLI's `integration` topic (`instructions --protocol 1 --topic integration --json`); the agent first loads the installed skill and obtains its workflow. This guidance update requires a newly built or later published CLI package; the already published npm `focused-spec@0.10.0` is immutable and does not acquire it from this repository.
+For coding agents, the same pinned distribution procedure is bundled in the local CLI's `integration` topic (`instructions --protocol 1 --topic integration --json`); the agent first loads the installed skill and obtains its workflow. Use `focused-spec@0.10.1` or later for this procedure; older published npm versions are immutable and do not acquire guidance updates from this repository.
 
 ## Agent skill
 
-Install the skill for the agent doing specification work, then continue using that agent's normal specification workflow. The [skill description](../../skills/focused-spec/SKILL.md) requires the agent to load focused-spec before every SDD step that reviews, creates, revises, publishes, moves, or completes behavioral requirements or scenarios, across frameworks and commands, even when the user does not name focused-spec. Loading the skill and calling the CLI are the agent's responsibility, not additional user steps. Read-only and planning boundaries still apply. Installing the npm dependency alone does not install the skill; the CLI also remains available for optional manual and CI use.
+Install the skill for the agent doing BDD or SDD work. Its [description](../../skills/focused-spec/SKILL.md) requires loading before reviewing, authoring, revising, or verifying executable scenarios or their application drivers, including SDK-only tasks without an SDD framework or CLI integration, and before SDD steps concerning behavioral requirements or scenarios. This applies across formats and commands, even without a request naming focused-spec. The agent loads the skill and calls the CLI; these are not additional user steps. It follows a host workflow when present and preserves read-only/planning limits. Installing the npm dependency alone does not install the skill; manual and CI CLI use remain optional.
+
+The agent loader needs a compatible project-local CLI to obtain current guidance. Independent SDK execution does not: the native suite/test wrapper needs only its language SDK and runtime. Installing agent tooling does not authorize adding CLI plugins, focused configuration, registries, or Markdown companions to SDK-only work.
 
 ### Bundled agent integration
 

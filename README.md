@@ -47,7 +47,7 @@ Use this project's package manager, initialize only the agent integration I use,
 and report what you verified and what still needs configuration.
 ```
 
-After setup, continue your normal specification workflow. **You do not need to invoke focused-spec or its skill yourself.** Before each SDD step that reviews, creates, revises, publishes, moves, or completes behavioral requirements or scenarios, the agent must load the installed focused-spec skill alongside the host workflow—even when your request does not mention focused-spec. The agent obtains current instructions and runs the local CLI as the workflow requires, respecting read-only and planning boundaries.
+After setup, continue your BDD or SDD work. **You do not need to invoke focused-spec or its skill yourself.** The agent must load the installed skill before reviewing, authoring, revising, or verifying executable scenarios or their application drivers, including SDK-only work without an SDD framework or CLI integration, and before SDD steps concerning behavioral requirements or scenarios—even when your request does not mention focused-spec. It follows the host workflow when present, respecting read-only and planning boundaries.
 
 ### For AI agents
 
@@ -85,7 +85,7 @@ npx focused-spec validate --strict
 npx focused-spec run
 ```
 
-SDK-only consumers do not need CLI installation or configuration; use the language-specific SDK links above. For planned evidence and scope selection, see [concepts](docs/concepts/README.md) and the [CLI reference](docs/reference/cli.md).
+SDK-only execution does not need CLI installation or configuration; use the language-specific SDK links above. The agent loader separately needs a compatible project-local CLI for current guidance, not as an SDK runtime dependency. For planned evidence and scope selection, see [concepts](docs/concepts/README.md) and the [CLI reference](docs/reference/cli.md).
 
 ## Shipped examples
 

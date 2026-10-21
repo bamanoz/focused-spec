@@ -1,6 +1,6 @@
 {
   "name": "@focused-spec/format-scenarios-typescript",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Static native JS/TS scenario format for focused-spec",
   "repository": {
     "type": "git",
@@ -30,11 +30,11 @@
     "node": ">=22.16.0"
   },
   "dependencies": {
-    "@focused-spec/scenarios-typescript": "0.10.0",
+    "@focused-spec/scenarios-typescript": "0.10.1",
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
-    "focused-spec": "^0.10.0"
+    "focused-spec": "^0.10.1"
   },
   "license": "MIT"
 }

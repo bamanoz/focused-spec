@@ -34,7 +34,7 @@ export async function runEval(
     if (workspace.upgrade !== undefined) {
       for (const path of snapshots.keys()) if (isUpgradeArtifact(path)) snapshots.delete(path)
       const unrelated = await glob('node_modules/yaml/**/*', { cwd: workspace.path, nodir: true, dot: true, follow: true, nocase: false })
-      for (const path of ['.npmrc', 'README.md', 'go.mod', ...unrelated]) {
+      for (const path of ['.npmrc', 'go.mod', ...unrelated]) {
         snapshots.set(path, await readFile(join(workspace.path, path), 'utf8'))
       }
     }

@@ -1,6 +1,6 @@
 # Install focused-spec with an AI agent
 
-This page is for a coding agent asked to install focused-spec **in a consuming project**. Install the local CLI and the integration for the agent that will author specifications; verify the result, then hand off to the installed loader. The user continues their normal specification workflow afterward; loading the skill and invoking the CLI are the agent's responsibility, not commands the user must remember. You do not need this repository's source code to install it.
+This page is for a coding agent asked to install focused-spec **in a consuming project**. Install the local CLI and integration for the agent doing BDD or SDD work; verify the result, then hand off to the installed loader. The user continues their normal work afterward; loading the skill and invoking the CLI are the agent's responsibility, not commands the user must remember. You do not need this repository's source code to install it.
 
 Installation is not specification authoring or evidence verification. Do not create specifications, rewrite native requirements, register plugins, or migrate existing evidence merely to make installation look complete. If the user also requested project integration, continue that authorized work through the installed skill after setup.
 
@@ -30,7 +30,7 @@ For an npm project, in the dependency-owning directory:
 npm install --save-dev focused-spec
 ```
 
-Use the equivalent local development-dependency operation for the project's existing package manager. Do not install globally, run a remote shell installer, or clone this repository as a consumer dependency. Go and Python projects still need a project-local Node package installation to own the CLI and plugins.
+Use the equivalent local development-dependency operation for the project's existing package manager. Do not install globally, run a remote shell installer, or clone this repository as a consumer dependency. Go, Python, and .NET projects using the agent loader still need a project-local Node package installation for its CLI guidance; independent SDK execution itself needs neither that installation nor CLI plugins/configuration.
 
 After installing the dependency, the bootstrap commands below use `npx --no-install focused-spec` from the dependency-owning directory. `--no-install` prevents npx from fetching a different package if the local CLI is absent.
 
@@ -81,9 +81,9 @@ Check the actual initialization result, not just its exit code:
 - Root and target IDs match the requested project and authoring agent.
 - Reported files exist at the returned destinations and contain the installed loader or wrapper. Read them; do not assume every host gets command files. Codex, for example, receives the shared `.agents/skills/focused-spec/SKILL.md` loader without a command wrapper.
 - Report conflicts and partial writes honestly. A failed installation may have completed some writes; do not claim rollback.
-- Check any host reload or external-directory configuration hint printed by init. Explain the normal handoff: the user continues the host specification workflow, and the agent must load focused-spec when its description applies. A native wrapper or explicit skill invocation is an optional entrypoint, not a required user step.
+- Check any host reload or external-directory configuration hint printed by init. Explain the normal handoff: the user continues BDD or SDD work, and the agent loads focused-spec when its description applies, alongside a host workflow when present. A native wrapper or explicit invocation is optional, not a required user step.
 
-A loader on disk is discoverable, not necessarily loaded. Read the installed skill and its description. It requires loading before every SDD step that reviews, creates, revises, publishes, moves, or completes behavioral requirements or scenarios, even when the user does not name focused-spec. Do not turn that agent obligation into an instruction for the user to invoke the skill before each task. **The installed loader, not this page, owns subsequent guidance acquisition.** During authorized specification work, follow it alongside the host workflow; an installation-only task does not authorize specification or evidence changes.
+A loader on disk is discoverable, not necessarily loaded. Read the installed skill and description. It requires loading for executable-scenario and application-driver review, authoring, revision, and verification, including SDK-only work without an SDD framework or CLI integration, as well as SDD steps concerning behavioral requirements or scenarios—even when the user does not name focused-spec. Do not turn this agent obligation into a per-task user invocation. **The installed loader, not this page, owns subsequent guidance acquisition.** Follow a host workflow when present; installation alone authorizes no specification or evidence changes.
 
 If the host cannot discover or load the installed skill in this session, report the precise discovery/reload/configuration limitation. Do not claim loading from file existence alone, promise automatic host compliance from `MUST-LOAD`, or silently modify the project's agent rules. Use the [discovery and troubleshooting guidance](install.md#skill-discovery-and-troubleshooting); explicit invocation may diagnose routing but does not replace the intended agent-owned loading.
 

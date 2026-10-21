@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline'
 import type { AgentDriver, AgentRequest, AgentResult } from './types.ts'
 import { lastAssistantMessage, parseUserDecision } from './dialogue.ts'
 import { OmpAgentDriver } from './omp-agent.ts'
+import { runAgentTurn } from './result.ts'
 
 type ObjectValue = Record<string, unknown>
 const object = (value: unknown): value is ObjectValue => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -68,6 +69,9 @@ function explicitlyProposesPath(path: string, proposed: string, submittedPlan: s
     if (folder === directory && paragraph.includes(file) && /in (?:that|the) same (?:folder|directory)/iu.test(paragraph)) return true
     if (folder === directory && creations.includes(file)) return true
     if (folder === directory) {
+      for (const payload of paragraph.matchAll(/^\*\*([^*\n]+)\*\*\s*(?:—|–|:)/gu)) {
+        if (payload[1] === path.slice(slash + 1)) return true
+      }
       for (const payload of paragraph.matchAll(/^(?:Exact\s+)?(`[^`\n]+`)(?:\s+contents)?:\s*$/gimu)) {
         if (payload[1] === file) return true
       }
@@ -120,7 +124,7 @@ export interface PlanningResult {
   planModeEntered: boolean
   planApproved: boolean
   unauthorizedPaths: string[]
-  interactions: { question: unknown; decision: ElicitationDecision; transcript: string }[]
+  interactions: { question: unknown; decision: ElicitationDecision | null; transcript: string }[]
   protocol: string
   detail: string
 }
@@ -200,14 +204,17 @@ export async function runPlanningDialogue(
       ? await readSubmittedPlan(proposal ?? '', planArtifacts) : ''
     conversation.push({ role: 'assistant', text: `${assistantText}\n${message}` })
     assistantText = ''
-    const user = await responder.run({ workspace: request.workspace, skills: [], tools: '',
+    const interaction: PlanningResult['interactions'][number] = { question, decision: null, transcript: '' }
+    interactions.push(interaction)
+    const user = await runAgentTurn(responder, { workspace: request.workspace, skills: [], tools: '',
       ...(request.model === undefined ? {} : { model: request.model }), timeoutMs: 60_000,
       systemPrompt: responderSystem, prompt: JSON.stringify({ task: request.prompt, conversation, question,
         ...(submittedPlan === '' ? {} : { submittedPlan }) }) })
+    interaction.transcript = user.output
     if (!user.success) throw new Error(`test-user failed: exit=${user.exitCode}`)
     const proposed = [request.prompt, ...conversation.filter(item => item.role === 'assistant').map(item => item.text)].join('\n')
     const decision = readElicitationDecision(lastAssistantMessage(user.output), question.requestedSchema)
-    interactions.push({ question, decision, transcript: user.output })
+    interaction.decision = decision
     assertExplicitlyProposed(decision, proposed, submittedPlan)
     const approvesPlan = grantsPlanApproval(message, mode, decision)
     conversation.push({ role: 'user', text: JSON.stringify(decision) })

@@ -22,7 +22,13 @@ export const EVAL_CASES: readonly EvalCase[] = [
     ['executable-authoring-sdk', 'typescript', 'author', false, 'executable-authoring/sdk.md'],
     ['executable-authoring-cli', 'typescript', 'author', true, 'executable-authoring/cli.md'],
   ] as const).map(([id, source, mode, cli, prompt]) => ({
-    id, description: `${mode} ${source} composition with ${cli ? 'CLI' : 'independent'} execution and independently judged side effects.`,
+    id, description: mode === 'recommend'
+      ? 'Recommend a project-grounded composition only; do not install packages, configure evidence, or claim execution.'
+      : mode === 'install'
+        ? 'Verify or complete project-local core and Oh My Pi integration only; leave plugins, configuration, evidence, specifications and tests untouched. Installation is not behavioral verification.'
+        : mode === 'revise'
+          ? `Review the existing ${source} scenario, clarify only if necessary, and verify its exact evidence and application-regression sensitivity while preserving representation, identity, evidence ownership and configuration.`
+          : `${mode} ${source} composition with ${cli ? 'CLI' : 'independent'} execution and independently judged side effects.`,
     source: 'files' as const, integration: { source, mode, cli },
     turns: [{ promptPath: `cases/${prompt}`, skills: FOCUSED }],
     expectedEvidenceCount: 0, expectedSelectorFragments: [],

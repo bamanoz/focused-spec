@@ -1,6 +1,6 @@
 ---
 name: focused-spec
-description: "MUST-LOAD before any SDD/spec-driven development workflow step that reviews, creates, revises, publishes, moves, or completes behavioral requirements or scenarios. This applies across frameworks, artifact formats, and commands, even when the user does not name focused-spec. Load alongside the host workflow skill; reconcile changed native outcomes with exact evidence and execute it before completion, respecting read-only and planning boundaries."
+description: "MUST LOAD for behavioral specification work: review, create, revise, plan, publish, regenerate, verify, or complete requirements, acceptance criteria, BDD/code scenarios, or their application drivers. Includes wording-only edits and SDK-only projects, even when the user does not mention focused-spec. Load alongside any host workflow and preserve its approval boundaries."
 ---
 
 # Focused Spec
@@ -18,12 +18,16 @@ Before **every** focused-spec workflow step, including a later step in the same 
 1. Identify the consuming project root from repository or package context. If the project declares a workspace and that context establishes a hoisted installation root, use that root instead.
 2. Resolve the `focused-spec` package from that explicit root. Use its project-local executable—normally `<installation-root>/node_modules/.bin/focused-spec`, with the platform-appropriate executable form—or invoke its installed `dist/cli.js` explicitly with Node. Read that same installation's `node_modules/focused-spec/package.json` to establish the expected package name and version.
 3. Do **not** use a bare `focused-spec` from `PATH`, a global installation, `npx`, a downloaded package, `latest`, a repository checkout, or guidance retained from an earlier workflow step as a fallback.
-4. Invoke the resolved local CLI with `instructions --protocol 1 --topic workflow --json` **as its own tool command** and wait for completion. Do not chain it with installation, `init`, help, another guidance request, or any other command: their output would contaminate the single JSON response. If a combined call already ran, reacquire guidance in a standalone call; extracting one object from concatenated output does not satisfy this contract.
-   If the host truncates the displayed output, retrieve the complete stdout from that call's linked output artifact or another full-output capture before validating it. A clipped JSON preview or a separately extracted `content` value is not the complete protocol response.
+4. Invoke the resolved local CLI with `instructions --protocol 1 --topic workflow --json` **as its own tool command** and wait for completion. Perform executable/manifest checks separately: even `test -x … && <CLI> instructions …` is a combined call. Do not chain guidance with installation, `init`, help, another topic, or another command. If a combined call already ran, reacquire guidance in a standalone call; extracting one object does not satisfy this contract.
+   **A truncation notice means acquisition is unfinished.** Before any downstream work, read that successful call's exact linked full-output artifact (use `artifact://<returned-id>:raw` when the host supports raw reads). Read the whole JSON response, not only `content`, a preview, another call's artifact, or hidden tool metadata. If recovery is still clipped, finish recovering that same response before continuing; without complete output, stop and report the delivery limitation.
 5. Accept the response only if the command completed successfully and stdout is one valid JSON object whose `protocolVersion` is `1`, whose `package.name` is `focused-spec`, whose `package.version` is a nonempty string equal to the resolved installation's package version, whose `topic` is `workflow`, and whose `content` is nonempty Markdown. Otherwise stop focused-spec work and report that the consuming project needs a complete, compatible local installation; do not continue from global, downloaded, embedded, or stale instructions.
-6. Follow the returned content alongside the host workflow. Loading guidance does not authorize writes or other actions forbidden by the host's current phase.
+6. Follow the returned content alongside the host workflow when present. Standalone BDD work needs no SDD host. Loading guidance does not authorize writes or other actions forbidden by the current phase.
 
 For all later focused-spec commands in that workflow step, use the same explicit local installation that served the accepted guidance. If that installation is upgraded during the step, reload and revalidate its workflow before continuing.
+
+## Load composition guidance before choosing
+
+For a first integration choice or a requested composition change, including a recommendation without writes or an independent SDK setup, acquire the same local CLI's `instructions --protocol 1 --topic integration --json` before recommending packages or installing anything. Complete and validate that standalone response using the checks above, with topic `integration`. Existing compatible integrations stay in place for ordinary review or revision; acquire their selected plugin contracts below instead of choosing a replacement.
 
 ## Load format and runner guidance on demand
 

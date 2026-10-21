@@ -10,7 +10,7 @@ Create a Go consumer and install the SDK at the coordinated CLI/SDK release vers
 mkdir scenario-consumer
 cd scenario-consumer
 go mod init example.com/scenario-consumer
-go get github.com/bamanoz/focused-spec/packages/sdk/go@v0.10.0
+go get github.com/bamanoz/focused-spec/packages/sdk/go@v0.10.1
 ```
 
 The Go module has its own `packages/sdk/go/vX.Y.Z` tag, with the same version as the CLI and other SDKs. Repository examples retain an explicit repository-relative replacement to test checkout source without requiring a registry release.

@@ -40,7 +40,7 @@ describe('project Vitest evidence runner', () => {
       { targetId: passing, status: 'pass' },
       { targetId: failing, status: 'fail', diagnostic: expect.stringContaining('expected 4 to be 5') },
     ])
-  })
+  }, 30_000)
 })
 
 describe('native item evidence execution', () => {

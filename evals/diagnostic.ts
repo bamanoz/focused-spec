@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentDriver, AgentRequest, EvalDiagnostic } from './types.ts'
-import { lastAssistantMessage } from './dialogue.ts'
+import { assistantMessages } from './dialogue.ts'
 import { OmpAgentDriver } from './omp-agent.ts'
 
 export async function interviewFailedAgent(
@@ -17,7 +17,7 @@ export async function interviewFailedAgent(
     const sessions = (await readdir(request.sessionDir)).filter(file => file.endsWith('.jsonl'))
     if (sessions.length !== 1) throw new Error(`expected one persisted eval session, found ${sessions.length}`)
     const agent = await driver.run({ ...request, resume: join(request.sessionDir, sessions[0]!), tools: 'read', timeoutMs: 120_000, prompt })
-    const answer = lastAssistantMessage(agent.output)
+    const answer = assistantMessages(agent.output).join('\n\n').trim()
     return { status: agent.success && answer ? 'answered' : 'unavailable', answer, transcript: agent.output,
       detail: `exit=${agent.exitCode}; ${answer ? 'answer captured' : 'no answer captured'}` }
   } catch (error) {

@@ -1,6 +1,6 @@
 # CLI reference
 
-The binary is `focused-spec`. During agent-led specification work, the agent loads the installed skill when its description applies and invokes the explicit project-local CLI; the user does not need to call the skill or CLI separately. The shell examples here are for optional manual/CI use after local installation, with `npx focused-spec` as launcher. The command grammar below omits the launcher. The installed skill resolves the explicit local CLI itself rather than using npx for workflow guidance.
+The binary is `focused-spec`. During agent-led BDD or SDD work, the agent loads the installed skill when its description applies—including SDK-only executable-scenario and application-driver work without a host framework—and invokes the explicit project-local CLI for guidance. The user need not call either separately. That agent-tooling prerequisite does not make the CLI an SDK runtime dependency or require evidence configuration for native execution. Shell examples here are for optional manual/CI use after local installation, with `npx focused-spec` as launcher. The grammar below omits the launcher; the loader uses the explicit local CLI, not npx.
 
 ## Commands
 
@@ -209,7 +209,7 @@ For example, from the established local installation root:
 
 The workflow routes absent or explicitly reconsidered integration to this topic, preserves supported existing choices for ordinary tasks, and retains its upgrade procedure for incompatible setups. Guidance retrieval does not authorize installation, configuration or migration.
 
-The `integration` topic also carries the pinned .NET SDK `0.10.0` GitHub Release installation procedure: public artifact URL, SHA-256, project-local NuGet feed, preserved custom sources/mapping, and repeatable CI restore. The procedure is served offline without a checkout; performing the download and installation requires network access and authorization. It does not claim nuget.org publication or add a .NET CLI runner. See the human-facing [installation guide](../guides/install.md#net-sdk-from-github-releases).
+The `integration` topic also carries the pinned .NET SDK `0.10.1` GitHub Release installation procedure: public artifact URL, SHA-256, project-local NuGet feed, preserved custom sources/mapping, and repeatable CI restore. The procedure is served offline without a checkout; performing the download and installation requires network access and authorization. It does not claim nuget.org publication or add a .NET CLI runner. See the human-facing [installation guide](../guides/install.md#net-sdk-from-github-releases).
 
 Loader protocol defaults to 1; it is independent of package versions, configuration version 5, Format API version 2, and Runner API version 1. The loader requests it explicitly. Protocol-1 JSON is:
 
@@ -224,7 +224,7 @@ Loader protocol defaults to 1; it is independent of package versions, configurat
 
 The response's `topic` is exactly the requested `workflow`, `integration`, `formats`, or `runners`; the default remains `workflow`. Every topic ships with core, independently of whether adapter packages are installed. The thin loader acquires shared format/runner guidance from the same project-local installation only when the workflow calls for that work, then acquires each selected plugin's document through a separate [`plugin-docs`](#installed-plugin-documentation) request.
 
-Acquire each response with a standalone tool command. Do not chain it with `init --json`, installation, help or another guidance request: combined stdout is not the single protocol object. If this happens, request guidance again by itself; extracting one object from concatenated output is not accepted acquisition.
+Acquire each response with a standalone tool command. Even an executable check such as `test -x … && <CLI> instructions …` is a combined call; perform checks separately. Do not chain guidance with `init --json`, installation, help or another request. If this happens, request guidance again by itself; extracting one object from combined output is not accepted acquisition. A host truncation notice leaves acquisition unfinished until a completed read of that successful command's exact linked full-output artifact delivers the complete protocol response. Hidden metadata, a clipped preview, another call's artifact, or extracted `content` alone is insufficient. The installed loader owns recovery and response validation.
 
 Text output identifies the installed package version, protocol, and topic before the Markdown. An unsupported protocol, invalid option/topic, missing value, or incomplete package exits nonzero with stderr diagnostics and no usable guidance on stdout. An explicit unsupported protocol is never silently replaced with the default. No legacy full-text skill or alternate installation is used as a fallback.
 

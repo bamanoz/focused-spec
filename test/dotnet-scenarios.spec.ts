@@ -46,7 +46,7 @@ describe('dotnet executable scenarios', () => {
 <configuration><packageSources><clear /><add key="local" value="${feed}" /><add key="nuget.org" value="https://api.nuget.org/v3/index.json" /></packageSources></configuration>`)
     await writeFile(join(consumer, 'consumer.csproj'), `<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net9.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
-  <ItemGroup><PackageReference Include="FocusedSpec.Scenarios" Version="0.10.0" /></ItemGroup>
+  <ItemGroup><PackageReference Include="FocusedSpec.Scenarios" Version="0.10.1" /></ItemGroup>
 </Project>`)
     await writeFile(join(consumer, 'Program.cs'), `using FocusedSpec.Scenarios;
 var scenario = new Scenario<int, int, int>("account.deposit", "Deposit", 100, 25, 125);

@@ -27,6 +27,23 @@ A level-four `Scenario:` heading owns metadata until the next heading at level f
 
 IDs preserve exact case and value; nonblank strings without control characters are valid. No lowercase/dotted restriction or implicit path semantics. A format's Markdown representation must still be valid. Reference selectors stay opaque to core; only the first `::` separates the runner ID. Multiple EVIDENCE rows form AND: all must pass. Fenced/indented code and quoted examples never enroll scenarios. Plain unrelated content remains unenrolled.
 
+## Planning before executable enrollment
+
+When the current phase permits native identity but forbids executable integration, reserve the future inline ID with a structural Markdown marker immediately before its native scenario heading:
+
+```markdown
+<!-- focused-spec:id=auth-login -->
+#### Scenario: Blocked account submits valid credentials
+- **WHEN** a blocked account submits valid credentials
+- **THEN** authentication is rejected
+```
+
+This uses the structural marker from `@focused-spec/format-markdown`, not executable inline metadata. Keep it adjacent to one item; do not create configuration, a registry, or incomplete inline ID/EVIDENCE rows merely to validate a proposal. Record intended exact evidence and final inline metadata in permitted planning artifacts instead. The example is not yet a valid executable inline scenario.
+
+During authorized implementation, replace that marker with the inline ID row using the exact same value, add every required EVIDENCE row, and retain the canonical scenario and its WHEN/THEN. Do not leave a second identity representation or registry enrollment for the same item.
+
+## Execute inline scenarios
+
 Use the project's installed CLI to validate and execute:
 
 ```sh

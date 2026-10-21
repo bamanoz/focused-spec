@@ -31,6 +31,7 @@ export interface UpgradeBaseline {
   readonly config: unknown
   readonly manifest: unknown
   readonly documents: ReadonlyMap<string, string>
+  readonly readme: string
   readonly occurrences: readonly Scenario[]
 }
 
@@ -68,6 +69,7 @@ export async function captureUpgradeBaseline(workspace: string, candidateRoot: s
     artifacts,
     config: parse(await readFile(join(workspace, '.focused-spec/config.yaml'), 'utf8')) as unknown,
     manifest: JSON.parse(await readFile(join(workspace, 'package.json'), 'utf8')) as unknown,
+    readme: await readFile(join(workspace, 'README.md'), 'utf8'),
     documents,
     occurrences,
   }
@@ -219,6 +221,16 @@ export async function upgradePreservationGate(workspace: string, baseline: Upgra
       return result
     }
     if (!same(withoutFocused(object(baseline.manifest)), withoutFocused(manifest))) problems.push('unrelated manifest changes')
+    const readme = await readFile(join(workspace, 'README.md'), 'utf8')
+    let readmeOffset = 0
+    for (const paragraph of baseline.readme.trim().split(/\r?\n\s*\r?\n/u)) {
+      const found = readme.indexOf(paragraph, readmeOffset)
+      if (found < 0) {
+        problems.push('existing README content was removed, rewritten, or reordered')
+        break
+      }
+      readmeOffset = found + paragraph.length
+    }
     for (const [path, before] of baseline.documents) {
       const after = await readFile(join(workspace, path), 'utf8')
       if (nativeText(before) !== nativeText(after)) problems.push(`native behavior/content changed: ${path}`)

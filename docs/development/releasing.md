@@ -10,7 +10,7 @@ This repository prepares thirteen independently published npm packages from one 
 
 The Python and .NET SDKs are framework-independent. Their pytest/xUnit bank consumers are repository verification projects, not runtime dependencies of the SDKs. Publishing each native SDK requires its own authorized registry account and exact package verification.
 
-The CLI, all thirteen npm packages, and the Go, Python, and .NET SDKs share one release version, currently `0.10.0`. SDKs remain runtime-independent; an unchanged package still receives the coordinated release version. Configuration, guidance, format, and runner protocol versions remain separate compatibility contracts. Source versions are not proof of registry publication: source-only or partially published GitHub Releases must identify the exact pending distributions.
+The CLI, all thirteen npm packages, and the Go, Python, and .NET SDKs share one release version, currently `0.10.1`. SDKs remain runtime-independent; an unchanged package still receives the coordinated release version. Configuration, guidance, format, and runner protocol versions remain separate compatibility contracts. Source versions are not proof of registry publication: source-only or partially published GitHub Releases must identify the exact pending distributions.
 
 There is no automated release workflow. An npm suite release is complete only when all thirteen exact npm versions are available from the registry, the remote `v<version>` tag identifies the built source commit, and a published (not draft) GitHub Release exists for that tag. npm publication and Git tags do not create a GitHub Release. Go, Python, and .NET SDKs have their own native publication gates.
 

@@ -207,7 +207,7 @@ export async function prepareNativeWorkspace(workspace: string, name: NativeCase
     await put(workspace, 'agent-os/standards/index.yml', '{}\n')
   }
   if (name === 'bmad') {
-    const repo = 'bmad-code-org/BMAD-METHOD'
+    const repo = 'https://github.com/bmad-code-org/BMAD-METHOD/tree/48f0ce37e1fc378d6255c90e1b155f2212a6fe33/skills'
     const skills = ['bmad', 'bmod-core-tools', 'bmod-method', 'bmad-spec']
     await requireCommand('npx', ['skills', 'add', repo, ...skills.flatMap(value => ['--skill', value]), '--agent', 'pi', '--copy', '-y'], workspace, 120_000)
     for (const value of skills) {
@@ -226,7 +226,7 @@ description: ${JSON.stringify('Host integration facts for applying focused-spec 
 
 # BMad Focused-Spec Integration
 
-Provenance: host integration of the installed official \`.agents/skills/bmad-spec/SKILL.md\` from \`github:bmad-code-org/BMAD-METHOD/skills\` with the installed \`focused-spec\` skill. This supplements but does not replace or modify either workflow.
+Provenance: host integration of the installed official \`.agents/skills/bmad-spec/SKILL.md\` from \`${repo}\` with the installed \`focused-spec\` skill. This supplements but does not replace or modify either workflow.
 
 - A BMad \`spec-<slug>.md\` kernel is generated from its canonical append-only \`.memlog.md\`; the official \`bmad-spec\` workflow is its single writer.
 - A declared BMad \`CAP-N\` is the stable native capability identity. Preserve existing numbers; never reuse or renumber them.
@@ -270,7 +270,7 @@ function deniesAuthentication(text: string): boolean {
 }
 
 function atomicBlockedOutcome(source: string): boolean {
-  const capability = source.match(/^- \*\*CAP-1\*\*\n  - \*\*intent:\*\* ([^\n]+)\n  - \*\*success:\*\* ([^\n]+)/mu)
+  const capability = source.match(/^- \*\*CAP-1\*\*:?[ \t]*\r?\n  - \*\*intent:\*\* ([^\n]+)\n  - \*\*success:\*\* ([^\n]+)/mu)
   const intent = capability?.[1] ?? ''
   const success = capability?.[2] ?? ''
   return /block/iu.test(intent) && /valid/iu.test(success) && deniesAuthentication(success)
@@ -314,7 +314,7 @@ export function creationGate(name: NativeCase, source: string, binding?: NativeB
     'spec-kit': /^### User Story /mu.test(source) && /\*\*Acceptance Scenarios\*\*/u.test(source)
       && /^\d+\. \*\*Given\*\* .*\*\*When\*\* .*\*\*Then\*\* /mu.test(source),
     kiro: /^(?:\d+\.\s+)?(?:[A-Za-z0-9][\w.-]*:\s*)?WHEN [^\n]*?\s+THE [^\r\n]+? SHALL [^\r\n]+/imu.test(identity.text),
-    bmad: /^- \*\*CAP-1\*\*$/mu.test(source) && atomicBlockedOutcome(source)
+    bmad: /^- \*\*CAP-1\*\*:?[ \t]*$/mu.test(source) && atomicBlockedOutcome(source)
       && ['## Why', '## Capabilities', '## Constraints', '## Non-goals', '## Success signal'].every(section => source.includes(section))
       && identity.marked.length === 0,
     gsd: /^- \[.\] \*\*AUTH-01\*\*:/mu.test(source),
@@ -472,7 +472,8 @@ async function regenerateBmad(workspace: string, model: string, driver: AgentDri
   const cli = await focusedCliGates(workspace, binding)
   const registryPreserved = await registrySnapshot(workspace).then(after => JSON.stringify(after) === JSON.stringify(registry), () => false)
   const configPreserved = await readFile(join(workspace, '.focused-spec/config.yaml'), 'utf8').catch(() => '') === config
-  const unique = (after.match(/^- \*\*CAP-1\*\*$/gmu) ?? []).length === 1 && !/^- \*\*CAP-2\*\*$/mu.test(after)
+  const native = nativeIdentity('bmad', after)
+  const unique = native.valid && native.parsed.items.filter(item => item.nativeIds.some(id => /^CAP-\d+$/u.test(id))).length === 1
   const hostLoaded = hostWorkflowGate('bmad', agent.output).passed
   const memlogRead = canonicalMemlogReadGate(workspace, agent.output).passed
   const singleSource = (await companionGate(workspace, 'bmad')).passed
@@ -555,6 +556,21 @@ export function agentEvidenceGate(transcript: string, references: string[]): Gat
   }
   const cliRun = /(?:^|&&|;)\s*(?:(?:(?:npx|npm exec)(?:\s+--[\w-]+)*\s+)?(?:\S*\/)?focused-spec\s+(?:run\b|transition\s+prepare\b)|node\s+\S*focused-spec\/dist\/cli\.js\s+(?:run\b|transition\s+prepare\b))/u
   const executed = references.every(reference => completed.some(({ command, output }) => {
+    if (/^(?:\S*\/)?(?:python(?:3)?|node|bun)\s+\S+\.(?:py|[cm]?js|ts)(?:\s|$)/u.test(command)) {
+      for (const match of output.matchAll(/(?:^|\n)[ \t]*(\{[^\n]*\}|\{\r?\n[\s\S]*?\r?\n\})/gu)) {
+        try {
+          const result: unknown = JSON.parse(match[1]!)
+          if (result === null || typeof result !== 'object' || !('success' in result) || result.success !== true
+            || !('executionStarted' in result) || result.executionStarted !== true
+            || !('scenarios' in result) || !Array.isArray(result.scenarios)) continue
+          if (result.scenarios.some(scenario => scenario !== null && typeof scenario === 'object'
+            && typeof scenario.scope === 'string' && typeof scenario.id === 'string' && scenario.status === 'PASS'
+            && Array.isArray(scenario.evidence) && scenario.evidence.some((evidence: unknown) => evidence !== null
+              && typeof evidence === 'object' && 'reference' in evidence && evidence.reference === reference
+              && 'status' in evidence && evidence.status === 'PASS'))) return true
+        } catch { /* A wrapper must expose complete executed results, not previews or commands. */ }
+      }
+    }
     if (cliRun.test(command) && !/(?:^|\s)(?:--help|-h)(?:\s|$)/u.test(command)) {
       if (output.split('\n').some(line => line.trim() === `PASS ${reference}`)) return true
       try {
@@ -741,7 +757,7 @@ export async function evaluateNativePilot(name: NativeCase, model: string, keep:
     const prompt = create
       ? `Create a ${name} specification for this project at ${fixture.path}: an account blocked by an administrator must not log in even with valid credentials. The implementation and tests already exist.`
       : `Update the existing ${name} specification at ${fixture.path}: clarify that a blocked account must be rejected even when its credentials are valid. The implementation and tests already exist.`
-    const skills = name === 'openspec' ? ['focused-spec', 'openspec-propose', 'openspec-update-change', 'openspec-explore']
+    const skills = name === 'openspec' ? ['focused-spec', 'openspec-propose', 'openspec-update-change', 'openspec-apply-change', 'openspec-explore']
       : name === 'spec-kit' ? ['focused-spec', 'speckit-specify']
         : name === 'bmad' ? ['focused-spec', 'bmad-spec', 'bmad-focused-spec-integration']
           : name === 'gsd' ? ['focused-spec', 'gsd-new-project', 'gsd-requirements']
@@ -756,7 +772,7 @@ export async function evaluateNativePilot(name: NativeCase, model: string, keep:
     if (prerequisite !== null) gates.push(prerequisite)
     if (planning !== null) gates.push(gate('host-write-constraints', planning.unauthorizedPaths.length === 0,
       planning.unauthorizedPaths.length === 0 ? 'each authored file followed explicit plan and path approval' : `files changed without approval: ${planning.unauthorizedPaths.join(', ')}`))
-    if (name === 'openspec' || name === 'kiro') {
+    if (name !== 'agent-os') {
       dialogue = await runAuthoringDialogue(request, safeDriver, () => authoringSnapshot(workspace, name), name === 'openspec' && !create)
       gates.push(gate('authoring-dialogue', dialogue.completed, dialogue.detail))
       if (name === 'openspec' && !create) gates.push(gate('host-write-constraints', dialogue.unauthorizedPaths.length === 0,

@@ -185,6 +185,10 @@ describe('native pilot evaluation boundaries', () => {
     const duplicate = `${generated}\n- **CAP-1**\n  - **intent:** Reject blocked login.\n  - **success:** A blocked account with valid credentials receives denial.\n`
 
     expect(creationGate('bmad', generated).passed).toBe(true)
+    const colonDeclaration = generated.replace('- **CAP-1**', '- **CAP-1**:')
+    expect(creationGate('bmad', colonDeclaration).passed).toBe(true)
+    expect(nativeSingleSourceGate('bmad', colonDeclaration).passed).toBe(true)
+    expect(creationGate('bmad', `${colonDeclaration}\n- **CAP-1**:\n  - **intent:** Reject blocked login.\n  - **success:** A blocked account with valid credentials receives denial.\n`).passed).toBe(false)
     expect(creationGate('bmad', generated.replace('Authentication denies access when the account is blocked and the supplied credentials are valid.', 'A blocked account with valid credentials is not authenticated.')).passed).toBe(true)
     expect(creationGate('bmad', generated.replace(' and the supplied credentials are valid.', '.')).passed).toBe(false)
     expect(creationGate('bmad', generated.replace('denies access', 'returns an outcome')).passed).toBe(false)
@@ -371,6 +375,13 @@ describe('native pilot evaluation boundaries', () => {
     expect(agentEvidenceGate(events('focused-spec run', output), ['pytest::tests/functional/test_auth.py::test_blocked_account']).passed).toBe(false)
     const jsonOutput = JSON.stringify({ success: true, executionStarted: true, scenarios: [{ evidence: [{ reference, status: 'PASS' }] }] })
     expect(agentEvidenceGate(events('node node_modules/focused-spec/dist/cli.js run --json', jsonOutput), [reference]).passed).toBe(true)
+    const wrapperResult = JSON.stringify({ success: true, executionStarted: true, scenarios: [{ scope: 'current', id: 'account.access.blocked', status: 'PASS', evidence: [{ reference, status: 'PASS' }] }] }, null, 2)
+    expect(agentEvidenceGate(events('python3 /tmp/proof.py', `Baseline\n ${wrapperResult}\nRestored\n ${wrapperResult}`), [reference]).passed).toBe(true)
+    expect(agentEvidenceGate(events('python3 /tmp/proof.py', wrapperResult, true), [reference]).passed).toBe(false)
+    expect(agentEvidenceGate(events('python3 /tmp/proof.py', wrapperResult.replace('"executionStarted": true', '"executionStarted": false')), [reference]).passed).toBe(false)
+    expect(agentEvidenceGate(events('python3 /tmp/proof.py', wrapperResult.replace('"status": "PASS"', '"status": "FAIL"')), [reference]).passed).toBe(false)
+    expect(agentEvidenceGate(events('python3 /tmp/proof.py', wrapperResult.slice(0, -4)), [reference]).passed).toBe(false)
+    expect(agentEvidenceGate(events('echo recorded-result', wrapperResult), [reference]).passed).toBe(false)
     expect(agentEvidenceGate(JSON.stringify({ type: 'tool_execution_start', toolCallId: 'execution', toolName: 'bash', args: { command: 'focused-spec run' } }), [reference]).passed).toBe(false)
   })
 
@@ -460,6 +471,13 @@ describe('native pilot evaluation boundaries', () => {
     const source = '# Requirements\n\n## Acceptance Criteria\n\n1. **BLOCKED-LOGIN-1**: WHEN an administrator-blocked account logs in with valid credentials, THE authentication service SHALL reject login.\n'
     await writeFile(join(root, path), source)
     await writeFile(join(root, '.focused-spec/config.yaml'), `version: 5\nspecifications:\n  formats:\n    native:\n      package: '@focused-spec/format-registry'\n      options:\n        parser: { package: '@focused-spec/format-markdown' }\n  documents: [{ match: ${path}, scope: current, format: native }]\nrunners: {}\n`)
+    const absent = await evidenceGate(root, 'kiro', source)
+    expect(absent.gate.passed).toBe(false)
+    expect(nativeSingleSourceGate('kiro', source).passed).toBe(false)
+    expect(await focusedCliGates(root, absent)).toEqual([
+      expect.objectContaining({ name: 'focused-cli-validation', passed: null, blockedBy: 'normalized-evidence' }),
+      expect.objectContaining({ name: 'focused-cli-execution', passed: null, blockedBy: 'normalized-evidence' }),
+    ])
     await writeFile(join(root, '.focused-spec/evidence.yaml'), `scopes:\n  current:\n    login-denied:\n      source: { path: ${path}, nativeId: BLOCKED-LOGIN-1 }\n      evidence: [go::./auth::TestBlockedAccount]\n`)
     const evidence = await evidenceGate(root, 'kiro', source)
     expect(evidence.gate.passed, evidence.gate.detail).toBe(true)

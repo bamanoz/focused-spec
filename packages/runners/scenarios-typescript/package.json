@@ -1,6 +1,6 @@
 {
   "name": "@focused-spec/runner-scenarios-typescript",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Exact JS/TS scenario execution through the independent SDK",
   "repository": {
     "type": "git",
@@ -26,11 +26,11 @@
     "node": ">=22.16.0"
   },
   "dependencies": {
-    "@focused-spec/scenarios-typescript": "0.10.0",
-    "@focused-spec/format-scenarios-typescript": "0.10.0"
+    "@focused-spec/scenarios-typescript": "0.10.1",
+    "@focused-spec/format-scenarios-typescript": "0.10.1"
   },
   "peerDependencies": {
-    "focused-spec": "^0.10.0"
+    "focused-spec": "^0.10.1"
   },
   "license": "MIT"
 }

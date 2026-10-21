@@ -236,3 +236,30 @@ scopes:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > rejects diagnostic
           success when selected behavioral comparison fails
+  broaden-bdd-skill-activation:
+    agent.activation.bdd-sdk:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects SDK-only BDD turns without skill and local workflow activation
+        - vitest::test/evals.spec.ts::agent eval harness > judges standalone compositions against the requested canonical source
+    agent.activation.bdd-driver:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects SDK-only BDD turns without skill and local workflow activation
+        - vitest::test/evals.spec.ts::agent eval harness > rejects duplicate behavioral sources beside executable scenarios
+        - vitest::test/evals.spec.ts::agent eval harness > rejects executable evidence disconnected from the mutated application
+    agent.activation.sdd:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > stops an OpenSpec turn before judging artifacts if the agent skipped the skill
+        - vitest::test/evals.spec.ts::agent eval harness > rejects a proposal that creates configuration or a planned evidence registry
+  repair-evaluation-completion-handoff:
+    agent.review.missing-enrollment:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > judges an external Kiro native-ID binding without requiring a second marker
+        - vitest::test/dialogue.spec.ts::authoring dialogue consent > permits the confirmed revision without authorizing a different metadata file
+    agent.eval.research-replies:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > keeps post-failure recommendations outside scored agent turns
+    agent.eval.responder-failure:
+      evidence:
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains the unanswered host question and responder failure (exit)
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains the unanswered host question and responder failure (malformed)
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains the unanswered host question and responder failure (throw)

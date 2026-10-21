@@ -537,6 +537,13 @@ describe('agent eval harness', () => {
     expect(preservedUpgrade, preservedUpgrade.detail).toMatchObject({ passed: true })
     expect(await upgradeArtifactsGate(root, baseline)).toMatchObject({ passed: true })
 
+    const readme = await readFile(join(root, 'README.md'), 'utf8')
+    await put(root, 'README.md', `${readme}\nUse the updated project-local focused-spec CLI to validate and run evidence.\n`)
+    expect(await upgradePreservationGate(root, baseline)).toMatchObject({ passed: true })
+    await put(root, 'README.md', '# Replacement overview\n')
+    expect(await upgradePreservationGate(root, baseline)).toMatchObject({ passed: false })
+    await put(root, 'README.md', readme)
+
     const refresh = await readFile(join(root, 'changes/refresh/spec.md'), 'utf8')
     await rm(join(root, 'changes/refresh/spec.md'))
     const validButLost = await runProcess(process.execPath, [join(candidate, 'dist/cli.js'), 'validate', '--syntax-only', '--json'], { cwd: root, timeoutMs: 30_000 })
@@ -815,8 +822,12 @@ describe('agent eval harness', () => {
       async run(request) {
         if (request.resume !== undefined) {
           if (await readFile(request.resume, 'utf8') !== 'the failed authoring session') throw new Error('wrong authoring session')
-          return { success: true, output: JSON.stringify({ type: 'message_end', message: { role: 'assistant',
-            content: [{ type: 'text', text: 'Clarify the verification boundary; do not relabel the failed turn.' }] } }), exitCode: 0, durationMs: 2 }
+          const answers = [
+            'Clarify the verification boundary; do not relabel the failed turn.',
+            'Those todos belong to the terminated scored task, not the current research interview.',
+          ]
+          return { success: true, output: answers.map(text => JSON.stringify({ type: 'message_end',
+            message: { role: 'assistant', content: [{ type: 'text', text }] } })).join('\n'), exitCode: 0, durationMs: 2 }
         }
         if (request.sessionDir === undefined) throw new Error('missing authoring session')
         await put(request.sessionDir, 'authoring.jsonl', 'the failed authoring session')
@@ -954,6 +965,28 @@ describe('agent eval harness', () => {
     expect(await guidanceActivationGate(root, [updated])).toMatchObject({ passed: true })
     expect(await guidanceActivationGate(root, [first])).toMatchObject({ passed: false })
   })
+
+  it('rejects SDK-only BDD turns without skill and local workflow activation', async () => {
+    for (const missing of ['focused-skill-loaded', 'focused-workflow-acquired'] as const) {
+      const driver: AgentDriver = {
+        async run(request) {
+          const workflow = await runProcess(process.execPath, [join(request.workspace, 'node_modules/focused-spec/dist/cli.js'),
+            'instructions', '--protocol', '1', '--topic', 'workflow', '--json'], { cwd: request.workspace, timeoutMs: 10_000 })
+          expect(workflow.code, workflow.stderr).toBe(0)
+          const output = [
+            ...(missing === 'focused-skill-loaded' ? [] : [skillReadTranscript()]),
+            guidanceTranscript(request.workspace, { rawOutput: workflow.stdout, complete: missing !== 'focused-workflow-acquired' }),
+          ].join('\n')
+          return { success: true, output, exitCode: 0, durationMs: 1 }
+        },
+      }
+      const result = await runEval({ caseId: 'integration-standalone-typescript-sdk' }, driver)
+      expect(result.gates.find(gate => gate.name === 'agent-turn-1')).toMatchObject({ passed: true })
+      expect(result.passed).toBe(false)
+      expect(result.gates.find(gate => gate.name === missing)).toMatchObject({ passed: false })
+      expect(result.gates.some(gate => ['integration-composition', 'executable-application-sensitivity'].includes(gate.name))).toBe(false)
+    }
+  }, 60_000)
 
   it('stops an OpenSpec turn before judging artifacts if the agent skipped the skill', async () => {
     const driver: AgentDriver = {
@@ -1170,6 +1203,18 @@ describe('agent eval harness', () => {
       expect(await integrityGate(root, new Map(), [event('read', { path })]), path).toMatchObject({ passed: true })
     }
     expect(await integrityGate(root, new Map(), [event('bash', { command: 'node node_modules/focused-spec/dist/cli.js run --json' })])).toMatchObject({ passed: true })
+  })
+
+  it('distinguishes variable-root CLI execution from implementation reads', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-eval-variable-cli-'))
+    roots.push(root)
+    const event = (command: string) => JSON.stringify({ type: 'tool_execution_start', toolName: 'bash', args: { command } })
+    const cli = '"$workspace/node_modules/focused-spec/dist/cli.js"'
+    expect(await integrityGate(root, new Map(), [event(`workspace=$(pwd); node ${cli} run --root "$tmp"`)])).toMatchObject({ passed: true })
+    expect(await integrityGate(root, new Map(), [event(`node ${cli} run; cat ${cli}`)])).toMatchObject({ passed: false })
+    expect(await integrityGate(root, new Map(), [event(`cat ${cli}`)])).toMatchObject({ passed: false })
+    expect(await integrityGate(root, new Map(), [event('(cd "$probe/project" && node node_modules/focused-spec/dist/cli.js run --scope current)')])).toMatchObject({ passed: true })
+    expect(await integrityGate(root, new Map(), [event('(cd "$probe/project" && node node_modules/focused-spec/dist/cli.js run); (cat node_modules/focused-spec/dist/cli.js)')])).toMatchObject({ passed: false })
   })
 
   it('rejects protected test and package changes in an evaluated workspace', async () => {

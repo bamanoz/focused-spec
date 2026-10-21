@@ -467,7 +467,7 @@ function inspectionCommands(command: string, workspace: string): string[] {
       if (character === quote) quote = undefined
     } else if (character === '"' || character === "'") {
       quote = character
-    } else if (character !== undefined && ';&|\n'.includes(character)) {
+    } else if (character !== undefined && ';&|()\n'.includes(character)) {
       commands.push(command.slice(start, index))
       start = index + 1
     }
@@ -477,7 +477,8 @@ function inspectionCommands(command: string, workspace: string): string[] {
   return commands.map(part => {
     const tokens = shellTokens(part)
     return tokens !== undefined && tokens[0] !== undefined && tokens[1] !== undefined
-      && /^(?:node|node\.exe)$/u.test(basename(tokens[0])) && isPath(tokens[1], cli, workspace)
+      && /^(?:node|node\.exe)$/u.test(basename(tokens[0]))
+      && (isPath(tokens[1], cli, workspace) || /(?:^|[\\/])node_modules[\\/]focused-spec[\\/]dist[\\/]cli\.js$/u.test(tokens[1]))
       ? tokens.slice(2).join(' ') : part
   })
 }

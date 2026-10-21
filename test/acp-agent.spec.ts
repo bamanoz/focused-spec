@@ -1,12 +1,60 @@
 import { describe, expect, it } from 'vitest'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { grantsPlanApproval, parseElicitationDecision, readSubmittedPlan } from '../evals/acp-agent.ts'
+import { grantsPlanApproval, parseElicitationDecision, readSubmittedPlan, runPlanningDialogue } from '../evals/acp-agent.ts'
 
 const planSchema = { type: 'object', properties: { value: { type: 'string', enum: ['Approve and execute', 'Refine plan'] } } }
 
 describe('genuine planning consent', () => {
+  it.each(['exit', 'malformed', 'throw'] as const)('retains the unanswered host question and responder failure (%s)', async failure => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-plan-failure-'))
+    try {
+      const bin = join(root, 'node_modules/.bin')
+      const sessionDir = join(root, 'sessions')
+      await mkdir(bin, { recursive: true })
+      await mkdir(sessionDir)
+      const executable = join(bin, 'omp')
+      await writeFile(executable, `#!${process.execPath}
+import { createInterface } from 'node:readline';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const sessionDir = process.argv[process.argv.indexOf('--session-dir') + 1];
+writeFileSync(join(sessionDir, 'actor.jsonl'), '');
+const send = frame => process.stdout.write(JSON.stringify(frame) + '\\n');
+for await (const line of createInterface({ input: process.stdin })) {
+  const frame = JSON.parse(line);
+  if (frame.method === 'initialize') send({ id: frame.id, result: {} });
+  if (frame.method === 'session/new') send({ id: frame.id, result: { sessionId: 'actor', modes: { availableModes: [{ id: 'plan' }] } } });
+  if (frame.method === 'session/set_mode') {
+    send({ method: 'session/update', params: { update: { sessionUpdate: 'current_mode_update', currentModeId: 'plan' } } });
+    send({ id: frame.id, result: {} });
+  }
+  if (frame.method === 'session/prompt') send({ id: 100, method: 'elicitation/create', params: {
+    message: 'Do you have visuals to reference?', requestedSchema: { type: 'object', properties: { value: { type: 'string' } } }
+  } });
+}
+`)
+      await chmod(executable, 0o755)
+      const transcript = 'responder transport or decoding failure'
+      const result = await runPlanningDialogue({ workspace: root, sessionDir, prompt: 'Document existing behavior.', skills: [], timeoutMs: 5000 },
+        async () => new Map(), { async run() {
+          if (failure === 'throw') throw Object.assign(new Error('responder transport failed'), { stdout: transcript, stderr: 'responder stderr' })
+          return { success: failure !== 'exit', exitCode: failure === 'exit' ? 1 : 0, durationMs: 1, output: transcript }
+        } })
+      expect(result.agent.success).toBe(false)
+      expect(result.planApproved).toBe(false)
+      expect(result.unauthorizedPaths).toEqual([])
+      expect(result.interactions).toEqual([{
+        question: { message: 'Do you have visuals to reference?', requestedSchema: { type: 'object', properties: { value: { type: 'string' } } } },
+        decision: null, transcript: failure === 'throw' ? `${transcript}\nresponder stderr\nresponder transport failed` : transcript,
+      }])
+      if (failure === 'exit') expect(result.detail).toContain('exit=1')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('approves the current submitted file after edits and rejects unavailable resources', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-plan-resource-'))
     try {
@@ -120,6 +168,9 @@ describe('genuine planning consent', () => {
     expect(() => parseElicitationDecision(decision, planSchema, '', exactContents.replace('Create `agent-os/specs/login/shape.md`.', 'Create `agent-os/specs/login/shape.md` and `agent-os/specs/other/shape.md`.'))).toThrow('proposed')
     const nestedFolder = payloads.replace('After runtime approval, create the requested folder.', 'After runtime approval, create `agent-os/specs/login/` and an empty `visuals/` subdirectory.')
     expect(parseElicitationDecision(decision, planSchema, '', nestedFolder)).toEqual({ value: 'Approve and execute', approvedPaths })
+    const boldPayloads = nestedFolder.replaceAll(/`(standards|references)\.md`:/gu, '**$1.md** — create the specified document.')
+    expect(parseElicitationDecision(decision, planSchema, '', boldPayloads)).toEqual({ value: 'Approve and execute', approvedPaths })
+    expect(() => parseElicitationDecision(JSON.stringify({ value: 'Approve and execute', approvedPaths: ['agent-os/specs/other/references.md'] }), planSchema, '', boldPayloads)).toThrow('proposed')
     expect(() => parseElicitationDecision(JSON.stringify({ value: 'Approve and execute', approvedPaths: ['visuals/standards.md'] }), planSchema, '', nestedFolder)).toThrow('proposed')
     const explicitFileContext = payloads.replace('Create `agent-os/specs/login/shape.md`.', 'Author `agent-os/specs/login/shape.md`.').replace('After runtime approval, create the requested folder. Save `plan.md` as the approved plan.', 'Create `agent-os/specs/login/plan.md` from the approved plan.')
     expect(parseElicitationDecision(decision, planSchema, '', explicitFileContext)).toEqual({ value: 'Approve and execute', approvedPaths })
