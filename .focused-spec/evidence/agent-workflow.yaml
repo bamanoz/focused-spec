@@ -68,6 +68,7 @@ scopes:
         - vitest::test/acp-agent.spec.ts::genuine planning consent > recognizes exact companion paths from the authoritative submitted plan
         - vitest::test/acp-agent.spec.ts::genuine planning consent > authorizes compact companion lists only within their explicit directory
         - vitest::test/acp-agent.spec.ts::genuine planning consent > resolves listed companions only in an unambiguous requested folder
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > accepts described companion creation operands without widening approval
         - vitest::test/acp-agent.spec.ts::genuine planning consent > approves the current submitted file after edits and rejects unavailable resources
     agent.eval.native-denial:
       evidence:
@@ -81,7 +82,7 @@ scopes:
         - vitest::test/dialogue.spec.ts::authoring dialogue consent > fails unfinished dialogue at the turn limit instead of claiming completion
     agent.guidance.project-local:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects global guidance in place of the project installation
+        - vitest::test/evals.spec.ts::agent eval harness > accepts guidance from the selected installed CLI
     agent.guidance.unavailable:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > rejects absent or legacy local guidance activation
@@ -200,6 +201,7 @@ scopes:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > rejects unauthorized
           conversion of an existing integration
+        - vitest::test/evals.spec.ts::agent eval harness > distinguishes retained SDK composition from first selection
     agent.integration.route-selection:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > requires completed local
@@ -220,6 +222,8 @@ scopes:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > requires selected
           installed contracts before integration configuration
+        - vitest::test/evals.spec.ts::agent eval harness > accepts complete selected
+          contract artifact recovery before configuration writes
     agent.workflow.single-source:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > rejects duplicate
@@ -263,3 +267,55 @@ scopes:
         - vitest::test/acp-agent.spec.ts::genuine planning consent > retains the unanswered host question and responder failure (exit)
         - vitest::test/acp-agent.spec.ts::genuine planning consent > retains the unanswered host question and responder failure (malformed)
         - vitest::test/acp-agent.spec.ts::genuine planning consent > retains the unanswered host question and responder failure (throw)
+  repair-portable-evidence-completion:
+    agent.guidance.project-local:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > accepts guidance from the selected installed CLI
+    agent.guidance.unavailable:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects absent or legacy local guidance activation
+    agent.guidance.invalid-response:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects completed but unusable guidance responses
+    agent.guidance.session-refresh:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > requires fresh guidance for a subsequent workflow step
+    agent.guidance.effective-path:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > resolves guidance with the evaluated driver executable search path
+    agent.guidance.standalone-request:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects chained guidance until a standalone request completes
+    agent.guidance.artifact-recovery:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > requires completed local workflow guidance after loader activation
+    agent.integration.preserve-existing:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects unauthorized conversion of an existing integration
+        - vitest::test/evals.spec.ts::agent eval harness > distinguishes retained SDK composition from first selection
+    agent.integration.route-selection:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > requires completed local integration guidance for composition selection
+    agent.integration.missing-dependency:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > requires completed local integration guidance for composition selection
+        - vitest::test/evals.spec.ts::agent eval harness > distinguishes retained SDK composition from first selection
+    agent.author.complete-proposal:
+      evidence:
+        - vitest::test/dialogue.spec.ts::authoring dialogue consent > permits the confirmed revision without authorizing a different metadata file
+    agent.author.real-phase-boundary:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects a proposal that creates configuration or a planned evidence registry
+        - vitest::test/evals.spec.ts::agent eval harness > rejects planning-time inline evidence integration
+    agent.author.enroll-before-completion:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > rejects stale green evidence after native revision and accepts synchronized sensitive evidence
+    agent.eval.dialogue-outcome:
+      evidence:
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > keeps host questions independent from runtime plan approval
+    agent.eval.bound-outcome-prerequisite:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > distinguishes an unjudged bound outcome from a behavioral mismatch
+    agent.eval.integration-outcome:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > scores SDK repair by verified outcome rather than integration reading

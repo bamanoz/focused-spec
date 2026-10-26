@@ -47,11 +47,13 @@ Use this project's package manager, initialize only the agent integration I use,
 and report what you verified and what still needs configuration.
 ```
 
-After setup, continue your BDD or SDD work. **You do not need to invoke focused-spec or its skill yourself.** The agent must load the installed skill before reviewing, authoring, revising, or verifying executable scenarios or their application drivers, including SDK-only work without an SDD framework or CLI integration, and before SDD steps concerning behavioral requirements or scenarios—even when your request does not mention focused-spec. It follows the host workflow when present, respecting read-only and planning boundaries.
+After setup, continue your BDD or SDD work. **You do not need to invoke focused-spec or its skill yourself.** The agent loads the installed skill and selects an installed CLI—an explicit path when supplied, otherwise a compatible project/workspace installation when present, otherwise a compatible PATH/global installation. It requests the compact workflow router, then the operation topic for review, author/revise, upgrade, or verify. The same executable serves all guidance for that step, while project configuration and plugins still resolve from the explicit project root. The agent preserves host read-only, planning, approval, and lifecycle boundaries.
+
+The guidance-delivery and [portable completion correction](docs/development/candidate-improvements.md#block-1--guidance-delivery-hardening) are source-checkout work, not a new npm release or a refresh of existing consumer installations. Evaluation separates integration-topic reading observations from task-success gates; composition, authorization and real behavioral evidence remain required. The fresh complete matrix passes all 40 cases on `externcash/gpt-6.1-sol`, alongside 408 repository tests and 349 focused occurrences. Model-specific results and unsupported native checks are recorded with the correction; this is not universal native-host certification.
 
 ### For AI agents
 
-Read the [agent installation guide](docs/guides/agent-install.md). It covers project inspection, local package installation, explicit target selection, safe initialization, and verification before handing off to the installed skill. Installing the CLI or loader alone is not evidence that a specification passes.
+Read the [agent installation guide](docs/guides/agent-install.md) when installing a project-pinned CLI and bundled integration. It covers project inspection, explicit target selection, safe initialization, and verification before handing off to the installed skill. The loader may instead use another explicitly selected installed CLI; installing a CLI or loader alone is not evidence that a specification passes.
 
 ## Set up agent integration
 
@@ -85,7 +87,7 @@ npx focused-spec validate --strict
 npx focused-spec run
 ```
 
-SDK-only execution does not need CLI installation or configuration; use the language-specific SDK links above. The agent loader separately needs a compatible project-local CLI for current guidance, not as an SDK runtime dependency. For planned evidence and scope selection, see [concepts](docs/concepts/README.md) and the [CLI reference](docs/reference/cli.md).
+SDK-only execution does not need CLI installation or configuration; use the language-specific SDK links above. Agent guidance needs a compatible installed CLI, which may be project-local, global, or explicitly located, but that CLI is not an SDK runtime dependency. For planned evidence and scope selection, see [concepts](docs/concepts/README.md) and the [CLI reference](docs/reference/cli.md).
 
 ## Shipped examples
 

@@ -18,6 +18,7 @@ const gate = (name: string, passed: boolean, detail: string): EvalGate => ({ nam
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
 const codeSource = (choice: IntegrationCase): boolean => choice.source === 'typescript' || choice.source === 'go'
 const cliPath = (workspace: string): string => join(workspace, 'node_modules/focused-spec/dist/cli.js')
+const GO_SCENARIOS_MODULE = 'github.com/bamanoz/focused-spec/packages/sdk/go'
 const focused = (workspace: string, args: string[]) => runProcess(process.execPath, [cliPath(workspace), ...args, '--json'], { cwd: workspace, timeoutMs: 240_000 })
 async function put(workspace: string, path: string, content: string): Promise<void> {
   await mkdir(dirname(join(workspace, path)), { recursive: true })
@@ -40,6 +41,7 @@ export interface IntegrationBaseline {
   readonly native: ReadonlyMap<string, string>
   readonly config?: string
   readonly packages: readonly string[]
+  readonly establishedComposition: readonly string[]
 }
 async function packageFiles(root: string): Promise<Map<string, string>> {
   return new Map(await Promise.all((await glob('**/*', { cwd: root, dot: true, nodir: true, follow: false })).map(async path => [path, digest(await readFile(join(root, path)))] as const)))
@@ -47,6 +49,37 @@ async function packageFiles(root: string): Promise<Map<string, string>> {
 async function installedPackages(workspace: string): Promise<string[]> {
   const manifests = await glob(['node_modules/focused-spec/package.json', 'node_modules/@focused-spec/*/package.json'], { cwd: workspace, nodir: true })
   return (await Promise.all(manifests.map(async path => String(JSON.parse(await readFile(join(workspace, path), 'utf8')).name)))).sort()
+}
+function goDirectiveEntries(source: string, directive: 'require' | 'replace'): string[][] {
+  const entries: string[][] = []
+  let block = false
+  for (const raw of source.split('\n')) {
+    const line = raw.replace(/\/\/.*$/u, '').trim()
+    if (line === `${directive} (`) { block = true; continue }
+    if (block && line === ')') { block = false; continue }
+    const entry = block ? line : line.startsWith(`${directive} `) ? line.slice(directive.length + 1).trim() : ''
+    if (entry !== '') entries.push(entry.split(/\s+/u))
+  }
+  return entries
+}
+
+export async function inspectEstablishedComposition(workspace: string, packages: readonly string[]): Promise<string[]> {
+  const established = new Set(packages)
+  const goMod = await text(workspace, 'go.mod')
+  if (goMod === undefined || !goDirectiveEntries(goMod, 'require').some(entry => entry[0] === GO_SCENARIOS_MODULE)) return [...established].sort()
+  const replacement = goDirectiveEntries(goMod, 'replace').find(entry => entry[0] === GO_SCENARIOS_MODULE)
+  const separator = replacement?.indexOf('=>') ?? -1
+  const target = separator < 0 ? undefined : replacement?.[separator + 1]
+  if (target === undefined || (!target.startsWith('.') && !target.startsWith('/'))) return [...established].sort()
+  const dependencyRoot = resolve(workspace, target)
+  const dependencyManifest = await text(dependencyRoot, 'go.mod')
+  if (!dependencyManifest?.split('\n').some(line => line.trim() === `module ${GO_SCENARIOS_MODULE}`)) return [...established].sort()
+  const importsModule = async (pattern: string): Promise<boolean> => {
+    const paths = await glob(pattern, { cwd: workspace, nodir: true, ignore: ['.dependencies/**'] })
+    return (await Promise.all(paths.map(path => text(workspace, path)))).some(source => source?.includes(`"${GO_SCENARIOS_MODULE}"`))
+  }
+  if (await importsModule('**/*.scenarios.go') && await importsModule('**/*_test.go')) established.add(GO_SCENARIOS_MODULE)
+  return [...established].sort()
 }
 function composition(choice: IntegrationCase): string[] {
   if (choice.mode === 'recommend' || choice.mode === 'install') return ['focused-spec']
@@ -67,7 +100,7 @@ export async function prepareIntegration(workspace: string, cache: string, choic
   const reference = join(cache, 'integration-reference')
   await mkdir(reference)
   await put(reference, 'package.json', '{"private":true}')
-  const installed = await runProcess('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund', ...candidates.map(item => item.tarball)], { cwd: reference, timeoutMs: 180_000 })
+  const installed = await runProcess('npm', ['install', '--prefer-offline', '--ignore-scripts', '--no-audit', '--no-fund', ...candidates.map(item => item.tarball)], { cwd: reference, timeoutMs: 180_000 })
   if (installed.code !== 0) throw new Error(`integration candidate installation failed: ${installed.stderr}`)
   const artifacts = new Map(await Promise.all(candidates.map(async item => [item.name, await packageFiles(join(reference, 'node_modules', item.name))] as const)))
   const isCode = codeSource(choice)
@@ -107,7 +140,7 @@ export async function prepareIntegration(workspace: string, cache: string, choic
     }
   }
   const initial = choice.mode === 'revise' ? composition(choice) : ['focused-spec']
-  const coreInstall = await runProcess('npm', ['install', '--save-dev', '--ignore-scripts', '--no-audit', '--no-fund', ...candidates.filter(item => initial.includes(item.name)).map(item => item.tarball)], { cwd: workspace, timeoutMs: 180_000 })
+  const coreInstall = await runProcess('npm', ['install', '--prefer-offline', '--save-dev', '--ignore-scripts', '--no-audit', '--no-fund', ...candidates.filter(item => initial.includes(item.name)).map(item => item.tarball)], { cwd: workspace, timeoutMs: 180_000 })
   if (coreInstall.code !== 0) throw new Error(`integration fixture install failed: ${coreInstall.stderr}`)
   const registry = await serveUpgradeCandidate(candidates)
   try {
@@ -117,7 +150,8 @@ export async function prepareIntegration(workspace: string, cache: string, choic
     const protectedPaths = await glob(isCode ? [choice.source === 'typescript' ? 'src/**/*' : 'bank/**/*', '.dependencies/**/*', '.omp/skills/**/*'] : ['app/**/*', 'auth/**/*', 'tests/**/*', 'go.mod', '.omp/skills/**/*'], { cwd: workspace, nodir: true, dot: true })
     const protectedFiles = new Map(await Promise.all(protectedPaths.map(async path => [path, digest(await readFile(join(workspace, path)))] as const)))
     const config = await text(workspace, '.focused-spec/config.yaml')
-    return { baseline: { files, protected: protectedFiles, candidates: artifacts, native, packages: await installedPackages(workspace), ...(config === undefined ? {} : { config }) }, close: registry.close }
+    const packages = await installedPackages(workspace)
+    return { baseline: { files, protected: protectedFiles, candidates: artifacts, native, packages, establishedComposition: await inspectEstablishedComposition(workspace, packages), ...(config === undefined ? {} : { config }) }, close: registry.close }
   } catch (error) { await registry.close(); throw error }
 }
 
@@ -164,7 +198,12 @@ function events(transcripts: readonly string[]): ToolEvent[] {
 function output(event: ToolEvent): string { return event.result?.content?.map(part => part.text ?? '').join('\n') ?? '' }
 function successful(event: ToolEvent): boolean { return event.isError !== true && event.result !== undefined && event.result.isError !== true && (event.result.details?.exitCode ?? 0) === 0 }
 function parseOutput(value: string): unknown {
-  try { return JSON.parse(value.trim().replace(/\n\nWall time: [^\n]+$/u, '')) } catch { return undefined }
+  try { return JSON.parse(value.trim().replace(/(?:\n+Wall time: [^\n]+)+$/u, '').trim()) } catch { return undefined }
+}
+function linkedArtifact(value: string): string | undefined {
+  const display = value.trim().replace(/(?:\n+Wall time: [^\n]+)+$/u, '').trim()
+  return display.match(/\n\[[^\n]*Read (artifact:\/\/[A-Za-z0-9_-]+) for full output\]$/u)?.[1]
+    ?? display.match(/\n\[raw output: (artifact:\/\/[A-Za-z0-9_-]+)\]$/u)?.[1]
 }
 function configWrite(event: ToolEvent): boolean {
   if (event.type !== 'tool_execution_start') return false
@@ -172,7 +211,7 @@ function configWrite(event: ToolEvent): boolean {
     || event.toolName === 'bash' && /(?:>|tee|writeFile|write_text|cp\s|mv\s).*?\.focused-spec\/config\.ya?ml/u.test(String(event.args?.command))
 }
 export async function selectedContractsGate(workspace: string, transcripts: readonly string[], required: readonly string[]): Promise<EvalGate> {
-  const starts = new Map<string, string>(), artifacts = new Map<string, string>(), acquired = new Set<string>()
+  const starts = new Map<string, { name: string; toolName: 'bash' | 'read' }>(), artifacts = new Map<string, string>(), acquired = new Set<string>()
   const missingBeforeWrite = new Set<string>()
   const validate = async (name: string, value: unknown): Promise<boolean> => {
     if (!object(value) || !object(value.selection) || !['package', 'format', 'runner'].includes(String(value.selection.kind)) || !object(value.plugin) || !object(value.document)) return false
@@ -194,7 +233,9 @@ export async function selectedContractsGate(workspace: string, transcripts: read
     if (configWrite(event)) for (const name of required) if (!acquired.has(name)) missingBeforeWrite.add(name)
     if (event.type === 'tool_execution_start' && event.toolCallId !== undefined) {
       if (event.toolName === 'bash') {
-        const args = localCommandArguments(String(event.args?.command ?? ''), workspace)
+        const command = String(event.args?.command ?? '')
+        const localCommand = command.replace(/^focused-spec(?=\s|$)/u, JSON.stringify(join(workspace, 'node_modules', '.bin', 'focused-spec')))
+        const args = localCommandArguments(localCommand, workspace)
         if (args?.[0] === 'plugin-docs' && args.includes('--json')) {
           const selector = args.findIndex(value => ['--package', '--format', '--runner'].includes(value))
           const value = args[selector + 1]
@@ -204,28 +245,37 @@ export async function selectedContractsGate(workspace: string, transcripts: read
             const registrations = args[selector] === '--format' ? loaded.config?.specifications.formats : loaded.config?.runners
             name = value === undefined ? undefined : registrations?.[value]?.package
           }
-          if (name !== undefined && required.includes(name)) starts.set(event.toolCallId, name)
+          if (name !== undefined && required.includes(name)) starts.set(event.toolCallId, { name, toolName: 'bash' })
         }
       } else if (event.toolName === 'read') {
         const artifact = String(event.args?.path ?? '').match(/^(artifact:\/\/[\w-]+)(?::|$)/u)?.[1]
-        if (artifact !== undefined && artifacts.has(artifact)) starts.set(event.toolCallId, artifacts.get(artifact)!)
+        const name = artifact === undefined ? undefined : artifacts.get(artifact)
+        if (name !== undefined) starts.set(event.toolCallId, { name, toolName: 'read' })
       }
     }
-    if (event.type !== 'tool_execution_end' || event.toolCallId === undefined || !successful(event)) continue
-    const name = starts.get(event.toolCallId)
-    if (name === undefined) continue
+    if (event.type !== 'tool_execution_end' || event.toolCallId === undefined) continue
+    const start = starts.get(event.toolCallId)
     starts.delete(event.toolCallId)
+    if (start === undefined || event.toolName !== start.toolName || !successful(event)) continue
     const result = output(event)
-    if (await validate(name, parseOutput(result))) acquired.add(name)
+    if (await validate(start.name, parseOutput(result))) acquired.add(start.name)
     else {
-      const artifact = result.match(/Read (artifact:\/\/[\w-]+) for full output/u)?.[1]
-      if (artifact !== undefined && event.toolName === 'bash') artifacts.set(artifact, name)
+      const artifact = linkedArtifact(result)
+      const previous = artifact === undefined ? undefined : artifacts.get(artifact)
+      if (artifact !== undefined && (previous === undefined || previous === start.name)) artifacts.set(artifact, start.name)
     }
   }
   const missing = required.filter(name => !acquired.has(name))
   return gate('integration-selected-contracts', missing.length === 0 && missingBeforeWrite.size === 0, `missing installed contracts=${missing.join(',')}; premature writes=${[...missingBeforeWrite].join(',')}`)
 }
-export async function integrationRoutingGate(workspace: string, transcripts: readonly string[]): Promise<EvalGate> {
+export async function integrationRoutingGate(workspace: string, transcripts: readonly string[], choice: IntegrationCase, baseline: IntegrationBaseline): Promise<EvalGate> {
+  const required = choice.source === 'typescript'
+    ? ['@focused-spec/scenarios-typescript', ...(choice.cli ? ['@focused-spec/format-scenarios-typescript', '@focused-spec/runner-scenarios-typescript'] : [])]
+    : choice.source === 'go'
+      ? [GO_SCENARIOS_MODULE, ...(choice.cli ? ['@focused-spec/format-scenarios-go', '@focused-spec/runner-scenarios-go'] : [])]
+      : composition(choice).filter(name => name !== 'focused-spec')
+  const missing = required.filter(name => !baseline.establishedComposition.includes(name))
+  if (choice.mode !== 'recommend' && missing.length === 0) return gate('focused-integration-acquired', true, `established compatible composition retained: ${required.join(',')}`)
   const beforeWrites: string[] = []
   for (const transcript of transcripts) {
     const entries = transcript.split('\n')
@@ -311,7 +361,6 @@ export async function judgeIntegrationWorkspace(workspace: string, evalCase: Eva
   const choice = evalCase.integration!
   const gates = await integrationBoundaryGates(workspace, choice, baseline)
   gates.push(gate('integration-no-implementation-inspection', !inspectsImplementation(workspace, transcripts), 'public contracts only; implementation inspection is not permitted'))
-  if (choice.mode !== 'revise' && choice.mode !== 'install') gates.push(await integrationRoutingGate(workspace, transcripts))
   if (choice.mode === 'recommend' || choice.mode === 'install') return gates
   const selected = composition(choice).filter(name => name !== 'focused-spec' && name !== '@focused-spec/scenarios-typescript')
   if (choice.cli) gates.push(await selectedContractsGate(workspace, transcripts, selected))

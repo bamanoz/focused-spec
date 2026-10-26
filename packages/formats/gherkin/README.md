@@ -1,6 +1,6 @@
 # @focused-spec/format-gherkin
 
-Structural Gherkin parser for focused-spec Format API 2, using the Cucumber Gherkin parser. Requires Node.js 22.16.0+ and a project-local `focused-spec` installation. It exposes Scenario/Scenario Outline items and identities; it does not read evidence, implement a catalog binder, or execute Cucumber steps. No parser-specific options are required.
+Structural Gherkin parser for focused-spec Format API 2, using the Cucumber Gherkin parser. Requires Node.js 22.16.0+ and an installed `focused-spec` CLI. It exposes Scenario/Scenario Outline items and identities; it does not read evidence, implement a catalog binder, or execute Cucumber steps. No parser-specific options are required.
 
 ## Registry composition
 
@@ -62,7 +62,7 @@ Core preserves native source locations and owns scope-local uniqueness and execu
 
 ## Verification
 
-Use the same project-local CLI that served the workflow:
+Use the same selected installed CLI that served the workflow, passing the consuming project with `--root <path>` when needed. The examples below assume an installed project-local CLI:
 
 ```sh
 npx focused-spec validate --syntax-only

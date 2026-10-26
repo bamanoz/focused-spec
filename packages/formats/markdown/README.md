@@ -1,6 +1,6 @@
 # @focused-spec/format-markdown
 
-Structural Markdown parser for focused-spec Format API 2. Requires Node.js 22.16.0+ and a project-local `focused-spec` installation. It exposes native items and identities; it does not read evidence, implement a catalog binder, or interpret inline `ID`/`EVIDENCE` scenarios. No parser-specific options are required.
+Structural Markdown parser for focused-spec Format API 2. Requires Node.js 22.16.0+ and an installed `focused-spec` CLI. It exposes native items and identities; it does not read evidence, implement a catalog binder, or interpret inline `ID`/`EVIDENCE` scenarios. No parser-specific options are required.
 
 ## Registry composition
 
@@ -63,7 +63,7 @@ For generated or metadata-hostile documents, leave the item unmarked and use the
 
 ## Verification
 
-Use the same project-local CLI that served the workflow:
+Use the same selected installed CLI that served the workflow, passing the consuming project with `--root <path>` when needed. The examples below assume an installed project-local CLI:
 
 ```sh
 npx focused-spec validate --syntax-only

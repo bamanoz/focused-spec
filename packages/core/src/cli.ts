@@ -61,7 +61,7 @@ Commands:
   validate  Check native bindings and resolve format-provided evidence without running tests
   run       Strictly validate, then execute selected evidence
   plugin-docs  Read one installed plugin's public Markdown documentation
-  instructions  Read version-compatible workflow, integration, format or runner guidance from this package
+  instructions  Read workflow router or focused review, authoring, upgrade, verification and plugin guidance from this package
   init      Install selected agent integrations without evidence setup
   version   Identify this executable and its supported contract versions offline
   list      Inspect enrolled items and evidence provenance without resolving targets

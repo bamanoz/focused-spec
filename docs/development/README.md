@@ -3,6 +3,7 @@
 - [Repository workflow](workflow.md)
 - [Coordinated npm suite and separate Go, Python, and .NET SDK release gates](releasing.md)
 - [Agent evaluations](agent-evals.md)
+- [Candidate improvements](candidate-improvements.md)
 
 Run the standard checks before handoff:
 

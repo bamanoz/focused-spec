@@ -1,6 +1,6 @@
 # Install focused-spec with an AI agent
 
-This page is for a coding agent asked to install focused-spec **in a consuming project**. Install the local CLI and integration for the agent doing BDD or SDD work; verify the result, then hand off to the installed loader. The user continues their normal work afterward; loading the skill and invoking the CLI are the agent's responsibility, not commands the user must remember. You do not need this repository's source code to install it.
+This page is for a coding agent asked to install a project-pinned focused-spec CLI **in a consuming project** and initialize that package's agent integration. Verify the result, then hand off to the installed loader. A loader can also use a compatible CLI installed globally or at an explicit path; project-local ownership is not a prerequisite unless the user requested this setup. The user continues normal work afterward, and the agent owns skill loading and CLI invocation. You do not need this repository's source code to install it.
 
 Installation is not specification authoring or evidence verification. Do not create specifications, rewrite native requirements, register plugins, or migrate existing evidence merely to make installation look complete. If the user also requested project integration, continue that authorized work through the installed skill after setup.
 
@@ -22,7 +22,7 @@ For manual options, see the [installation guide](install.md). Exact flags, targe
 
 If focused-spec is already installed, identify its local version and preserve its current setup. An explicit upgrade request includes package/integration refresh and migration through the replacement loader's upgrade procedure; rerunning `init` alone is not a migration. Do not silently turn a fresh-install request into a destructive upgrade.
 
-## 2. Install the local CLI
+## 2. Install a project-pinned CLI
 
 For an npm project, in the dependency-owning directory:
 
@@ -30,21 +30,21 @@ For an npm project, in the dependency-owning directory:
 npm install --save-dev focused-spec
 ```
 
-Use the equivalent local development-dependency operation for the project's existing package manager. Do not install globally, run a remote shell installer, or clone this repository as a consumer dependency. Go, Python, and .NET projects using the agent loader still need a project-local Node package installation for its CLI guidance; independent SDK execution itself needs neither that installation nor CLI plugins/configuration.
+Use the equivalent local development-dependency operation for the project's existing package manager. Do not run a remote shell installer or clone this repository as a consumer dependency. Independent Go, Python, and .NET SDK execution needs neither this Node package nor CLI plugins/configuration; this section installs a project-pinned source of agent guidance and the `init` assets it owns.
 
-After installing the dependency, the bootstrap commands below use `npx --no-install focused-spec` from the dependency-owning directory. `--no-install` prevents npx from fetching a different package if the local CLI is absent.
+After installing the dependency, the bootstrap commands below use `npx --no-install focused-spec` from the dependency-owning directory. `--no-install` ensures this installation task verifies the package just added rather than downloading another one.
 
 ```sh
 npx --no-install focused-spec version --json
 ```
 
-For a hoisted workspace, run npx in the established installation root and pass the intended project path to `init`. Do not fall back to a bare command on `PATH`, a global package, or downloading npx. On Windows, use the same local-only npx command in the project's shell.
+For a hoisted workspace, run npx in the established installation root and pass the intended project path to `init`. On Windows, use the same no-download command in the project's shell. This guide verifies the project-pinned installation it was asked to create; it does not prohibit the loader's documented selection of another explicitly located or PATH/global installation for other workflows.
 
-Read the installed package manifest and compare the version response with that same installation: package name/version, canonical executable path, runtime, and supported contract versions. Stop if npx did not resolve that installation. A successful version command identifies the CLI; it does not validate project configuration or evidence. After installation, the skill resolves and invokes the explicit local executable itself; do not substitute npx for its workflow-guidance calls.
+Read the installed package manifest and compare the version response with that installation: package name/version, canonical executable path, runtime, and supported contract versions. Stop if npx did not resolve the package just installed. A successful version command identifies the CLI; it does not validate project configuration or evidence. After handoff, the skill selects an installed executable according to its own loader contract and invokes that exact executable for the workflow step.
 
 ### Defer composition to the installed workflow
 
-Core contains no document parser, evidence store or test runner. Do not select plugins from this installation page. Finish core/agent setup; for subsequent authorized specification work, load the installed skill and follow its workflow without waiting for a dedicated user invocation. When project integration is requested, that workflow acquires the same local CLI's `integration` topic before selecting packages, including a first SDK-only choice with no focused configuration or CLI plugins, then each selected installed package's public contract before configuration. SDK-only execution and optional CLI integration are distinct paths.
+Core contains no document parser, evidence store or test runner. Do not select plugins from this installation page. Finish core/agent setup; for subsequent authorized specification work, load the installed skill and follow its workflow without waiting for a dedicated user invocation. When project integration is requested, that workflow acquires the selected CLI's `integration` topic before selecting packages, including a first SDK-only choice with no focused configuration or CLI plugins, then each selected installed package's public contract from the explicit project root before configuration. SDK-only execution and optional CLI integration are distinct paths.
 
 An installation-only task leaves plugin choice, configuration and evidence explicitly pending; do not invent a test stack or convert an existing source to finish setup.
 
@@ -83,7 +83,7 @@ Check the actual initialization result, not just its exit code:
 - Report conflicts and partial writes honestly. A failed installation may have completed some writes; do not claim rollback.
 - Check any host reload or external-directory configuration hint printed by init. Explain the normal handoff: the user continues BDD or SDD work, and the agent loads focused-spec when its description applies, alongside a host workflow when present. A native wrapper or explicit invocation is optional, not a required user step.
 
-A loader on disk is discoverable, not necessarily loaded. Read the installed skill and description. It requires loading for executable-scenario and application-driver review, authoring, revision, and verification, including SDK-only work without an SDD framework or CLI integration, as well as SDD steps concerning behavioral requirements or scenarios—even when the user does not name focused-spec. Do not turn this agent obligation into a per-task user invocation. **The installed loader, not this page, owns subsequent guidance acquisition.** Follow a host workflow when present; installation alone authorizes no specification or evidence changes.
+A loader on disk is discoverable, not necessarily loaded. Read the installed skill and description. It requires loading for executable-scenario and application-driver review, authoring, revision, and verification, including SDK-only work without an SDD framework or CLI integration, as well as SDD steps concerning behavioral requirements or scenarios—even when the user does not name focused-spec. Do not turn this agent obligation into a per-task user invocation. **The installed loader, not this page, owns subsequent executable selection and guidance acquisition.** Follow a host workflow when present; installation alone authorizes no specification or evidence changes.
 
 If the host cannot discover or load the installed skill in this session, report the precise discovery/reload/configuration limitation. Do not claim loading from file existence alone, promise automatic host compliance from `MUST-LOAD`, or silently modify the project's agent rules. Use the [discovery and troubleshooting guidance](install.md#skill-discovery-and-troubleshooting); explicit invocation may diagnose routing but does not replace the intended agent-owned loading.
 
@@ -91,9 +91,9 @@ If the host cannot discover or load the installed skill in this session, report 
 
 Return a short factual report:
 
-- Project root, dependency owner, package-manager command, installed CLI version and executable.
+- Project root, dependency owner, package-manager command, installed project-pinned CLI version and executable.
 - Selected plugins, target IDs, created/unchanged integration paths, and any conflicts or limitations.
-- Whether skill discovery and an actual loader read were observed, whether current workflow guidance was acquired for any authorized specification work, and any remaining host discovery/reload limitation. Do not report required per-task user invocation as normal setup.
+- Whether skill discovery and an actual loader read were observed, which installed executable served current workflow guidance for any authorized specification work, and any remaining host discovery/reload limitation. Do not report required per-task user invocation as normal setup.
 - Whether project configuration/evidence already exists, was integrated under separate authorization, or remains pending.
 
 Do not run `validate` or `run` in an unconfigured project as an installation check. When configuration and evidence integration are also authorized, follow the installed workflow and [configuration guide](configuration.md), then execute the selected evidence. `validate --strict` resolves exact targets but does not run them; only actual execution supplies test results. Neither installation success nor an empty selection proves behavioral coverage.

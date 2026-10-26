@@ -2,6 +2,10 @@ import { delimiter, join } from 'node:path'
 import type { AgentDriver, AgentRequest } from './types.ts'
 import { runProcess } from './process.ts'
 
+export function agentEnvironment(workspace: string): NodeJS.ProcessEnv {
+  return { ...process.env, PATH: `${join(workspace, 'node_modules', '.bin')}${delimiter}${process.env.PATH ?? ''}` }
+}
+
 export class OmpAgentDriver implements AgentDriver {
   async run(request: AgentRequest) {
     const args = [
@@ -26,7 +30,7 @@ export class OmpAgentDriver implements AgentDriver {
     const result = await runProcess('omp', args, {
       cwd: request.workspace,
       timeoutMs: request.timeoutMs + 30_000,
-      env: { ...process.env, PATH: `${join(request.workspace, 'node_modules', '.bin')}${delimiter}${process.env.PATH ?? ''}` },
+      env: agentEnvironment(request.workspace),
     })
     return {
       success: result.code === 0,

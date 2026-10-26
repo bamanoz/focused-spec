@@ -1,206 +1,49 @@
 # Focused Spec Workflow
 
-This is the authoritative portable focused-spec workflow served by the installed `focused-spec` package for guidance protocol 1. Apply it to standalone BDD/executable scenarios and their application drivers as well as SDD requirements, without waiting for the user to name focused-spec. Keep the **native checkable item** as the only behavioral source: code-native Given/When/Expect or an existing requirement/acceptance item. Do not create a second focused scenario. Follow the host's authoring, approval and lifecycle rules when a host exists; standalone BDD needs no SDD framework.
+This compact package-owned router applies to standalone executable scenarios, application drivers, and native SDD requirements. Keep one native behavioral source: code-native Given/When/Expect or the host's existing requirement or acceptance item. Do not create a second focused-spec copy.
 
-## Route this task before acting
+## Preserve the governing boundary
 
-Use this order; the sections below supply the details:
+Before writing, establish the requested deliverable and native outcome, canonical source, actual host phase and permissions, existing composition, and operation: review, author/revise, upgrade, or verify. Select the host workflow by artifact and operation. Existing code, tests, or wording-only edits do not create a planning restriction. Preserve host approval, read-only, planning, generated-source, publication, archive, and removal boundaries.
 
-1. Establish the requested boundary and the host's current phase. Select the host authoring workflow by the native artifact and operation, not by whether implementation is missing: creating a change specification for already-implemented behavior is still host authoring. Load the applicable exposed host skill before drafting; CLI artifact instructions do not replace that workflow. A request to edit an existing behavioral item is specification work, including a wording clarification; it is not permission to bypass the selected evidence integration. Inspect existing configuration before deciding that integration is absent.
-2. For a first composition recommendation or choice, acquire the standalone `integration` topic before selecting packages, including SDK-only and recommendation-only work. For ordinary configured work, preserve that composition.
-3. Acquire complete selected plugin contracts before relying on selectors, reviewing evidence, writing configuration, or asking approval for its final contents. Recover every clipped response from its own linked artifact before continuing.
-4. Plan or apply the complete native-item change and its identity/evidence reconciliation within the authorized phase. If the host permits only planning, propose the remaining exact files and final evidence and ask for the next required authorization; do not silently exclude integration or claim the specification complete.
-5. During authorized implementation, execute the selected evidence, prove each affected reference detects its controlled application regression, restore exact state, and execute the completed configured scope. Guidance, prose, native syntax validation, or one passing AND member cannot replace this proof.
+A genuine planning phase records intended identity, evidence, selectors, full owning paths, and later work but cannot configure or execute integration or edit tests, runners, or product code. Required approval covers the complete native revision and auxiliary integration together, not a narrowed wording-only substitute. Recommendation-only and installation-only work stops at its stated deliverable. Respect explicit user exclusions, retain outstanding obligations, and report incomplete synchronization. SDK-only scenarios need no SDD framework, focused configuration, CLI plugins, or text companion.
 
-Recommendation-only and installation-only requests stop at their stated boundary; they do not require executable evidence. An existing-scenario review may retain correct source unchanged, but still acquires its selected contracts and performs the requested verification. SDK-only work uses its native execution path without adding CLI integration.
+## Keep the selected executable and project root distinct
 
-## Keep commands bound to the serving installation
+The loader selected one installed `focused-spec` executable. It may be project-local, global, or at an explicit path. Use that same executable throughout this workflow step so every topic and command has one package identity. If that installation is upgraded during the step, start again with its fresh workflow.
 
-The loader resolved an explicit consuming-project or declared-workspace installation and obtained this workflow from it. Throughout this workflow step, use that same explicit local CLI for every focused-spec command. In commands below, `<project-local-focused-spec>` means that resolved executable or an explicit Node invocation of the same installed package; it never means a bare global command, a downloaded package, `npx`, or `latest`.
+The executable's installation directory does not own the consuming project. For commands that read configuration, documents, or plugins, pass the explicit consuming-project root with `--root <project-root>`. Formats, runners, package registrations, and project modules resolve from that project root, never from the CLI location or a global/downloaded fallback. `instructions` reads package-owned assets only and has no `--root` option.
 
-Before a later focused-spec workflow step, resolve the local installation again and request fresh protocol-1 workflow guidance. If the installation is upgraded during a step, reload the workflow before continuing. Guidance retrieval is instruction loading, not validation or executable evidence, and it does not authorize writes that the host workflow forbids.
+Guidance loading does not install dependencies, write files, validate a project, execute evidence, or grant permission forbidden by the host phase.
 
-Acquire each protocol response in a standalone tool command. Never chain a workflow, integration, formats, or runners instruction request with installation, `init`, help, another topic, or another command. Combined stdout containing multiple JSON values is not an accepted response; run the guidance request alone again before acting.
+## Acquire one focused topic
 
-## Choose integration only when needed
+Route the task before acting:
 
-For ordinary work, preserve the project's supported configuration, canonical source and evidence ownership. Incompatible configurations follow the existing upgrade procedure below, not greenfield selection.
+- `review`: inspect an existing native item, application path, and configured enrollment without writing.
+- `author-revise`: create or revise a native item, application driver, identity, or evidence under its host workflow.
+- `upgrade`: update the selected focused-spec installation/integration and migrate supported project configuration while preserving outcomes and evidence.
+- `verify`: validate, execute selected evidence, prove controlled-regression sensitivity, restore exact state, and execute the completed scope.
+- `integration`: choose a first composition or an explicitly requested composition change, including SDK-only selection.
+- `formats`: apply shared format obligations when selecting, configuring, authoring with, implementing, or repairing an adapter.
+- `runners`: apply shared runner obligations when selecting, configuring, implementing, repairing, or parallelizing a runner.
 
-Before recommending or choosing a first composition, installing its first selected dependency, or writing its configuration:
+Preserve compatible established composition. Inspect manifest, lockfile, suite, and configuration: repairing an already selected compatible dependency is not first composition. Without an established compatible choice, selecting or installing the first execution SDK or runner requires `integration`, including SDK-only work. Missing focused configuration or an existing driver alone decides neither branch. Incompatible existing setups route to `upgrade`, not greenfield selection.
 
-1. For a first choice or explicitly requested composition change, acquire `<project-local-focused-spec> instructions --protocol 1 --topic integration --json` in its own command. This includes first-time independent SDK setup even when CLI integration is excluded. SDK-only describes execution, not an exemption from composition guidance.
-2. Validate the complete response: successful command, protocol 1, the same installed `focused-spec` version, topic `integration`, and nonempty Markdown. Recover a clipped response from that call's linked full-output artifact before proceeding. Missing or mismatched guidance blocks selection; another topic, README or repository page is not a fallback.
-3. State the retained native source, requested execution path and minimal composition, then follow the integration topic. A request to integrate executable evidence for an existing native text item means enrolling that item and executing its evidence, not replacing it with independent SDK scenarios. An absent config is work to complete under that authorization, not a reason to switch sources. Recommendation-only and installation-only tasks still stop at their requested boundaries.
-
-## Ground every outcome in the application
-
-Before authoring or revising evidence, identify the canonical native claim, real application entry point, actual observation, independently authored expected outcome, exact execution path and reversible product regression that should break it. These are checking obligations, not new persisted metadata. Keep one independently failing outcome and one native source, whether text, inline or executable code; no mandatory representation conversion.
-
-For code scenarios, Given/When/Expect are the native item. A thin driver prepares and invokes the real application and exposes its result; it must not reimplement the domain decision, return Expect as Actual, or derive both sides from the same invocation. A deterministic projection is valid only when it retains every observable distinction the claim protects. Ordinary test wrappers and optional CLI plugins execute the same suite, without a Markdown copy or registry. For native text, retain its source and use suitable existing real tests; do not rewrite them into SDK scenarios merely to follow this workflow.
-
-Explanations describe decisions, not assertions. An Actual event is not an equality check; codec roundtrips protect serialization rather than application behavior or historical wire compatibility. Neither logs nor green diagnostics can override a failed application comparison. SDK-only tasks execute the native suite and sensitivity proof without requiring focused configuration. If CLI integration is requested, also validate and execute the exact occurrence and completed configured scope. Preserve exact PASS → selected behavioral FAIL under product regression → restored PASS; missing targets, runner/setup errors, skips, modified tests and unrelated failures are not sensitivity.
-
-The local CLI supplies agent guidance; it is not an SDK runtime dependency. SDK-only work follows the native execution path below without selecting CLI format/runner plugins, enrollment, registry, or focused configuration. Enrollment and CLI completion sections apply only when CLI integration is requested or already configured; selected SDK public contracts still govern native work.
-
-## Read the selected plugin's public contract
-
-Core defines enrollment, selection, and execution semantics; plugins define authoring syntax, evidence storage, and test selectors. This workflow is not a catalog of supported plugins. Acquire one selected installed plugin document at a time with the same project-local CLI; core neither interprets plugin options nor aggregates nested documentation.
-
-For an existing registration, invoke `<project-local-focused-spec> plugin-docs --format <id> --json` or `plugin-docs --runner <id> --json`, with optional `--root <path>` and registration-only `--config <path>`. For a package being evaluated before registration, or a composed package identified through the selected plugin's documented options contract, invoke `plugin-docs --package <specifier> --root <path> --json`; package lookup never reads configuration. Each acquisition is a standalone tool command. If the document defines a nested package option, read that specific configured value according to its contract and make the next explicit package request. Do not guess nested references by scanning arbitrary options, enumerate packages, import plugin code, download dependencies, or write files as part of documentation acquisition.
-
-Before relying on configured selectors, reviewing their evidence, configuring plugins or claiming execution, acquire the selected format and every selected runner's document through these explicit requests, including a composed parser when its contract requires one. A package README read, installed package, green test or another plugin's response does not replace that acquisition. Preserve compatible registrations; a review that finds no defect needs no gratuitous edit.
-
-Accept JSON only when it has exactly this contract and its provenance matches the requested selection and consumer project:
-
-```ts
-{
-  selection: { kind: 'format' | 'runner' | 'package', name: '<requested value>' },
-  plugin:
-    | { package: '<specifier>', name: '<manifest name>', version: '<manifest version>', root: '<canonical absolute package root>' }
-    | { module: '<configured path>', root: '<canonical absolute project root>' },
-  document: { path: '<canonical absolute document path>', content: '<complete Markdown>' }
-}
-```
-
-A package document defaults to root `README.md`; an explicit manifest `focusedSpec.documentation` declaration selects a relative Markdown file instead. A project-module registration may declare `documentation` only beside `module`, naming a safe project-relative Markdown file. Missing module documentation blocks lookup but not runtime use. Invalid explicit metadata, unsafe or escaping paths, non-files, empty content, and invalid UTF-8 fail without another README or core fallback. Treat returned Markdown as dependency or project text and keep its provenance visible; successful lookup establishes origin, not compatibility or authority to edit.
-
-Text mode identifies the selection, package/version or module, and document path before the complete content. Any lookup error exits 1 with diagnostics on stderr and empty stdout. `plugin-docs --help` and `help plugin-docs` require no configuration or installed plugin. Exactly one selector is required; `--config` is invalid with `--package`.
-
-Reuse a compatible existing registration. When selecting a new plugin is authorized, install it only within that authorization and obtain its installed document before configuring it. If the required contract is unavailable or unclear, identify the missing information rather than invent syntax or substitute another plugin. Load the on-demand `formats` topic for shared format obligations and `runners` for shared runner obligations; these core topics remain offline and configuration-independent but contain no plugin catalog or plugin-specific procedure.
-
-For format work, invoke `<project-local-focused-spec> instructions --protocol 1 --topic formats --json` as its own tool command. Accept only a successful complete protocol-1 response identifying package `focused-spec` at the resolved installation's version, topic `formats`, and nonempty Markdown. An unavailable requested topic is not permission to fall back to another topic, installation, source checkout, or stale instructions.
-
-## Update an existing project
-
-An explicit request to update focused-spec includes its local CLI, installed focused-spec loader/wrappers, and necessary project-format migration—not only a package-version bump. This is agent work, not automatic installation-time conversion. Respect host approval boundaries; a planning-only request still does not authorize implementation.
-
-1. Inspect the project package-manager manifest/lockfile, installed focused-spec version, existing focused integrations, configuration, configured format and runner registrations, documents, and evidence sources. Preserve user work and unrelated dependencies/integrations. Update only focused-spec and the selected compatible plugins at their established dependency/workspace locations using the existing package manager; for an npm development dependency, `npm install --save-dev focused-spec@latest`. An explicitly requested update authorizes those selected package downloads; ordinary guidance acquisition does not.
-2. Resolve the replacement local CLI and read its `init --help`. Refresh existing focused integration with explicit relevant `--tools` targets, using `--dry-run --json` first. Replace an identified package-owned legacy loader/wrapper with `--replace` only within authorized scope; preserve custom instructions and unrelated targets. Symlinked skills are not safe replacement destinations: use their owning installer or an approved safe cutover, not forced traversal. Remove identified obsolete package-owned full-text copies once replaced; never delete custom neighbors. Verify the installed loader/wrappers match the replacement package, and reread the new loader even in the same session.
-3. Obtain and validate a fresh complete protocol-1 `workflow` response from that exact installation with `<project-local-focused-spec> instructions --protocol 1 --topic workflow --json`, in a separate tool call after integration refresh has completed. Do not join it to `init --json` with `&&`, a semicolon or a pipeline. Discard earlier/legacy procedure as authority. A missing or incompatible response blocks migration; neither package source inspection nor a repository checkout is a fallback. Use the new workflow and help to finish the task without asking the user for migration steps available here.
-4. Inventory every still-relevant occurrence before editing: configured scope, exact opaque ID, canonical native item and behavioral text, every evidence reference and AND member, document layouts/exclusions, selected formats and their options, evidence ownership, runner IDs/modules/packages/options/timeouts/cwd, and execution settings. Same-ID occurrences in different scopes remain independently enrolled. Inventory `REVISES` only to preserve still-relevant behavior/evidence before removing it; it creates no transfer or inheritance.
-5. Install each selected Format API 2 adapter before configuring it, and acquire its document with the explicit registration or package request above. Follow any composed-plugin requirement through a subsequent explicit package lookup after reading the composing plugin's document. Core has no native parser, evidence loader, format inference, storage default, or nested-options discovery. Give every document layout one explicit format while preserving its match, assigned/captured scope, and exclusions. Preserve the existing supported authoring representation and evidence owner; upgrading does not itself authorize a storage conversion.
-6. Inspect existing runner registrations and acquire their public selector/options contracts before writing custom plugin code. Obtain the same CLI's `runners` topic when selecting or changing a runner. Replace a registration only when the replacement preserves existing opaque selectors and execution requirements. If an authorized replacement requires a runner-ID change, change only affected reference prefixes and preserve selector suffixes and AND members. Preserve project-owned runner files unless their removal is authorized.
-7. Move configuration to version 5 and every project format to API 2 in one clean cutover. Remove top-level `evidence`; migrate its existing source list unchanged into the selected storage adapter's documented options, without introducing an implicit core default. Supported historical inline `ID`/`EVIDENCE` may remain inline through explicit adapter selection; do not force it into YAML. Remove every `REVISES` and obsolete relationship field after inventory without renaming identity, dropping evidence, or inventing ancestry. If an old focused companion duplicates a native item, remove only the redundant companion through its host workflow; if it is the sole native source, keep its behavior. Bind generated/metadata-hostile sources only through a documented stable native identity, never guessed text or coordinates.
-8. Compare the final occurrences and registrations with the inventory: no lost outcome, changed ID/scope/case, unexplained runner-ID change, redirected opaque selector, omitted AND member, inherited evidence, changed storage/shard ownership, or orphaned metadata. Run native host validation where available, then strict focused validation and actual execution for every completed migrated scope (or the full project when all evidence is concrete). Resolve `planned:` only when its exact test exists. Prove new or changed evidence sensitivity as described below, restore every controlled product regression, and report updated packages/integration, commands, observed results, and limitations.
-
-## Respect the current phase
-
-During an explicitly planning-only task or the host's proposal phase, author only permitted planning artifacts and native identity binding. When the selected format supports identity without executable evidence, establish that identity on the canonical native item now using its public contract; defer the evidence, not the permitted identity. Preserve it through implementation. Record intended exact runner IDs/selectors and final format-owned evidence contents in design/tasks. Defer executable evidence integration, configuration, runners, tests, and product changes until implementation is authorized, regardless of whether evidence is embedded in a native document or stored separately. Integration containing `planned:` is still integration setup, not a planning artifact. Fenced examples in planning artifacts are not executable enrollment. Existing permitted native-format checks may run without creating integration setup.
-
-A request to complete a native specification for already-implemented behavior is not itself a request to stop at a proposal. Finish the host's planning phase, then obtain any host-required authorization for final identity/evidence integration against existing tests. Require another approval only when an applicable host rule or the user's scope requires it; do not invent an approval boundary. Do not change product code to bind existing evidence or report the specification complete merely because its native format validates. If integration belongs to a later phase, ask to enter that phase rather than silently omit it.
-
-## Reconcile evidence when reviewing or revising a specification
-
-A specification revision is not complete merely because prose changed or old registered tests remain green. For each touched native item selected by the project's existing configuration, reconcile enrollment even when its identity, binding, or configured evidence source is still missing. Missing enrollment is unfinished integration, not an implied prose-only scope; obtain any required host approval for the concrete remaining change. Leave unrelated native items unenrolled.
-
-For SDK-only code scenarios, review the native Given/When/Expect claim, application driver and ordinary test wrapper directly. Respect the same read-only/planning limits; during authorized implementation reconcile the scenario and real observation, then execute the native suite and selected product-regression sensitivity. The enrollment steps below apply only to CLI-integrated items, not as a requirement to add integration.
-
-1. Before editing, inspect the configured scope, canonical native item, selected format, owning evidence location, existing `(scope, ID)` and binding when present, every exact evidence reference, and each selected assertion—not only its name. Identify missing enrollment components and compare the requested outcome with what the existing assertions actually prove. Preserve unrelated enrollments and all still-relevant AND obligations.
-2. In read-only review, report stale or missing evidence and exact required changes without writing. In planning-only work, record native, test, evidence, and configuration changes with exact paths/selectors in the permitted plan; do not write executable integration or claim synchronization. Obtain host-required approval for the complete revision before implementation.
-3. During authorized implementation, revise the native item and complete or reconcile its enrollment in the selected format-owned location. Establish missing identity/binding through the authoring protocol below; do not replace an existing stable identity. Keep references unchanged only when assertions genuinely protect the revised behavior; otherwise repair an authorized test or replace stale references with exact tests for the same outcome. Include every required AND member. Do not preserve unrelated tests merely for counts, silently drop outcomes, switch storage without cause, or mark existing runnable evidence planned.
-4. Reconcile each reference against the revised item's preconditions and observation. Appending a correct test does not repair a stale reference: remove or replace evidence that only exercises different conditions, while preserving still-relevant AND members and unrelated enrollments in their own items.
-5. Reconcile approved splits, additions, moves, format conversions, and removals explicitly. Each surviving outcome needs one unique native binding and its own scope-local evidence. Remove obsolete enrollment only when the outcome is retired through the host workflow. Update external bindings only to real explicit native IDs. Preserve unaffected scopes, selectors, storage owners, and domain-owned sources; do not reorganize as a side effect.
-6. Compare final native items and normalized enrollments in both directions, including assertion coverage. Run native validation where available, strict focused validation and exact evidence for every changed item, then execute the completed scope. Prove changed-outcome sensitivity using the controlled product regression below even when the selector stayed unchanged. Structural validity and a green old assertion do not establish semantic correspondence.
-
-If tests are absent, permissions are missing, or sensitivity cannot be checked safely, state exact deferred work and verification limits. Use `planned:` only when the exact test is genuinely absent and integration is authorized; planned evidence cannot pass strict validation or execution. Do not declare the revision synchronized while required integration remains deferred.
-
-## Native identity and evidence authoring protocol
-
-This enrollment protocol applies to CLI-integrated native items. SDK-only scenarios retain their native identities and execute directly without enrollment.
-
-1. Read the host workflow when present. Locate the one native checkable item, canonical editable/generated source, selected document layout/format adapter, and any host-owned native ID. If the layout or installed adapter is missing, do not guess from the extension; configure/install only during authorized implementation.
-2. Use exactly one enrollment path documented by the selected format. It may supply evidence with the parsed native item or bind it from a separate source; neither path is a core default. Follow the plugin's public authoring contract rather than copying another format's markers, metadata, storage schema, or options. For generated or metadata-hostile sources, use a documented external binding to a stable native ID exposed by the parser. Without such support, report binding unsupported; never guess from headings, lines, or wording.
-3. Treat the ID as an exact opaque stable value. It must contain non-whitespace and no control characters; preserve case, Unicode, spaces, numeric, historical, and path-looking values byte-for-byte when the selected format can represent them. Never normalize or rename an ID to fit another format.
-4. Ensure the source item still expresses one independently failing outcome. Every occurrence supplies its own nonempty evidence; no same-ID scope, owner, revision, or disappearing document lends evidence. Missing, detached, duplicate, competing, conflicting, or ambiguous enrollment fails.
-
-Do not widen the requested outcome with adjacent cases or attach their tests to the same ID. Add separate native items only through the host workflow when those outcomes are in scope. Leave unrelated native content unenrolled; focused-spec neither validates nor counts it as coverage.
-
-## Approval-aware authoring
-
-When the host workflow requires approval before writing, propose the complete change:
-
-- the native behavioral revision;
-- the chosen format, identity representation, and exact opaque ID;
-- the final format-owned evidence contents, their owning locations, and exact selected tests;
-- every file to create, modify, generate, move, or remove, using complete project-relative paths, including later task/completion edits.
-
-Keep those paths and contents in the approval request and applied change. A basename or path relative to a document folder does not authorize another destination. If consent names only part or is ambiguous, clarify before writing; broader outcome approval does not imply unlisted integration.
-
-Keep behavior only in its canonical native item. Do not propose wording alone while omitting identity/evidence. If the user approves only part, apply only that part and separately request the remainder. Do not declare completion before identity, format-owned evidence, native validation, selected execution, and required sensitivity are complete. Report unavailable host validators and unchecked sensitivity as limitations, not passes.
-
-Propose final executable contents, not merely a format or filename. Approval of a planning example does not authorize later inline/registry integration, and approval of an interim `planned:` reference does not authorize replacing it with a different final reference. Obtain the required authorization for each executable revision.
-
-## Evidence ownership
-
-Every selected format supplies normalized evidence. Core has no evidence file, storage default, inheritance, or precedence rule. Preserve the existing owner and every exact reference in order, whether evidence is embedded in a native document or kept separately. Do not generate an intermediate store or convert representations without an approved ownership change.
-
-Inspect configured sources and domain/module boundaries before editing. Reuse the affected domain's existing owner. Add a separate source only for a genuine new boundary and connect it through the selected adapter's documented configuration. Do not add redundant sources, introduce a monolith beside existing domain-owned sources, or reorganize unrelated registrations. Source discovery, safety constraints, binding syntax, and options belong to that plugin's public contract, not this workflow.
-
-Evidence uses `[planned:]<runner-id>::<opaque selector>`; only the first `::` separates the runner ID. Multiple references form an AND contract. Every selected `(scope, ID)` uniquely enrolls one native item; competing enrollments fail rather than merge. File placement is not identity or ancestry. Each reference retains its supplied source location for diagnostics.
-
-Selection isolates unrelated semantic entries; failures needed to read or structurally interpret selected sources remain blocking. Use `planned:` only while the exact test is absent. Non-strict validation permits it; strict validation and `run` reject it.
-
-## Configure focused-spec
-
-Create `.focused-spec/config.yaml` when first enrolling evidence. Version 5 requires explicit Format API 2 selection. Register formats under `specifications.formats` and document layouts under `specifications.documents`; each layout's `format` names one registered format. Reuse the selected plugin's public configuration example, preserving the project's document paths, scopes, evidence ownership, and runner selectors rather than copying its sample project.
-
-Every layout has a project-relative `match` and either an explicit path-safe `scope` without `{scope}`, or exactly one `{scope}` token in `match` without `scope`. Optional `exclude` patterns are project-relative. Register runners under `runners` with the IDs used in evidence references. Formats/runners declare exactly one installed `package` or project-contained `module`, optional `timeoutMs`, and plugin-owned JSON-compatible `options`. Runners remain API 1 and may also declare a project-relative `cwd`. No package resolves from a global installation, download, or CLI location. Core rejects top-level `evidence`, config versions 1–4, and Format API 1; storage configuration belongs to the selected adapter.
-
-Keep `execution.maxConcurrentGroups` at its default `1` unless runner grouping and shared resources have been audited through the on-demand runner workflow.
-
-## Preserve surviving evidence through host operations
-
-The host owns publication, movement, regeneration, archive, and removal. Use its authoring and approval workflow; never hand-edit generated artifacts outside their owner.
-
-1. Keep every surviving outcome uniquely bound and explicitly enrolled in its final selected scope and chosen format. Evidence never inherits from a disappearing scope; matching IDs do not transfer behavior or evidence.
-2. Let the host perform the approved operation. Update surviving format-owned evidence in its existing owner. Retire obsolete working enrollment through the host workflow when its item leaves discovery. A format conversion must preserve exact ID, references, AND members, and selected assertion semantics.
-3. Validate the final selection and execute its exact surviving evidence. Host structural validation is separate; passing registered outcomes do not certify unenrolled native history.
-
-No transition command, snapshot, or replacement checkpoint is required. Production validation sees current enrollment and cannot detect historical loss when both item and evidence disappear consistently. Preserve lifecycle continuity through host review, explicit final enrollment, actual execution, and independent checkpoints where required—not a claimed historical guarantee.
-
-## Discover CLI commands and options
-
-Begin discovery with `<project-local-focused-spec> version --json` to confirm the invoked installation, executable and supported contract versions without loading project state. Consult `<project-local-focused-spec> --help` and the command-specific help for `plugin-docs`, `list`, `show`, `validate`, and `run` before choosing flags. Keep using that exact local CLI. Help is guidance, not evidence; execute the selected tests before completion.
-
-Use `list --root <path> [--config <path>]` to inspect enrolled occurrences and their evidence provenance, and `show <id> --root <path> [--config <path>]` for an exact opaque ID; add `--scope <name>` when one scope is intended and use `show -- <id>` for a flag-looking ID. These commands may parse and bind through the selected format plugins, but they do not load runners, resolve targets, execute tests, or certify native coverage. Keep acquiring each selected plugin's public contract through the separate `plugin-docs` flow above.
-
-## Select or implement a runner only when evidence needs one
-
-Inspect existing configuration, installed runner packages, and project modules before authoring plugin code. Reuse a compatible runner and its public selector contract when it fits; an installed but unregistered runner may need only an approved configuration entry. Do not create a parallel custom runner merely because package registration is new.
-
-When selecting, configuring, creating, repairing, or parallelizing a runner requires its shared obligations, obtain the on-demand runner workflow from the same installed package by invoking `<project-local-focused-spec> instructions --protocol 1 --topic runners --json` as a standalone tool command. Wait for successful completion and accept it only when the response identifies protocol 1, package `focused-spec` at the resolved installation's version, topic `runners`, and nonempty Markdown content. Then acquire the selected registration's contract with a separate `plugin-docs --runner <id> --json` request as described above. Do not use a skill-local reference, repository documentation, a global binary, downloaded package, stale instructions, or another plugin's document as a fallback.
-
-## Prove new or changed evidence detects failure
-
-For every new or changed evidence reference, selected assertion, or claimed product behavior—including a repaired assertion whose format-owned reference stays unchanged:
-
-1. Run that exact selected native test or, for CLI-integrated evidence, its exact focused evidence and observe `PASS`. Identify every AND member whose sensitivity must be checked.
-2. Introduce one controlled regression in the protected application boundary—not in the test, selector, runner, or assertion. When application/test files must remain unchanged, use an isolated disposable copy and execute against that copy; do not mutate the protected workspace. Otherwise prefer a disposable copy too. If an authorized in-place probe is necessary, retain the exact prior bytes and complete state, including generated files and bytecode, and restore them even on failure; rewriting equivalent source is not restoration.
-3. Confirm the intended product edit actually applied at the real boundary before execution. A zero-match replacement or a mutation to the wrong copy is not a probe. Run the same evidence and require each affected selected test to execute and fail on its behavioral assertion. For multiple languages or AND members, check and report each reference separately: one failing member does not establish the others' sensitivity. Missing targets, runner errors, skips and unrelated failures do not count.
-4. Restore the original state, compare protected file bytes or hashes with the captured baseline, rerun the same evidence and observe `PASS`. For isolated probes, verify the original workspace stayed unchanged and remove the disposable copy after retaining the results.
-
-If a safe controlled regression is unavailable, explain what was not checked and why. Do not claim mutation verification.
-
-## Verify
-
-For SDK-only work, execute the native suite and selected sensitivity proof described above, then report the actual results. Do not create focused configuration or run CLI validation merely to complete that path. The CLI verification below applies to configured evidence integration.
-
-Run the same explicitly resolved project-local CLI against the intended project root. The root supplies version-5 configuration, installed formats/runners, native documents, and any adapter-owned external sources; core supplies none of those integrations.
-
-While selected evidence remains planned:
+Request the chosen topic from the same executable as a standalone command:
 
 ```text
-<project-local-focused-spec> validate --scope <name> --syntax-only
-<project-local-focused-spec> validate --scope <name>
+<focused-spec-cli> instructions --protocol 1 --topic <topic> --json
 ```
 
-Syntax-only validates format parsing/binding and normalized references without loading runners. After every selected reference is concrete:
+Do not chain the request with executable checks, installation, `init`, help, another topic, or another command. If a combined call ran, request the topic again by itself. Accept only a successful response for protocol 1, package `focused-spec` at the selected executable's installed version, the exact requested topic, and nonempty Markdown content.
 
-```text
-<project-local-focused-spec> validate --scope <name> --strict
-<project-local-focused-spec> run --scope <name>
-```
+Host truncation leaves this workflow or any later topic unacquired. Before continuing, recover the complete stdout from that successful call's linked full-output artifact. A clipped preview, extracted `content`, hidden metadata, another call's artifact, stale guidance, repository file, README, or different installation cannot substitute. If the complete matching response is unrecoverable, stop and report the delivery limitation.
 
-`validate --scenario <id>` and `run --scenario <id>` use the same exact occurrence selection. Use `--scope <name>` when one scope is intended; without it, every matching same-ID occurrence is independently selected. Scenario-filtered validation preserves syntax-only, non-strict, and strict behavior and reports the actual narrowed validation scope without executing tests. `run` performs strict validation first. A selected scenario excludes unrelated semantic failures but does not certify the rest of a scope, so run the full completed scope afterward. `ERROR` always prevents success; `SKIP` does too unless the project explicitly permits it through `--allow-skip`. Structural format/source failures remain errors; per-reference diagnostics use the supplied evidence location, including a malformed later AND member.
+The selected focused topic is complete for that operation and may route to a shared topic or selected plugin contract when needed. Return here and acquire a different topic when the operation changes; do not carry procedure from an earlier workflow step as authority.
 
-Before reporting implementation or revision complete, check the final native claim against every selected assertion and report the actual verification sequence for each affected reference: baseline PASS, selected behavioral FAIL under the controlled product regression, exact restoration, restored PASS. Remove references that exercise only superseded preconditions; an additional correct reference does not repair them. If any required observation is missing, perform that remaining check now or state the concrete blocker instead of claiming completion. Finish with execution of the completed configured scope. This completion gate does not apply to recommendation-only, installation-only, read-only or planning-only tasks beyond their authorized boundary.
+## Universal evidence boundary
+
+Keep every selected `(scope, ID)` occurrence independent, every evidence reference exact, and every AND member intact. Core owns no evidence store or inheritance rule; the selected format owns identity representation, binding, storage, and provenance. Plugin syntax and selectors come from separately acquired installed public contracts, including an explicit follow-up package request for every composed plugin named by its composing document.
+
+During authorized implementation, compare the real application observation with an independently authored expectation. New or changed evidence must demonstrate `PASS → selected behavioral FAIL under a controlled product regression → exact restoration → PASS`. Test edits, selector errors, missing targets, skips, runner failures, and unrelated failures are not sensitivity. Finish with the completed native suite or configured scope and report actual commands, results, and limitations.

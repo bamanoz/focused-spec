@@ -2,7 +2,7 @@ import { cp, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node
 import { createHash } from 'node:crypto'
 import { glob } from 'glob'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentDriver, AgentRequest, AgentResult, EvalCase } from '../evals/types.ts'
@@ -14,7 +14,7 @@ import { evalCase } from '../evals/cases.ts'
 import { provisionWorkspace } from '../evals/provision.ts'
 import { runProcess } from '../evals/process.ts'
 import { captureUpgradeBaseline, upgradeArtifactsGate, upgradePreservationGate } from '../evals/upgrade.ts'
-import { executableBehaviorGates, executableSourceGate, integrationBoundaryGates, integrationFiles, integrationRoutingGate, selectedContractsGate } from '../evals/integration.ts'
+import { executableBehaviorGates, executableSourceGate, inspectEstablishedComposition, integrationBoundaryGates, integrationFiles, integrationRoutingGate, selectedContractsGate } from '../evals/integration.ts'
 import type { IntegrationBaseline } from '../evals/integration.ts'
 import type { IntegrationCase } from '../evals/types.ts'
 
@@ -113,6 +113,7 @@ function guidanceTranscript(workspace: string, options: GuideTranscriptOptions =
 }
 
 interface ArtifactTranscriptOptions {
+  readonly command?: string
   readonly artifact?: string
   readonly cliComplete?: boolean
   readonly cliFailed?: boolean
@@ -121,6 +122,7 @@ interface ArtifactTranscriptOptions {
   readonly readBeforeCommand?: boolean
   readonly omitCommand?: boolean
   readonly response?: unknown
+  readonly rawCliOutput?: string
   readonly rawArtifactOutput?: string
 }
 
@@ -128,7 +130,7 @@ function artifactGuidanceTranscript(workspace: string, options: ArtifactTranscri
   const artifact = options.artifact ?? 'artifact://0'
   const linked = 'artifact://0'
   const cli = join(workspace, 'node_modules', 'focused-spec', 'dist', 'cli.js')
-  const command = `${JSON.stringify(process.execPath)} ${JSON.stringify(cli)} instructions --protocol 1 --topic workflow --json`
+  const command = options.command ?? `${JSON.stringify(process.execPath)} ${JSON.stringify(cli)} instructions --protocol 1 --topic workflow --json`
   const response = options.response ?? {
     protocolVersion: 1,
     package: { name: 'focused-spec', version: '0.6.0' },
@@ -140,7 +142,7 @@ function artifactGuidanceTranscript(workspace: string, options: ArtifactTranscri
     { type: 'tool_execution_start', toolName: 'bash', toolCallId: 'artifact-cli', args: { command } },
     ...(options.cliComplete === false ? [] : [{ type: 'tool_execution_end', toolName: 'bash', toolCallId: 'artifact-cli',
       isError: options.cliFailed === true, result: { isError: options.cliFailed === true,
-        content: [{ type: 'text', text: `{"protocolVersion":1,"package":{"name":"focused-spec","version":"0.6.0"},"topic":"workflow","content":"# Authoritative workflow…\n\n\nWall time: 0.36 seconds\n\n[Some lines truncated to 768 bytes. Read ${linked} for full output]` }],
+        content: [{ type: 'text', text: options.rawCliOutput ?? `{"protocolVersion":1,"package":{"name":"focused-spec","version":"0.6.0"},"topic":"workflow","content":"# Authoritative workflow…\n\n\nWall time: 0.36 seconds\n\n[Some lines truncated to 768 bytes. Read ${linked} for full output]` }],
         details: { exitCode: options.cliFailed === true ? 1 : 0 } } }]),
   ]
   const readEvents: object[] = [
@@ -158,8 +160,11 @@ async function activationFixture(): Promise<string> {
   roots.push(root)
   await Promise.all([
     put(root, 'node_modules/focused-spec/package.json', JSON.stringify({ name: 'focused-spec', version: '0.6.0' })),
+    put(root, 'node_modules/focused-spec/dist/cli.js', '#!/usr/bin/env node\n'),
     put(root, 'node_modules/focused-spec/guidance/workflow.md', WORKFLOW_GUIDANCE),
   ])
+  await mkdir(join(root, 'node_modules/.bin'), { recursive: true })
+  await symlink('../focused-spec/dist/cli.js', join(root, 'node_modules/.bin/focused-spec'))
   return root
 }
 
@@ -259,7 +264,7 @@ async function boundaryFixture(packages: readonly string[], native: ReadonlyMap<
     const files = await glob('**/*', { cwd: join(root, 'node_modules', name), nodir: true })
     candidates.set(name, new Map(await Promise.all(files.map(async path => [path, createHash('sha256').update(await readFile(join(root, 'node_modules', name, path))).digest('hex')] as const))))
   }
-  return { root, baseline: { files: await integrationFiles(root), protected: new Map(), candidates, native, packages: [...packages].sort(), ...(config === undefined ? {} : { config }) } }
+  return { root, baseline: { files: await integrationFiles(root), protected: new Map(), candidates, native, packages: [...packages].sort(), establishedComposition: [...packages].sort(), ...(config === undefined ? {} : { config }) } }
 }
 
 async function bankFixture(): Promise<string> {
@@ -324,27 +329,55 @@ describe('agent eval harness', () => {
 
   it('requires completed local integration guidance for composition selection', async () => {
     const root = await activationFixture()
+    const baseline: IntegrationBaseline = { files: await integrationFiles(root), protected: new Map(), candidates: new Map(), native: new Map(), packages: ['focused-spec'], establishedComposition: ['focused-spec'] }
+    const choice: IntegrationCase = { source: 'typescript', mode: 'integrate', cli: false }
     const content = '# Integration\n\nInspect the project before selecting capabilities.\n'
     await put(root, 'node_modules/focused-spec/guidance/integration.md', content)
     const command = `${JSON.stringify(process.execPath)} ${JSON.stringify(join(root, 'node_modules/focused-spec/dist/cli.js'))} instructions --protocol 1 --topic integration --json`
     const response = { protocolVersion: 1, package: { name: 'focused-spec', version: '0.6.0' }, topic: 'integration', content }
     const accepted = guidanceTranscript(root, { command, response })
-    expect(await integrationRoutingGate(root, [accepted + '\n' + configurationWrite()])).toMatchObject({ passed: true })
+    expect(await integrationRoutingGate(root, [guidanceTranscript(root, {
+      command: 'focused-spec instructions --protocol 1 --topic integration --json', response,
+    })], choice, baseline)).toMatchObject({ passed: true })
+    expect(await integrationRoutingGate(root, [accepted + '\n' + configurationWrite()], choice, baseline)).toMatchObject({ passed: true })
     const hydration = JSON.stringify({ type: 'tool_execution_start', toolName: 'bash', toolCallId: 'hydrate', args: { command: 'npm install' } })
-    expect(await integrationRoutingGate(root, [hydration + '\n' + accepted])).toMatchObject({ passed: true })
+    expect(await integrationRoutingGate(root, [hydration + '\n' + accepted], choice, baseline)).toMatchObject({ passed: true })
     const install = JSON.stringify({ type: 'tool_execution_start', toolName: 'bash', toolCallId: 'select-sdk', args: { command: 'npm install --save-dev @focused-spec/scenarios-typescript' } })
-    expect(await integrationRoutingGate(root, [install + '\n' + accepted])).toMatchObject({ passed: false })
+    expect(await integrationRoutingGate(root, [install + '\n' + accepted], choice, baseline)).toMatchObject({ passed: false })
+    expect(await integrationRoutingGate(root, [accepted + '\n' + install], choice, baseline)).toMatchObject({ passed: true })
+    await put(root, 'package.json', JSON.stringify({ devDependencies: { '@focused-spec/scenarios-typescript': '0.10.1' } }))
+    await put(root, 'package-lock.json', JSON.stringify({ lockfileVersion: 3, packages: { '': { devDependencies: { '@focused-spec/scenarios-typescript': '0.10.1' } } } }))
+    expect(await integrationRoutingGate(root, [hydration + '\n' + accepted + '\n' + configurationWrite()], choice, baseline)).toMatchObject({ passed: true })
     for (const transcript of [
       guidanceTranscript(root, { command, response, complete: false }),
       guidanceTranscript(root, { command, response, failed: true }),
       guidanceTranscript(root, { command, response: { ...response, topic: 'workflow' } }),
       guidanceTranscript(root, { command, response: { ...response, package: { name: 'focused-spec', version: '0.5.0' } } }),
       guidanceTranscript(root, { command, response: { ...response, content: content.slice(0, 12) } }),
-      guidanceTranscript(root, { command: 'focused-spec instructions --protocol 1 --topic integration --json', response }),
       configurationWrite() + '\n' + accepted,
-    ]) expect(await integrationRoutingGate(root, [transcript])).toMatchObject({ passed: false })
+    ]) expect(await integrationRoutingGate(root, [transcript], choice, baseline)).toMatchObject({ passed: false })
     const recovered = artifactGuidanceTranscript(root, { response }).replace('--topic workflow', '--topic integration')
-    expect(await integrationRoutingGate(root, [recovered])).toMatchObject({ passed: true })
+    expect(await integrationRoutingGate(root, [recovered], choice, baseline)).toMatchObject({ passed: true })
+  })
+
+  it('distinguishes retained SDK composition from first selection', async () => {
+    const project = await mkdtemp(join(tmpdir(), 'focused-eval-established-go-'))
+    roots.push(project)
+    await cp(join(repository, 'examples/scenarios/go'), project, { recursive: true, filter: path => !path.includes('node_modules') && !path.includes('.focused-spec') })
+    await cp(join(repository, 'packages/sdk/go'), join(project, '.dependencies/scenarios-go'), { recursive: true })
+    await put(project, 'go.mod', (await readFile(join(project, 'go.mod'), 'utf8')).replace('../../../packages/sdk/go', './.dependencies/scenarios-go'))
+    const establishedComposition = await inspectEstablishedComposition(project, ['focused-spec'])
+    const sdk = 'github.com/bamanoz/focused-spec/packages/sdk/go'
+    expect(establishedComposition).toEqual(['focused-spec', sdk])
+
+    const root = await activationFixture()
+    const baseline: IntegrationBaseline = { files: await integrationFiles(root), protected: new Map(), candidates: new Map(), native: new Map(), packages: ['focused-spec'], establishedComposition }
+    expect(await integrationRoutingGate(root, [], { source: 'go', mode: 'integrate', cli: false }, baseline)).toMatchObject({ passed: true })
+    const absent = { ...baseline, establishedComposition: ['focused-spec'] }
+    expect(await integrationRoutingGate(root, [], { source: 'go', mode: 'integrate', cli: false }, absent)).toMatchObject({ passed: false })
+    expect(await integrationRoutingGate(root, [], { source: 'typescript', mode: 'integrate', cli: false }, absent)).toMatchObject({ passed: false })
+    expect(await integrationRoutingGate(root, [], { source: 'go', mode: 'integrate', cli: true }, baseline)).toMatchObject({ passed: false })
+    expect(await integrationRoutingGate(root, [], { source: 'go', mode: 'recommend', cli: false }, baseline)).toMatchObject({ passed: false })
   })
 
   it('rejects replacement of native acceptance items during integration', async () => {
@@ -419,6 +452,93 @@ describe('agent eval harness', () => {
     expect(await selectedContractsGate(root, [altered], names)).toMatchObject({ passed: false })
     expect(await selectedContractsGate(root, [complete.replaceAll('"exitCode":0', '"exitCode":1')], names)).toMatchObject({ passed: false })
     expect(await selectedContractsGate(root, [complete.split('\n').filter(line => JSON.parse(line).type !== 'tool_execution_end').join('\n')], names)).toMatchObject({ passed: false })
+  })
+
+  it('accepts complete selected contract artifact recovery before configuration writes', async () => {
+    const root = await activationFixture()
+    await installFocusedPackage(root)
+    await put(root, '.focused-spec/config.yaml', [
+      'version: 5',
+      'specifications:',
+      '  formats:',
+      '    inline:',
+      "      package: '@focused-spec/format-inline'",
+      '  documents:',
+      '    - match: specs/**/*.md',
+      '      scope: current',
+      '      format: inline',
+      'runners:',
+      '  go:',
+      "    package: '@focused-spec/runner-go'",
+      '  pytest:',
+      "    package: '@focused-spec/runner-pytest'",
+    ].join('\n'))
+    const selections = [
+      { kind: 'format', selector: 'inline', name: '@focused-spec/format-inline', source: 'formats/inline', footer: 'raw', chain: false },
+      { kind: 'runner', selector: 'go', name: '@focused-spec/runner-go', source: 'runners/go', footer: 'read', chain: false },
+      { kind: 'runner', selector: 'pytest', name: '@focused-spec/runner-pytest', source: 'runners/pytest', footer: 'read', chain: true },
+    ] as const
+    type RecordedToolEvent = {
+      type: 'tool_execution_start' | 'tool_execution_end'
+      toolName: 'bash' | 'read'
+      toolCallId: string
+      args?: { command?: string; path?: string }
+      isError?: boolean
+      result?: { isError?: boolean; content: { type: 'text'; text: string }[]; details?: { exitCode: number } }
+    }
+    const recoveryEvents: RecordedToolEvent[] = []
+    const responses = new Map<string, string>()
+    for (const selection of selections) {
+      await cp(join(repository, 'packages', selection.source, 'README.md'), join(root, 'node_modules', selection.name, 'README.md'))
+      const args = ['plugin-docs', `--${selection.kind}`, selection.selector, '--root', root, '--json']
+      const result = await runProcess(process.execPath, [join(root, 'node_modules/focused-spec/dist/cli.js'), ...args], { cwd: root, timeoutMs: 10_000 })
+      expect(result.code, result.stderr).toBe(0)
+      responses.set(selection.name, result.stdout)
+      const commandId = `${selection.selector}-command`
+      const firstArtifact = `artifact://${selection.selector}-preview`
+      const finalArtifact = selection.chain ? `artifact://${selection.selector}-full` : firstArtifact
+      const footer = selection.footer === 'raw'
+        ? `[raw output: ${firstArtifact}]`
+        : `[Some lines truncated to 768 bytes. Read ${firstArtifact} for full output]`
+      recoveryEvents.push(
+        { type: 'tool_execution_start', toolName: 'bash', toolCallId: commandId,
+          args: { command: `focused-spec ${args.slice(0, -3).join(' ')} --root . --json` } },
+        { type: 'tool_execution_end', toolName: 'bash', toolCallId: commandId,
+          result: { content: [{ type: 'text', text: `{ "selection": "${selection.selector}", … }\n\n${footer}\n\nWall time: 0.12 seconds` }], details: { exitCode: 0 } } },
+      )
+      if (selection.chain) recoveryEvents.push(
+        { type: 'tool_execution_start', toolName: 'read', toolCallId: `${selection.selector}-preview`, args: { path: firstArtifact } },
+        { type: 'tool_execution_end', toolName: 'read', toolCallId: `${selection.selector}-preview`,
+          result: { content: [{ type: 'text', text: `{ "selection": "${selection.selector}", … }\n\n[raw output: ${finalArtifact}]\n\nWall time: 0.04 seconds` }] } },
+      )
+      recoveryEvents.push(
+        { type: 'tool_execution_start', toolName: 'read', toolCallId: `${selection.selector}-document`, args: { path: finalArtifact } },
+        { type: 'tool_execution_end', toolName: 'read', toolCallId: `${selection.selector}-document`,
+          result: { content: [{ type: 'text', text: `${result.stdout}\n\nWall time: 0.03 seconds` }] } },
+      )
+    }
+    const names = selections.map(selection => selection.name)
+    const writeEvent = JSON.parse(configurationWrite()) as Record<string, unknown>
+    const complete = recoveryEvents.map(event => JSON.stringify(event)).join('\n')
+    expect(await selectedContractsGate(root, [`${complete}\n${configurationWrite()}`], names)).toMatchObject({ passed: true })
+
+    const pytestRead = recoveryEvents.findIndex(event => event.type === 'tool_execution_start' && event.toolCallId === 'pytest-document')
+    const premature = [...recoveryEvents.slice(0, pytestRead), writeEvent, ...recoveryEvents.slice(pytestRead)]
+    const wrong = recoveryEvents.map(event => event.type === 'tool_execution_start' && event.toolCallId === 'inline-document'
+      ? { ...event, args: { path: 'artifact://unlinked' } }
+      : event)
+    const unfinished = recoveryEvents.filter(event => !(event.type === 'tool_execution_end' && event.toolCallId === 'go-document'))
+    const failed = recoveryEvents.map(event => event.type === 'tool_execution_end' && event.toolCallId === 'go-document'
+      ? { ...event, isError: true, result: { ...event.result!, isError: true, details: { exitCode: 1 } } }
+      : event)
+    const staleResponse = JSON.parse(responses.get('@focused-spec/runner-pytest')!) as { document: { content: string } }
+    staleResponse.document.content = 'stale installed contract'
+    const stale = recoveryEvents.map(event => event.type === 'tool_execution_end' && event.toolCallId === 'pytest-document'
+      ? { ...event, result: { content: [{ type: 'text' as const, text: JSON.stringify(staleResponse) }] } }
+      : event)
+    for (const rejected of [premature, wrong, unfinished, failed, stale]) {
+      expect(await selectedContractsGate(root, [rejected.map(event => JSON.stringify(event)).join('\n')], names)).toMatchObject({ passed: false })
+    }
   })
 
   it('rejects duplicate behavioral sources beside executable scenarios', async () => {
@@ -809,6 +929,30 @@ describe('agent eval harness', () => {
     expect(result.gates.some(gate => gate.name === 'main-scope-evidence')).toBe(false)
   }, 120_000)
 
+  it('scores SDK repair by verified outcome rather than integration reading', async () => {
+    const driver = (repair: boolean): AgentDriver => ({
+      async run(request) {
+        const packages = await glob('../packages/focused-spec-scenarios-typescript-*.tgz', { cwd: request.workspace, absolute: true })
+        if (packages.length !== 1) throw new Error('expected one independently packed scenario SDK')
+        const installed = await runProcess('npm', ['install', '--prefer-offline', '--save-dev', '--ignore-scripts', '--no-audit', '--no-fund', packages[0]!], { cwd: request.workspace, timeoutMs: 120_000 })
+        if (installed.code !== 0) throw new Error(installed.stderr)
+        if (repair) await cp(join(repository, 'examples/scenarios/typescript/specifications/account.driver.mjs'), join(request.workspace, 'specifications/account.driver.mjs'))
+        const content = await readFile(join(request.workspace, 'node_modules/focused-spec/guidance/workflow.md'), 'utf8')
+        const metadata = JSON.parse(await readFile(join(request.workspace, 'node_modules/focused-spec/package.json'), 'utf8')) as { name: string; version: string }
+        const response = { protocolVersion: 1, package: { name: metadata.name, version: metadata.version }, topic: 'workflow', content }
+        return { success: true, output: `${skillReadTranscript()}\n${guidanceTranscript(request.workspace, { response })}`, exitCode: 0, durationMs: 1 }
+      },
+    })
+    const repaired = await runEval({ caseId: 'executable-authoring-sdk' }, driver(true))
+    expect(repaired.gates.filter(gate => !gate.passed)).toEqual([])
+    expect(repaired.passed).toBe(true)
+    expect(repaired.observations).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'focused-integration-acquired', passed: false })]))
+    const falseGreen = await runEval({ caseId: 'executable-authoring-sdk' }, driver(false))
+    expect(falseGreen.passed).toBe(false)
+    expect(falseGreen.gates.find(gate => gate.name === 'executable-application-sensitivity')).toMatchObject({ passed: false })
+    expect(falseGreen.observations).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'focused-integration-acquired', passed: false })]))
+  }, 180_000)
+
   it('records a failed agent turn without running downstream judges', async () => {
     const result = await runEval({ caseId: 'files-source-bootstrap' }, new FakeDriver())
     expect(result.passed).toBe(false)
@@ -876,6 +1020,10 @@ describe('agent eval harness', () => {
       name: 'focused-workflow-acquired', passed: true,
     })
     expect(await guidanceActivationGate(root, [artifactGuidanceTranscript(root)])).toMatchObject({ passed: true })
+    const rawCliOutput = '{"protocolVersion":1,"content":"# Workflow…[+5931]\n[raw output: artifact://0]\n\n\nWall time: 0.21 seconds'
+    expect(await guidanceActivationGate(root, [artifactGuidanceTranscript(root, { rawCliOutput })])).toMatchObject({ passed: true })
+    expect(await guidanceActivationGate(root, [artifactGuidanceTranscript(root, { rawCliOutput, readComplete: false })])).toMatchObject({ passed: false })
+    expect(await guidanceActivationGate(root, [artifactGuidanceTranscript(root, { rawCliOutput, artifact: 'artifact://1' })])).toMatchObject({ passed: false })
     for (const transcript of [
       artifactGuidanceTranscript(root, { artifact: 'artifact://1' }),
       artifactGuidanceTranscript(root, { readBeforeCommand: true }),
@@ -890,15 +1038,74 @@ describe('agent eval harness', () => {
     ]) expect(await guidanceActivationGate(root, [transcript])).toMatchObject({ passed: false })
   })
 
-  it('rejects global guidance in place of the project installation', async () => {
-    const root = await activationFixture()
-    const args = 'instructions --protocol 1 --topic workflow --json'
-    for (const command of [`focused-spec ${args}`, `/usr/local/bin/focused-spec ${args}`,
-      `${join(root, '..', 'other', 'node_modules', '.bin', 'focused-spec')} ${args}`]) {
-      expect(await guidanceActivationGate(root, [guidanceTranscript(root, { command })]), command).toMatchObject({ passed: false })
+  it('resolves guidance with the evaluated driver executable search path', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-eval-driver-path-'))
+    roots.push(root)
+    await installFocusedPackage(root)
+    await mkdir(join(root, 'node_modules/.bin'), { recursive: true })
+    await symlink('../focused-spec/dist/cli.js', join(root, 'node_modules/.bin/focused-spec'))
+    const args = ['instructions', '--protocol', '1', '--topic', 'workflow', '--json']
+    const result = await runProcess('focused-spec', args, { cwd: root, timeoutMs: 30_000,
+      env: { ...process.env, PATH: `${join(root, 'node_modules/.bin')}${delimiter}${process.env.PATH ?? ''}` } })
+    expect(result.code).toBe(0)
+    const response: unknown = JSON.parse(result.stdout)
+    const command = `focused-spec ${args.join(' ')}`
+    const transcript = artifactGuidanceTranscript(root, { response, command })
+    expect(await guidanceActivationGate(root, [transcript])).toMatchObject({ passed: true })
+    expect(await guidanceActivationGate(root, [artifactGuidanceTranscript(root, { response, command, artifact: 'artifact://1' })])).toMatchObject({ passed: false })
+    const localNpx = `npx --no-install focused-spec ${args.join(' ')}`
+    const npmResult = await runProcess('npx', ['--no-install', 'focused-spec', ...args], {
+      cwd: root, timeoutMs: 30_000, env: { ...process.env, npm_config_offline: 'true' },
+    })
+    expect(npmResult.code, npmResult.stderr).toBe(0)
+    const npmResponse: unknown = JSON.parse(npmResult.stdout)
+    expect(await guidanceActivationGate(root, [artifactGuidanceTranscript(root, { response: npmResponse, command: localNpx })])).toMatchObject({ passed: true })
+    for (const command of [localNpx.replace('--no-install ', ''), localNpx.replace('focused-spec ', 'focused-spec@latest '), `${localNpx} && echo done`]) {
+      expect(await guidanceActivationGate(root, [guidanceTranscript(root, { response: npmResponse, command })])).toMatchObject({ passed: false })
     }
-    const local = `${join(root, 'node_modules', '.bin', 'focused-spec')} ${args}`
-    expect(await guidanceActivationGate(root, [guidanceTranscript(root, { command: local })])).toMatchObject({ passed: true })
+    await rm(join(root, 'node_modules/.bin/focused-spec'))
+    expect(await guidanceActivationGate(root, [guidanceTranscript(root, { response: npmResponse, command: localNpx })])).toMatchObject({ passed: false })
+  })
+
+  it('rejects chained guidance until a standalone request completes', async () => {
+    const root = await activationFixture()
+    const cli = `${JSON.stringify(process.execPath)} ${JSON.stringify(join(root, 'node_modules/focused-spec/dist/cli.js'))}`
+    const combined = artifactGuidanceTranscript(root, { command: `${cli} --version && ${cli} instructions --protocol 1 --topic workflow --json` })
+    expect(await guidanceActivationGate(root, [combined])).toMatchObject({ passed: false })
+    expect(await guidanceActivationGate(root, [combined + '\n' + guidanceTranscript(root)])).toMatchObject({ passed: true })
+  })
+
+  it('accepts guidance from the selected installed CLI', async () => {
+    const root = await activationFixture()
+    const external = await activationFixture()
+    const cli = join(external, 'node_modules/focused-spec/dist/cli.js')
+    const version = '8.0.0'
+    const content = '# Selected external workflow\n'
+    await put(external, 'node_modules/focused-spec/package.json', JSON.stringify({ name: 'focused-spec', version }))
+    await put(external, 'node_modules/focused-spec/guidance/workflow.md', content)
+    const response = { protocolVersion: 1, package: { name: 'focused-spec', version }, topic: 'workflow', content }
+    const args = 'instructions --protocol 1 --topic workflow --json'
+    const direct = `${JSON.stringify(process.execPath)} ${JSON.stringify(cli)} ${args}`
+    const bin = `${JSON.stringify(join(external, 'node_modules/.bin/focused-spec'))} ${args}`
+    for (const command of [direct, bin]) {
+      expect(await guidanceActivationGate(root, [guidanceTranscript(root, { command, response })])).toMatchObject({ passed: true })
+      expect(await guidanceActivationGate(root, [guidanceTranscript(root, { command })])).toMatchObject({ passed: false })
+    }
+    await rm(join(root, 'node_modules/.bin/focused-spec'))
+    const originalPath = process.env.PATH
+    try {
+      const binDirectory = join(external, 'node_modules/.bin')
+      process.env.PATH = binDirectory
+      expect(await guidanceActivationGate(root, [guidanceTranscript(root, { command: `focused-spec ${args}`, response })])).toMatchObject({ passed: true })
+      await symlink(process.execPath, join(root, 'node_modules/.bin/focused-spec'))
+      expect(await guidanceActivationGate(root, [guidanceTranscript(root, { command: `focused-spec ${args}`, response })])).toMatchObject({ passed: false })
+    } finally {
+      if (originalPath === undefined) delete process.env.PATH
+      else process.env.PATH = originalPath
+    }
+    await rm(join(root, 'node_modules'), { recursive: true })
+    expect(await guidanceActivationGate(root, [guidanceTranscript(root, { command: direct, response })])).toMatchObject({ passed: true })
+    expect(await guidanceActivationGate(root, [guidanceTranscript(root, { command: direct, response, failed: true })])).toMatchObject({ passed: false })
   })
 
   it('rejects absent or legacy local guidance activation', async () => {
@@ -909,9 +1116,7 @@ describe('agent eval harness', () => {
     expect(await guidanceActivationGate(root, [guidanceTranscript(root, { command: help,
       rawOutput: 'Usage: focused-spec <command> [options]' })])).toMatchObject({ passed: false })
     await rm(join(root, 'node_modules', 'focused-spec', 'package.json'))
-    expect(await guidanceActivationGate(root, [guidanceTranscript(root)])).toMatchObject({
-      passed: false, detail: 'project-local focused-spec package metadata or workflow guidance is missing or invalid',
-    })
+    expect(await guidanceActivationGate(root, [guidanceTranscript(root)])).toMatchObject({ passed: false })
   })
 
   it('rejects completed but unusable guidance responses', async () => {

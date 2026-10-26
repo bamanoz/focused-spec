@@ -119,7 +119,7 @@ async function installPackedFocusedSpec(workspace: string, includeGherkin: boole
   ]
   try {
     const packages = await Promise.all(packageNames.map(name => packWorkspacePackage(cache, join(root, 'packages', name))))
-    await requireCommand('npm', ['install', '--ignore-scripts', '--no-save', ...packages], workspace, 180_000)
+    await requireCommand('npm', ['install', '--prefer-offline', '--ignore-scripts', '--no-save', ...packages], workspace, 180_000)
   } finally {
     await rm(cache, { recursive: true, force: true })
   }
@@ -207,7 +207,7 @@ export async function prepareNativeWorkspace(workspace: string, name: NativeCase
     await put(workspace, 'agent-os/standards/index.yml', '{}\n')
   }
   if (name === 'bmad') {
-    const repo = 'https://github.com/bmad-code-org/BMAD-METHOD/tree/48f0ce37e1fc378d6255c90e1b155f2212a6fe33/skills'
+    const repo = 'https://codeload.github.com/bmad-code-org/BMAD-METHOD/tar.gz/48f0ce37e1fc378d6255c90e1b155f2212a6fe33'
     const skills = ['bmad', 'bmod-core-tools', 'bmod-method', 'bmad-spec']
     await requireCommand('npx', ['skills', 'add', repo, ...skills.flatMap(value => ['--skill', value]), '--agent', 'pi', '--copy', '-y'], workspace, 120_000)
     for (const value of skills) {
@@ -296,14 +296,23 @@ function nativeIdentity(name: NativeCase, source: string, binding?: NativeBindin
   return { parsed, marked, bound, valid, text }
 }
 
+function boundNativeOutcome(name: NativeCase, source: string, text: string, boundItems: number): {
+  matches: boolean
+  status: 'unjudged' | 'match' | 'mismatch'
+} {
+  if (boundItems !== 1) return { matches: false, status: 'unjudged' }
+  const matches = name === 'bmad' ? atomicBlockedOutcome(source)
+    : /block/iu.test(text) && /valid/iu.test(text) && deniesAuthentication(text)
+  return { matches, status: matches ? 'match' : 'mismatch' }
+}
+
 export function nativeSingleSourceGate(name: NativeCase, source: string, binding?: NativeBinding): Gate {
   const identity = nativeIdentity(name, source, binding)
-  const preserved = name === 'bmad' ? atomicBlockedOutcome(source)
-    : /block/iu.test(identity.text) && /valid/iu.test(identity.text) && deniesAuthentication(identity.text)
+  const boundOutcome = boundNativeOutcome(name, source, identity.text, identity.bound.length)
   const noDuplicate = (name !== 'openspec' || (source.match(/^#### Scenario:/gmu) ?? []).length === 1)
     && (name !== 'spec-kit' || (source.match(/^\d+\. \*\*Given\*\*/gmu) ?? []).length === 1)
-  return gate('native-item-single-source', identity.valid && preserved && noDuplicate,
-    `bound native items=${identity.bound.length} native text preserved=${preserved} identity valid=${identity.valid} extra scenario=${!noDuplicate} parser violations=${identity.parsed.violations.length}`)
+  return gate('native-item-single-source', identity.valid && boundOutcome.matches && noDuplicate,
+    `bound native items=${identity.bound.length} bound outcome=${boundOutcome.status} identity valid=${identity.valid} extra scenario=${!noDuplicate} parser violations=${identity.parsed.violations.length}`)
 }
 
 export function creationGate(name: NativeCase, source: string, binding?: NativeBinding): Gate {
@@ -322,13 +331,12 @@ export function creationGate(name: NativeCase, source: string, binding?: NativeB
     gherkin: /^ *Scenario: [^\n]+/mu.test(source) && /^ *Given /mu.test(source)
       && /^ *When /mu.test(source) && /^ *Then /mu.test(source),
   }
-  const semanticOutcome = name === 'bmad' ? atomicBlockedOutcome(source)
-    : /block/iu.test(identity.text) && /valid/iu.test(identity.text) && deniesAuthentication(identity.text)
+  const boundOutcome = boundNativeOutcome(name, source, identity.text, identity.bound.length)
   const noDuplicate = (name !== 'openspec' || (source.match(/^#### Scenario:/gmu) ?? []).length === 1)
     && (name !== 'spec-kit' || (source.match(/^\d+\. \*\*Given\*\*/gmu) ?? []).length === 1)
-  const passed = forms[name] && semanticOutcome && identity.valid && noDuplicate
+  const passed = forms[name] && boundOutcome.matches && identity.valid && noDuplicate
   return gate('native-item-created', passed,
-    `native form=${forms[name]} blocked/valid/rejected outcome=${semanticOutcome} bound native items=${identity.bound.length} identity valid=${identity.valid} extra scenario=${!noDuplicate} parser violations=${identity.parsed.violations.length}`)
+    `native form=${forms[name]} bound outcome=${boundOutcome.status} bound native items=${identity.bound.length} identity valid=${identity.valid} extra scenario=${!noDuplicate} parser violations=${identity.parsed.violations.length}`)
 }
 export function hostWorkflowGate(name: NativeCase, transcript: string, create = false): Gate {
   const skill = name === 'openspec' ? create ? 'openspec-propose' : 'openspec-update-change'

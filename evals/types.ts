@@ -82,6 +82,7 @@ export interface EvalResult {
   readonly workspace: string
   readonly turns: readonly AgentResult[]
   readonly gates: readonly EvalGate[]
+  readonly observations: readonly EvalGate[]
   readonly diagnostic: EvalDiagnostic | null
 }
 

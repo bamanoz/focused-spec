@@ -1,6 +1,6 @@
 # CLI reference
 
-The binary is `focused-spec`. During agent-led BDD or SDD work, the agent loads the installed skill when its description applies—including SDK-only executable-scenario and application-driver work without a host framework—and invokes the explicit project-local CLI for guidance. The user need not call either separately. That agent-tooling prerequisite does not make the CLI an SDK runtime dependency or require evidence configuration for native execution. Shell examples here are for optional manual/CI use after local installation, with `npx focused-spec` as launcher. The grammar below omits the launcher; the loader uses the explicit local CLI, not npx.
+The binary is `focused-spec`. During agent-led BDD or SDD work, the agent loads the installed skill when its description applies—including SDK-only executable-scenario and application-driver work without a host framework—and selects one installed CLI for guidance: an explicit path when supplied, otherwise a compatible project/workspace installation when present, otherwise PATH/global. The user need not call either separately. That agent-tooling prerequisite does not make the CLI an SDK runtime dependency or require evidence configuration for native execution. Shell examples here use a project-pinned package and `npx focused-spec` for optional manual/CI operation; the loader invokes its selected executable directly.
 
 ## Commands
 
@@ -13,7 +13,7 @@ focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario 
 focused-spec list [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--json]
 focused-spec show <id> [--root <path>] [--config <path>] [--scope <name>] [--json]
 focused-spec plugin-docs (--format <id> | --runner <id> | --package <specifier>) [--root <path>] [--config <path>] [--json]
-focused-spec instructions [--protocol <version>] [--topic workflow|integration|formats|runners] [--json]
+focused-spec instructions [--protocol <version>] [--topic workflow|review|author-revise|upgrade|verify|integration|formats|runners] [--json]
 focused-spec init [path] [--tools <comma-separated IDs>] [--dry-run] [--json] [--replace] [--no-animation]
 ```
 
@@ -163,7 +163,7 @@ Unavailable packages, registrations or documents; invalid configuration required
 
 The interactive installer alone reveals the eight-row golden `f` beside a short explanation over 2.2 seconds. Any key skips the reveal, but Enter is still needed to enter selection; `--no-animation` shows the final glyph immediately. No alternate terminal screen or whole-display clear is used. The logo does not repeat in the picker. `NO_COLOR`, `TERM=dumb`, reduced motion and narrow terminals show a usable static fallback; installer status never implies evidence success. Cancel, error and interruption restore terminal input and cursor. Other commands and explicit `--tools` never show this welcome.
 
-MiniMax installs only `~/.minimax/skills/focused-spec/SKILL.md`, never a project `.minimax`/`.mavis`, settings, commands or global package. Home resolution/inspection occurs only when it is selected. Missing or non-directory home roots fail without creating a home. The global loader still resolves the consuming project’s local CLI, not a global installation.
+MiniMax installs only `~/.minimax/skills/focused-spec/SKILL.md`, never a project `.minimax`/`.mavis`, settings, commands or global package. Home resolution/inspection occurs only when it is selected. Missing or non-directory home roots fail without creating a home. The global loader uses the same installed-CLI selection policy as every other loader; it does not require a project-local installation.
 
 All selected assets and destinations across both canonical roots are checked before any mutation. Missing files are installed; byte-identical files are unchanged. Any divergent selected file in either root blocks all writes in both unless `--replace` explicitly authorizes replacement. Extras and unselected targets are preserved. Missing/non-directory roots, symlinked components below either root, non-directory ancestors and non-regular destinations fail even with `--replace`. A symlink naming a root itself resolves to its canonical directory. Missing, unreadable or empty selected assets fail without fallback. Destination state is rechecked before writing; this is not an atomic transaction or a sandbox against hostile races.
 
@@ -197,17 +197,17 @@ npx focused-spec init --tools minimax-code --dry-run --json
 
 ## Package-owned agent guidance
 
-`instructions` reads authoritative guidance from the invoked `focused-spec` package: general workflow (default), composition selection (`--topic integration`), format obligations (`--topic formats`), or runner obligations (`--topic runners`). Integration is available from core alone before optional packages or configuration exist. Its compact nonexclusive capability map is orientation, not a plugin manual, allowlist or host compatibility matrix. Exact syntax/selectors come from selected installed plugin documents. All topics work offline, create no files, and perform no validation or evidence execution. Invoke the consuming project's explicit installed CLI, not an unverified global binary or downloading `npx` invocation.
+`instructions` reads authoritative guidance from the invoked `focused-spec` package. The default `workflow` topic is a compact router; focused operation topics are `review`, `author-revise`, `upgrade`, and `verify`. Shared topics provide composition selection (`integration`), format obligations (`formats`), and runner obligations (`runners`). Integration is available from core alone before optional packages or configuration exist. Its compact nonexclusive capability map is orientation, not a plugin manual, allowlist or host compatibility matrix. Exact syntax and selectors come from selected installed plugin documents resolved from an explicit project root. All topics work offline, create no files, and perform no project validation or evidence execution. Invoke one selected installed CLI and keep it for the workflow step; it may be project-local, global, or explicitly located.
 
-The previous `agent-guide` command is not an alias. Refresh the installed loader when moving to `instructions`; protocol 1, existing topic names, and response fields remain compatible. Additional on-demand topics do not change the loader protocol.
+The previous `agent-guide` command is not an alias. Refresh an installed loader when moving to `instructions`. Protocol 1 and its response fields remain unchanged as focused topics are added.
 
-For example, from the established local installation root:
+For example, from a project-pinned installation:
 
 ```sh
 ./node_modules/.bin/focused-spec instructions --protocol 1 --topic integration --json
 ```
 
-The workflow routes absent or explicitly reconsidered integration to this topic, preserves supported existing choices for ordinary tasks, and retains its upgrade procedure for incompatible setups. Guidance retrieval does not authorize installation, configuration or migration.
+The workflow routes each operation to its focused topic, absent or explicitly reconsidered integration to `integration`, and incompatible setups to `upgrade`. Guidance retrieval does not authorize installation, configuration or migration.
 
 The `integration` topic also carries the pinned .NET SDK `0.10.1` GitHub Release installation procedure: public artifact URL, SHA-256, project-local NuGet feed, preserved custom sources/mapping, and repeatable CI restore. The procedure is served offline without a checkout; performing the download and installation requires network access and authorization. It does not claim nuget.org publication or add a .NET CLI runner. See the human-facing [installation guide](../guides/install.md#net-sdk-from-github-releases).
 
@@ -222,16 +222,16 @@ Loader protocol defaults to 1; it is independent of package versions, configurat
 }
 ```
 
-The response's `topic` is exactly the requested `workflow`, `integration`, `formats`, or `runners`; the default remains `workflow`. Every topic ships with core, independently of whether adapter packages are installed. The thin loader acquires shared format/runner guidance from the same project-local installation only when the workflow calls for that work, then acquires each selected plugin's document through a separate [`plugin-docs`](#installed-plugin-documentation) request.
+The response's `topic` is exactly the requested `workflow`, `review`, `author-revise`, `upgrade`, `verify`, `integration`, `formats`, or `runners`; the default remains `workflow`. Every topic ships with core, independently of whether adapter packages are installed. The thin loader selects the executable and obtains the compact router. That router acquires the operation/shared topic from the same executable, then separately acquires each selected plugin's document against the explicit project root through [`plugin-docs`](#installed-plugin-documentation).
 
-Acquire each response with a standalone tool command. Even an executable check such as `test -x … && <CLI> instructions …` is a combined call; perform checks separately. Do not chain guidance with `init --json`, installation, help or another request. If this happens, request guidance again by itself; extracting one object from combined output is not accepted acquisition. A host truncation notice leaves acquisition unfinished until a completed read of that successful command's exact linked full-output artifact delivers the complete protocol response. Hidden metadata, a clipped preview, another call's artifact, or extracted `content` alone is insufficient. The installed loader owns recovery and response validation.
+Acquire each response with a standalone tool command. Even an executable check such as `test -x … && <CLI> instructions …` is a combined call; perform checks separately. Do not chain guidance with `init --json`, installation, help or another request. If this happens, request guidance again by itself; extracting one object from combined output is not accepted acquisition. A host truncation notice leaves acquisition unfinished until a completed read of that successful command's exact linked full-output artifact delivers the complete protocol response. Hidden metadata, a clipped preview, another call's artifact, or extracted `content` alone is insufficient. The CLI-owned workflow router owns this response handling once; the thin loader does not duplicate it.
 
 Text output identifies the installed package version, protocol, and topic before the Markdown. An unsupported protocol, invalid option/topic, missing value, or incomplete package exits nonzero with stderr diagnostics and no usable guidance on stdout. An explicit unsupported protocol is never silently replaced with the default. No legacy full-text skill or alternate installation is used as a fallback.
 
 ```sh
 npx --no-install focused-spec instructions --protocol 1 --json
-npx --no-install focused-spec instructions --protocol 1 --topic formats --json
-npx --no-install focused-spec instructions --protocol 1 --topic runners --json
+npx --no-install focused-spec instructions --protocol 1 --topic author-revise --json
+npx --no-install focused-spec instructions --protocol 1 --topic verify --json
 ```
 
 ## Validation
@@ -447,4 +447,4 @@ timings: validation 18.00 ms, resolution 9.00 ms, execution 24.00 ms, total 53.0
 
 The default config is `.focused-spec/config.yaml` under `--root`; a relative `--config` path resolves from that root. Configuration requires `version: 5`, a nonempty `specifications.formats` ID map, a nonempty `specifications.documents` list, and a `runners` map. Every document layout names one configured Format API 2 adapter. Formats and runners each declare exactly one installed `package` or project-contained `module`, plus JSON-compatible options and bounded timeouts; runners may additionally declare `cwd`. Package/subpath resolution uses ESM import conditions from the consuming project and never a global or downloaded fallback. Core rejects top-level `evidence`; inline and external storage are selected through format packages and opaque format options.
 
-Versions 1–4 and Format API 1 have no compatibility alias. Unsupported `REVISES` and inline ID/EVIDENCE selected through a non-inline format also fail. Diagnostics identify an explicit local CLI command for loading the upgrade workflow from the installation root; on a locally installed npm project, a human can use `npx --no-install focused-spec instructions --protocol 1 --topic workflow --json`. The installed loader uses its resolved executable, not npx. The workflow is served without loading obsolete configuration. A supported historical inline project may select the API-2 inline adapter and keep its ID/EVIDENCE rows while removing `REVISES`; external evidence moves into explicit registry-adapter options. The [configuration guide](../guides/configuration.md#migrate-older-configurations) preserves the full migration rules.
+Versions 1–4 and Format API 1 have no compatibility alias. Unsupported `REVISES` and inline ID/EVIDENCE selected through a non-inline format also fail. Diagnostics identify how to load the `upgrade` topic from the selected executable; for a project-pinned npm installation, a human can use `npx --no-install focused-spec instructions --protocol 1 --topic upgrade --json`. The workflow is served without loading obsolete configuration and has no project-root option. A supported historical inline project may select the API-2 inline adapter and keep its ID/EVIDENCE rows while removing `REVISES`; external evidence moves into explicit registry-adapter options. The [configuration guide](../guides/configuration.md#migrate-older-configurations) preserves the full migration rules.

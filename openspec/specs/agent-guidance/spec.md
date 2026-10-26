@@ -7,7 +7,7 @@ Offline package-owned agent guidance with explicit loader compatibility and inst
 ## Requirements
 
 ### Requirement: Offline package-owned guidance
-The CLI SHALL provide `instructions [--protocol <version>] [--topic workflow|integration|formats|runners] [--json]` independently of project configuration, evidence registries, native documents, plugins, and network access.
+The CLI SHALL serve offline package-owned guidance through `instructions [--protocol <version>] [--topic <topic>] [--json]` without project configuration, evidence, documents, plugins, or network access. Topics SHALL be `workflow`, `review`, `author-revise`, `upgrade`, `verify`, `integration`, `formats`, and `runners`. The selected installation MAY be project-local, global, or explicitly located; project ownership SHALL NOT be required.
 
 <!-- focused-spec:id=guidance.delivery.offline -->
 #### Scenario: Workflow is available before project setup
@@ -37,13 +37,25 @@ The CLI SHALL provide `instructions [--protocol <version>] [--topic workflow|int
 - **THEN** text and protocol-1 JSON output deliver the serving package's complete integration guidance without reading project configuration, resolving or importing plugins, downloading packages, executing evidence or writing files
 - **AND** The guidance SHALL provide a compact nonexclusive map of behavioral-source, evidence and execution choices, distinguish SDK-only execution from optional CLI integration, and refer concrete syntax and selectors to the selected package's public contract. It SHALL NOT require repository documentation or a network connection to understand the selection procedure.
 
+<!-- focused-spec:id=guidance.delivery.installation-independent -->
+#### Scenario: An external installation serves its own guidance
+- **WHEN** a consumer invokes a compatible installed CLI outside the project, with no project-local CLI or with a different project-local CLI present
+- **THEN** the invoked CLI returns its own package identity and guidance without requiring project ownership or substituting the project's installation
+- **AND** Configuration and plugin resolution SHALL remain relative to the consuming project root, not the CLI installation.
+
+<!-- focused-spec:id=guidance.delivery.focused-topic -->
+#### Scenario: Focused guidance is available without loading project state
+- **WHEN** an offline consumer requests `review`, `author-revise`, `upgrade`, or `verify` with invalid project configuration
+- **THEN** the CLI returns the selected package-owned topic without reading configuration, loading plugins, executing evidence, or writing project files
+- **AND** each topic SHALL contain the obligations specific to its route and SHALL direct selected format and runner work to their existing public-contract requests.
+
 ### Requirement: Versioned guidance response
-For protocol 1, JSON output SHALL be one object with `protocolVersion: 1`, `package: { name: "focused-spec", version: <installed package version> }`, `topic: "workflow" | "integration" | "formats" | "runners"`, and nonempty Markdown `content`.
+For protocol 1, JSON output SHALL be one object with `protocolVersion: 1`, `package: { name: "focused-spec", version: <installed package version> }`, `topic: "workflow" | "review" | "author-revise" | "upgrade" | "verify" | "integration" | "formats" | "runners"`, and nonempty Markdown `content`.
 
 <!-- focused-spec:id=guidance.delivery.compatible-update -->
 #### Scenario: An unchanged loader receives an updated package's guidance
 - **WHEN** a consumer replaces one protocol-1 package with another protocol-1 package while retaining the same loader request
-- **THEN** the next guidance request returns the replacement package's version and workflow rather than the previous installation's instructions
+- **THEN** the next guidance request returns the replacement package's version and requested topic rather than the previous installation's instructions
 - **AND** Text output SHALL identify the serving package version, protocol, and topic and contain the corresponding guidance. Package versions, configuration versions, and runner API versions SHALL NOT be interpreted as loader protocol versions. A compatible package update SHALL NOT require changing the loader merely because the package version changed.
 
 ### Requirement: Incompatible requests fail closed
@@ -87,10 +99,15 @@ The CLI SHALL reject obsolete config/format APIs, unsupported REVISES and inline
 
 
 ### Requirement: Plugin-independent shared guidance
-The workflow, formats and runners topics SHALL retain shared core contracts and verification rules without bundled catalogs, dialects or framework-specific procedures. They SHALL direct agents to explicit installed plugin documentation with provenance; composed plugins remain responsible for explaining their own nested configuration, followed through separate agent requests rather than core discovery.
+The workflow router and shared topics SHALL retain package-owned contracts and verification boundaries without plugin catalogs, dialects, or framework-specific procedures. They SHALL direct explicit installed plugin documentation requests with provenance; composed plugins SHALL document nested options for separate requests, not core discovery. The loader SHALL contain only activation and routing, not duplicate procedure.
 
 <!-- focused-spec:id=guidance.plugins.public-contracts -->
 #### Scenario: Agent-facing contracts come from selected installed plugins
 - **WHEN** an agent uses the shared guidance to acquire documentation for a selected composing format and its parser
 - **THEN** the installed CLI supplies each package's independently owned complete contract through explicit requests without a core-maintained plugin allowlist, plugin imports, or automatic nested aggregation
+
+<!-- focused-spec:id=guidance.plugins.router -->
+#### Scenario: The loader routes to package-owned focused guidance
+- **WHEN** an agent loads the installed skill for a focused-spec workflow step and the router selects a review, author-revise, upgrade, or verify operation
+- **THEN** the agent requests that topic from the same selected installed CLI rather than relying on procedure embedded in the loader or a truncated workflow response
 

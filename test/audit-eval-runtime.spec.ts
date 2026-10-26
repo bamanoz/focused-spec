@@ -16,6 +16,8 @@ vi.mock('../evals/provision.ts', () => ({
     await mkdir(join(path, 'node_modules/focused-spec/guidance'), { recursive: true })
     await writeFile(join(path, 'node_modules/focused-spec/package.json'), JSON.stringify({ name: 'focused-spec', version: '0.9.0' }))
     await writeFile(join(path, 'node_modules/focused-spec/guidance/workflow.md'), '# Workflow\nUse exact evidence.\n')
+    await mkdir(join(path, 'node_modules/focused-spec/dist'), { recursive: true })
+    await writeFile(join(path, 'node_modules/focused-spec/dist/cli.js'), '#!/usr/bin/env node\n')
     if (selected.overlay !== undefined) await cp(join(state.repository, 'evals', selected.overlay), path, { recursive: true })
     return { path, finish: async () => {}, cleanup: async () => { await rm(path, { recursive: true, force: true }) } }
   },

@@ -137,6 +137,45 @@ for await (const line of createInterface({ input: process.stdin })) {
     ] }), planSchema, '', redirectedPlan).approvedPaths).toEqual(['agent-os/specs/other/extra.md'])
   })
 
+  it('accepts described companion creation operands without widening approval', () => {
+    const directory = 'agent-os/specs/2026-10-09-1200-blocked-login/'
+    const submittedPlan = [
+      `Create the following four files under \`${directory}\`.`,
+      'Create `shape.md` with the canonical behavioral item.',
+      'Create `plan.md` as the full execution plan, `standards.md` with heading `# Standards for Administrator-blocked Login` and sentence `No applicable standards.`, and `references.md` with heading `# References for Administrator-blocked Login` and these four entries:',
+      'Create `.focused-spec/evidence.yaml` with exactly the required evidence.',
+    ].join('\n\n')
+    const approvedPaths = [
+      `${directory}shape.md`,
+      `${directory}plan.md`,
+      `${directory}standards.md`,
+      `${directory}references.md`,
+      '.focused-spec/evidence.yaml',
+    ]
+    const decision = JSON.stringify({ value: 'Approve and execute', approvedPaths })
+
+    expect(parseElicitationDecision(decision, planSchema, 'Approve plan "blocked-login"…', submittedPlan))
+      .toEqual({ value: 'Approve and execute', approvedPaths })
+
+    const approve = (path: string, plan = submittedPlan) => parseElicitationDecision(JSON.stringify({
+      value: 'Approve and execute', approvedPaths: [path],
+    }), planSchema, '', plan)
+    expect(() => approve(`${directory}unmentioned.md`)).toThrow('proposed')
+    expect(() => approve('agent-os/specs/other/references.md')).toThrow('proposed')
+    expect(() => approve(`${directory}references.md`, [
+      `Create \`${directory}\`.`,
+      'Create `plan.md` as the full plan with a link to `references.md`.',
+    ].join('\n'))).toThrow('proposed')
+    expect(() => approve(`${directory}references.md`, [
+      `Create \`${directory}\`.`,
+      'Should we create `references.md` with existing code references?',
+    ].join('\n'))).toThrow('proposed')
+    expect(() => approve(`${directory}references.md`, [
+      `Create \`${directory}\`.`,
+      'Create `plan.md` as the full plan, `agent-os/specs/other/standards.md` with other standards, and `references.md` with existing references.',
+    ].join('\n'))).toThrow('proposed')
+  })
+
   it('authorizes compact companion lists only within their explicit directory', () => {
     const submittedPlan = 'Create `agent-os/specs/login/plan.md`, `shape.md`, `standards.md`, and `references.md` together before integration.'
     const approvedPaths = ['agent-os/specs/login/plan.md', 'agent-os/specs/login/shape.md', 'agent-os/specs/login/standards.md', 'agent-os/specs/login/references.md']

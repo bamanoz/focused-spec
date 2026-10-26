@@ -176,6 +176,15 @@ function json(stdout: string): Record<string, unknown> {
   return JSON.parse(stdout) as Record<string, unknown>
 }
 
+async function snapshotTree(root: string): Promise<string> {
+  return JSON.stringify(await Promise.all(
+    (await readdir(root, { recursive: true })).sort().map(async path => {
+      const absolute = join(root, path)
+      return [path, (await lstat(absolute)).isFile() ? (await readFile(absolute)).toString('base64') : 'directory']
+    }),
+  ))
+}
+
 interface PtyStep { when: string; send: string }
 
 async function interactiveInit(root: string, home: string, steps: readonly PtyStep[], options: { args?: string[]; rows?: number; columns?: number; env?: Record<string, string>; welcome?: boolean } = {}): Promise<{ code: number | null; output: string }> {
@@ -580,6 +589,41 @@ describe('focused-spec CLI', () => {
     expect(await readdir(home)).toEqual([])
   }, 40_000)
 
+  it('serves guidance from an installation outside the project', async () => {
+    const installation = await mkdtemp(join(tmpdir(), 'focused-guide-installation-'))
+    roots.push(installation)
+    await Promise.all([
+      cp(new URL('../packages/core/dist/', import.meta.url), join(installation, 'dist'), { recursive: true }),
+      symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(installation, 'node_modules'), 'dir'),
+    ])
+    const installedMetadata = JSON.parse(await readFile(new URL('../packages/core/package.json', import.meta.url), 'utf8')) as Record<string, unknown>
+    const version = '0.0.0-selected-installation'
+    const content = '# Guidance owned by the selected serving package\n'
+    await put(installation, 'package.json', `${JSON.stringify({ ...installedMetadata, version }, null, 2)}\n`)
+    await put(installation, 'guidance/workflow.md', content)
+
+    for (const hasProjectInstallation of [false, true]) {
+      const root = await mkdtemp(join(tmpdir(), `focused-guide-external-${hasProjectInstallation ? 'other-' : 'none-'}`))
+      roots.push(root)
+      await put(root, 'package.json', '{"name":"external-guidance-consumer","private":true,"type":"module"}\n')
+      await put(root, '.focused-spec/config.yaml', 'invalid: [')
+      await put(root, 'format.mjs', 'throw new Error("project plugins must not load")')
+      await put(root, 'guidance/workflow.md', '# Consumer fallback must not win\n')
+      if (hasProjectInstallation) {
+        await put(root, 'node_modules/focused-spec/package.json', '{"name":"focused-spec","version":"9.9.9-other"}\n')
+        await put(root, 'node_modules/focused-spec/guidance/workflow.md', '# Other installed guidance must not win\n')
+      }
+      const before = await snapshotTree(root)
+      const result = spawnSync(process.execPath, [join(installation, 'dist/cli.js'), 'instructions', '--protocol', '1', '--topic', 'workflow', '--json'], {
+        cwd: root, encoding: 'utf8', env: { ...process.env, npm_config_offline: 'true', HTTPS_PROXY: 'http://127.0.0.1:1' },
+      })
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stderr).toBe('')
+      expect(json(result.stdout)).toEqual({ protocolVersion: 1, package: { name: 'focused-spec', version }, topic: 'workflow', content })
+      expect(await snapshotTree(root)).toBe(before)
+    }
+  })
+
   it('serves workflow guidance without project setup', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-guide-offline-'))
     roots.push(root)
@@ -603,6 +647,50 @@ describe('focused-spec CLI', () => {
     expect(text.status, text.stderr).toBe(0)
     expect(text.stdout).toContain(String(response.content))
     expect(text.stdout).toContain(metadata.version)
+  })
+
+  it('serves focused guidance topics without project setup', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-topics-offline-'))
+    roots.push(root)
+    await put(root, '.focused-spec/config.yaml', 'invalid: [')
+    await put(root, '.focused-spec/evidence.yaml', 'invalid: [')
+    await put(root, 'format.mjs', 'throw new Error("project plugins must not load")')
+    const topics = ['review', 'author-revise', 'upgrade', 'verify'] as const
+    for (const topic of topics) await put(root, `guidance/${topic}.md`, `# Untrusted consumer ${topic} guidance\n`)
+    const before = await snapshotTree(root)
+    const metadata = JSON.parse(await readFile(new URL('../packages/core/package.json', import.meta.url), 'utf8'))
+    for (const topic of topics) {
+      const content = await readFile(new URL(`../guidance/${topic}.md`, import.meta.url), 'utf8')
+      const result = spawnSync(process.execPath, [cli, 'instructions', '--protocol', '1', '--topic', topic, '--json'], {
+        cwd: root, encoding: 'utf8', env: { ...process.env, npm_config_offline: 'true', HTTPS_PROXY: 'http://127.0.0.1:1' },
+      })
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stderr).toBe('')
+      expect(json(result.stdout)).toEqual({ protocolVersion: 1, package: { name: 'focused-spec', version: metadata.version }, topic, content })
+    }
+    expect(await snapshotTree(root)).toBe(before)
+  })
+
+  it('rejects missing or empty focused guidance without fallback', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-topics-incomplete-'))
+    roots.push(root)
+    const installation = join(root, 'installation')
+    await cp(new URL('../packages/core/dist/', import.meta.url), join(installation, 'dist'), { recursive: true })
+    await cp(new URL('../packages/core/package.json', import.meta.url), join(installation, 'package.json'))
+    await symlink(fileURLToPath(new URL('../node_modules', import.meta.url)), join(installation, 'node_modules'), 'dir')
+    for (const topic of ['workflow', 'author-revise', 'upgrade', 'verify', 'integration', 'formats', 'runners']) {
+      await put(installation, `guidance/${topic}.md`, `# Not requested ${topic} guidance\n`)
+    }
+    await put(root, 'guidance/review.md', '# Consumer fallback must not be used\n')
+    for (const content of [undefined, ' \n']) {
+      if (content !== undefined) await put(installation, 'guidance/review.md', content)
+      const result = spawnSync(process.execPath, [join(installation, 'dist/cli.js'), 'instructions', '--protocol', '1', '--topic', 'review', '--json'], {
+        cwd: root, encoding: 'utf8',
+      })
+      expect(result.status).toBe(1)
+      expect(result.stdout).toBe('')
+      expect(JSON.parse(result.stderr)).toMatchObject({ error: { code: 'command_failed', message: expect.stringMatching(/incomplete installed focused-spec package.*review/iu) } })
+    }
   })
 
   it('serves format guidance without loading project configuration or plugins', async () => {
@@ -677,7 +765,7 @@ describe('focused-spec CLI', () => {
 
   it('rejects invalid guide requests with actionable help', async () => {
     const root = await emptyFixture()
-    for (const args of [['--topic', 'unknown'], ['--protocol', '0'], ['--protocol', '1.5'], ['--protocol'], ['--topic'], ['--strict'], ['--root', root]]) {
+    for (const args of [['--topic', 'unknown'], ['--protocol', '0'], ['--protocol', '1.5'], ['--protocol'], ['--topic'], ['--strict'], ['--root', root], ['--topic', 'review', '--topic', 'verify'], ['--protocol', '1', '--protocol', '1'], ['--json', '--json']]) {
       const result = spawnSync(process.execPath, [cli, 'instructions', ...args], { cwd: root, encoding: 'utf8' })
       expect(result.status).toBe(1)
       expect(result.stdout).toBe('')

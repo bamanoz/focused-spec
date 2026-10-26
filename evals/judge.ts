@@ -1,5 +1,5 @@
-import { access, readFile, rename, writeFile } from 'node:fs/promises'
-import { basename, join, resolve } from 'node:path'
+import { access, readFile, realpath, rename, writeFile } from 'node:fs/promises'
+import { basename, delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
 import { glob } from 'glob'
 import { discoverDocuments, loadConfig } from '../packages/core/dist/index.js'
 import type { EvalCase, EvalGate } from './types.ts'
@@ -10,6 +10,7 @@ import { upgradeSensitivityGate } from './upgrade.ts'
 import { parseTrustedNativeDocument } from './native-parse.ts'
 import { specRevisionGate } from './spec-revision.ts'
 import { loadConfiguredRegistries } from './evidence.ts'
+import { agentEnvironment } from './omp-agent.ts'
 
 const PROTECTED_PATHS = [
   'auth/auth.go',
@@ -165,10 +166,15 @@ export function localCommandArguments(command: string, workspace: string): strin
   return tokens.slice(offset)
 }
 
-function isLocalGuideCommand(command: string, workspace: string, expectedTopic: string): boolean {
-  const args = localCommandArguments(command, workspace)
-  if (args === undefined) return false
-  if (args[0] !== 'instructions') return false
+async function guidanceCommand(command: string, workspace: string, expectedTopic: string): Promise<string | undefined> {
+  const tokens = shellTokens(command)
+  if (tokens === undefined || tokens[0] === undefined) return undefined
+  const node = /^(?:node|node\.exe)$/u.test(basename(tokens[0]))
+  const localNpx = basename(tokens[0]) === 'npx' && tokens[1] === '--no-install' && tokens[2] === 'focused-spec'
+  const executable = localNpx ? join(workspace, 'node_modules/.bin/focused-spec') : node ? tokens[1] : tokens[0]
+  if (executable === undefined) return undefined
+  const args = tokens.slice(localNpx ? 3 : node ? 2 : 1)
+  if (args[0] !== 'instructions') return undefined
   let protocol: string | undefined
   let topic: string | undefined
   let json = false
@@ -177,9 +183,22 @@ function isLocalGuideCommand(command: string, workspace: string, expectedTopic: 
     if (argument === '--protocol' && protocol === undefined && args[index + 1] !== undefined) protocol = args[++index]
     else if (argument === '--topic' && topic === undefined && args[index + 1] !== undefined) topic = args[++index]
     else if (argument === '--json' && !json) json = true
-    else return false
+    else return undefined
   }
-  return protocol === '1' && topic === expectedTopic && json
+  if (protocol !== '1' || topic !== expectedTopic || !json) return undefined
+  const candidates = isAbsolute(executable) || executable.includes('/') || executable.includes('\\')
+    ? [resolve(workspace, executable)]
+    : (agentEnvironment(workspace).PATH ?? '').split(delimiter).map(directory => resolve(workspace, directory, executable))
+  for (const candidate of candidates) {
+    try {
+      const canonical = await realpath(candidate)
+      if (basename(canonical) !== 'cli.js' || basename(dirname(canonical)) !== 'dist') return undefined
+      return dirname(dirname(canonical))
+    } catch {
+      // A missing PATH candidate cannot establish the serving installation.
+    }
+  }
+  return undefined
 }
 
 function toolText(event: ObjectValue): string | undefined {
@@ -201,11 +220,11 @@ interface PackageIdentity {
   readonly workflow: string
 }
 
-async function installedPackageIdentity(workspace: string, topic: string): Promise<PackageIdentity | undefined> {
+async function installedPackageIdentity(packageRoot: string, topic: string): Promise<PackageIdentity | undefined> {
   try {
     const [metadata, workflow] = await Promise.all([
-      readFile(join(workspace, 'node_modules', 'focused-spec', 'package.json'), 'utf8'),
-      readFile(join(workspace, 'node_modules', 'focused-spec', 'guidance', `${topic}.md`), 'utf8'),
+      readFile(join(packageRoot, 'package.json'), 'utf8'),
+      readFile(join(packageRoot, 'guidance', `${topic}.md`), 'utf8'),
     ])
     const value: unknown = JSON.parse(metadata)
     if (!object(value) || value.name !== 'focused-spec' || typeof value.version !== 'string' || value.version.trim() === ''
@@ -230,45 +249,55 @@ function validGuideResponse(output: string, identity: PackageIdentity, topic: st
   return value.package.name === identity.name && value.package.version === identity.version
 }
 
-function stepHasLocalGuidance(transcript: string, workspace: string, identity: PackageIdentity, topic: string): boolean {
-  const commands = new Set<string>()
-  const artifacts = new Set<string>()
-  const reads = new Set<string>()
+async function stepHasGuidance(transcript: string, workspace: string, topic: string): Promise<boolean> {
+  const commands = new Map<string, PackageIdentity>()
+  const artifacts = new Map<string, PackageIdentity>()
+  const reads = new Map<string, PackageIdentity>()
   for (const event of transcriptEvents(transcript)) {
     if (typeof event.toolCallId !== 'string') continue
     if (event.type === 'tool_execution_start' && object(event.args)) {
-      if (event.toolName === 'bash' && typeof event.args.command === 'string'
-        && isLocalGuideCommand(event.args.command, workspace, topic)) {
-        commands.add(event.toolCallId)
+      if (event.toolName === 'bash' && typeof event.args.command === 'string') {
+        const packageRoot = await guidanceCommand(event.args.command, workspace, topic)
+        const identity = packageRoot === undefined ? undefined : await installedPackageIdentity(packageRoot, topic)
+        if (identity !== undefined) commands.set(event.toolCallId, identity)
       } else if (event.toolName === 'read' && typeof event.args.path === 'string') {
         const artifact = event.args.path.match(/^(artifact:\/\/[A-Za-z0-9_-]+)(?::|$)/u)?.[1]
-        if (artifact !== undefined && artifacts.has(artifact)) reads.add(event.toolCallId)
+        const identity = artifact === undefined ? undefined : artifacts.get(artifact)
+        if (identity !== undefined) reads.set(event.toolCallId, identity)
       }
       continue
     }
     if (event.type !== 'tool_execution_end') continue
-    if (event.toolName === 'bash' && commands.delete(event.toolCallId) && successfulToolCompletion(event)) {
+    const identity = commands.get(event.toolCallId)
+    const recoveredIdentity = reads.get(event.toolCallId)
+    if (event.toolName === 'bash' && identity !== undefined) {
+      commands.delete(event.toolCallId)
+      if (!successfulToolCompletion(event)) continue
       const output = toolText(event)
       if (output === undefined) continue
       if (validGuideResponse(output, identity, topic)) return true
-      const artifact = output.match(/\n\[[^\n]*Read (artifact:\/\/[A-Za-z0-9_-]+) for full output\]$/u)?.[1]
-      if (artifact !== undefined) artifacts.add(artifact)
-    } else if (event.toolName === 'read' && reads.delete(event.toolCallId) && successfulToolCompletion(event)) {
+      const display = output.trim().replace(/\n+Wall time: [^\n]+$/u, '')
+      const artifact = display.match(/\n\[[^\n]*Read (artifact:\/\/[A-Za-z0-9_-]+) for full output\]$/u)?.[1]
+        ?? display.match(/\n\[raw output: (artifact:\/\/[A-Za-z0-9_-]+)\]$/u)?.[1]
+      if (artifact !== undefined) artifacts.set(artifact, identity)
+    } else if (event.toolName === 'read' && recoveredIdentity !== undefined) {
+      reads.delete(event.toolCallId)
       const output = toolText(event)
-      if (output !== undefined && validGuideResponse(output, identity, topic)) return true
+      if (successfulToolCompletion(event) && output !== undefined && validGuideResponse(output, recoveredIdentity, topic)) return true
     }
   }
   return false
 }
 
 export async function guidanceActivationGate(workspace: string, workflowSteps: readonly string[], topic = 'workflow'): Promise<EvalGate> {
-  const identity = await installedPackageIdentity(workspace, topic)
-  if (identity === undefined) return gate(`focused-${topic}-acquired`, false, `project-local focused-spec package metadata or ${topic} guidance is missing or invalid`)
-  const failedStep = workflowSteps.findIndex(transcript => !stepHasLocalGuidance(transcript, workspace, identity, topic))
+  let failedStep = -1
+  for (let index = 0; index < workflowSteps.length; index++) {
+    if (!await stepHasGuidance(workflowSteps[index]!, workspace, topic)) { failedStep = index; break }
+  }
   const passed = workflowSteps.length > 0 && failedStep === -1
   return gate(`focused-${topic}-acquired`, passed, passed
-    ? `completed valid project-local ${topic} guidance for ${workflowSteps.length} workflow step${workflowSteps.length === 1 ? '' : 's'}`
-    : `workflow step ${failedStep === -1 ? 1 : failedStep + 1} did not complete valid project-local ${topic} guidance`)
+    ? `completed valid installed ${topic} guidance for ${workflowSteps.length} workflow step${workflowSteps.length === 1 ? '' : 's'}`
+    : `workflow step ${failedStep === -1 ? 1 : failedStep + 1} did not complete valid installed ${topic} guidance`)
 }
 
 export async function snapshotProtectedFiles(workspace: string, editablePaths: readonly string[] = []): Promise<ReadonlyMap<string, string>> {

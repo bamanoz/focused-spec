@@ -10,7 +10,7 @@ import { evalRepositoryRoot, provisionWorkspace, readEvalPrompt } from './provis
 import { interviewFailedAgent } from './diagnostic.ts'
 import { isUpgradeArtifact, upgradeArtifactsGate, upgradePreservationGate } from './upgrade.ts'
 import { runAgentTurn, saveEvalResult } from './result.ts'
-import { judgeIntegrationWorkspace } from './integration.ts'
+import { integrationRoutingGate, judgeIntegrationWorkspace } from './integration.ts'
 
 export async function runEval(
   options: EvalRunOptions,
@@ -21,6 +21,7 @@ export async function runEval(
   const workspace = await provisionWorkspace(selected, options.openspecSkillsDir)
   const turns = []
   const gates: EvalGate[] = []
+  const observations: EvalGate[] = []
   const transcripts: string[] = []
   let workingCheckpoint: WorkingEvidenceCheckpoint | undefined
   let selectedScenarioId = selected.prescribedScenarioId
@@ -77,9 +78,15 @@ export async function runEval(
     if (turns.length === selected.turns.length && gates.every(item => item.passed)) {
       try {
         if (workspace.upgrade !== undefined) gates.push(await upgradeArtifactsGate(workspace.path, workspace.upgrade), await upgradePreservationGate(workspace.path, workspace.upgrade))
-        if (gates.every(item => item.passed)) gates.push(...(workspace.integration === undefined
-          ? await judgeCompletedWorkspace(workspace.path, selected, snapshots, transcripts, workingCheckpoint, selectedScenarioId)
-          : await judgeIntegrationWorkspace(workspace.path, selected, workspace.integration, transcripts)))
+        if (gates.every(item => item.passed)) {
+          if (workspace.integration === undefined) {
+            gates.push(...await judgeCompletedWorkspace(workspace.path, selected, snapshots, transcripts, workingCheckpoint, selectedScenarioId))
+          } else {
+            const choice = selected.integration!
+            if (choice.mode !== 'revise' && choice.mode !== 'install') observations.push(await integrationRoutingGate(workspace.path, transcripts, choice, workspace.integration))
+            gates.push(...await judgeIntegrationWorkspace(workspace.path, selected, workspace.integration, transcripts))
+          }
+        }
       } catch (error) {
         gates.push({ name: 'evaluation-error', passed: false, detail: error instanceof Error ? error.message : String(error) })
       }
@@ -96,6 +103,7 @@ export async function runEval(
       workspace: workspace.path,
       turns,
       gates,
+      observations,
       diagnostic,
     }
     const resultsDirectory = join(evalRepositoryRoot(), 'evals', 'results')

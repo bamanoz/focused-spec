@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parseDocument } from 'yaml'
 
-type GuideTopic = 'workflow' | 'integration' | 'formats' | 'runners'
+type GuideTopic = 'workflow' | 'review' | 'author-revise' | 'upgrade' | 'verify' | 'integration' | 'formats' | 'runners'
 
 interface PackageIdentity {
   readonly name: string
@@ -241,7 +241,9 @@ describe('package distribution', () => {
     expect(stage().status).toBe(0)
     expect(await stat(join(checkout, 'packages/core/skills/retired/SKILL.md')).then(() => 'present', error => error.code)).toBe('ENOENT')
     expect(await stat(join(checkout, 'packages/core/guidance/retired.md')).then(() => 'present', error => error.code)).toBe('ENOENT')
-    expect(await readFile(join(checkout, 'packages/core/guidance/workflow.md'), 'utf8')).toBe(await readFile(join(checkout, 'guidance/workflow.md'), 'utf8'))
+    for (const topic of ['workflow', 'review', 'author-revise', 'upgrade', 'verify', 'integration', 'formats', 'runners']) {
+      expect(await readFile(join(checkout, `packages/core/guidance/${topic}.md`), 'utf8')).toBe(await readFile(join(checkout, `guidance/${topic}.md`), 'utf8'))
+    }
     expect(await readFile(join(checkout, 'packages/core/skills/focused-spec/SKILL.md'), 'utf8')).toBe(await readFile(join(checkout, 'skills/focused-spec/SKILL.md'), 'utf8'))
   })
 
@@ -555,6 +557,41 @@ describe('package distribution', () => {
     expect(JSON.parse(execution.stdout)).toMatchObject({ success: true, validationScope: { scopes: { mode: 'all' } }, executionSelection: { scopes: { mode: 'all' } }, scenarios: [{ id: 'consumer.cli.works', scope: 'current', status: 'PASS' }] })
   })
 
+  it('ships a compact loader and complete focused guidance topics', async () => {
+    const project = await createPackedConsumer('focused-guidance-')
+    try {
+      const packageRoot = join(project, 'node_modules/focused-spec')
+      const authoredLoader = await readFile(join(repository, 'skills/focused-spec/SKILL.md'), 'utf8')
+      const installedLoader = await readFile(join(packageRoot, 'skills/focused-spec/SKILL.md'), 'utf8')
+      expect(installedLoader).toBe(authoredLoader)
+      expect(Buffer.byteLength(installedLoader, 'utf8')).toBeLessThanOrEqual(4_000)
+
+      const initialized = initializeConsumer(project, 'claude')
+      expect(initialized.status, initialized.stderr).toBe(0)
+      expect(await readFile(join(project, '.claude/skills/focused-spec/SKILL.md'), 'utf8')).toBe(authoredLoader)
+
+      const topics = ['workflow', 'review', 'author-revise', 'upgrade', 'verify'] as const
+      const identity = packageIdentity(await readFile(join(packageRoot, 'package.json'), 'utf8'))
+      for (const topic of topics) {
+        const authored = await readFile(join(repository, 'guidance', `${topic}.md`), 'utf8')
+        const installed = await readFile(join(packageRoot, 'guidance', `${topic}.md`), 'utf8')
+        expect(installed).toBe(authored)
+        expect(installed.trim()).not.toBe('')
+        expect(Buffer.byteLength(installed, 'utf8')).toBeLessThanOrEqual(topic === 'workflow' ? 6_000 : 14_000)
+        const acquired = spawnSync(process.execPath, [join(packageRoot, 'dist/cli.js'), 'instructions', '--protocol', '1', '--topic', topic, '--json'], {
+          cwd: project,
+          encoding: 'utf8',
+          env: { ...process.env, npm_config_offline: 'true', HTTP_PROXY: 'http://127.0.0.1:1', HTTPS_PROXY: 'http://127.0.0.1:1' },
+        })
+        expect(acquired.status, acquired.stderr).toBe(0)
+        expect(acquired.stderr).toBe('')
+        expect(JSON.parse(acquired.stdout)).toEqual({ protocolVersion: 1, package: identity, topic, content: installed })
+      }
+    } finally {
+      await rm(project, { recursive: true, force: true })
+    }
+  }, 300_000)
+
   it('serves complete runner guidance from the installed package', async () => {
     const guideConsumer = await createPackedConsumer('runner-guidance-')
     try {
@@ -595,14 +632,22 @@ describe('package distribution', () => {
         cp(sourcePackage, secondPackage, { recursive: true }),
       ])
 
-      const originalWorkflow = await readFile(join(sourcePackage, 'guidance/workflow.md'), 'utf8')
-      const firstWorkflow = `${originalWorkflow.trimEnd()}\n\n<!-- disposable compatible snapshot one -->\n`
-      const secondWorkflow = `${originalWorkflow.trimEnd()}\n\n<!-- disposable compatible snapshot two -->\n`
+      const topics = ['workflow', 'review', 'author-revise', 'upgrade', 'verify'] as const
+      const firstGuidance = Object.fromEntries(await Promise.all(topics.map(async topic => {
+        const original = await readFile(join(sourcePackage, 'guidance', `${topic}.md`), 'utf8')
+        return [topic, `${original.trimEnd()}\n\n<!-- disposable compatible snapshot one -->\n`] as const
+      }))) as Record<(typeof topics)[number], string>
+      const secondGuidance = Object.fromEntries(await Promise.all(topics.map(async topic => {
+        const original = await readFile(join(sourcePackage, 'guidance', `${topic}.md`), 'utf8')
+        return [topic, `${original.trimEnd()}\n\n<!-- disposable compatible snapshot two -->\n`] as const
+      }))) as Record<(typeof topics)[number], string>
       await Promise.all([
         writeSnapshotVersion(firstPackage, '0.0.0-compatible-snapshot.1'),
         writeSnapshotVersion(secondPackage, '0.0.0-compatible-snapshot.2'),
-        writeFile(join(firstPackage, 'guidance/workflow.md'), firstWorkflow),
-        writeFile(join(secondPackage, 'guidance/workflow.md'), secondWorkflow),
+        ...topics.flatMap(topic => [
+          writeFile(join(firstPackage, 'guidance', `${topic}.md`), firstGuidance[topic]),
+          writeFile(join(secondPackage, 'guidance', `${topic}.md`), secondGuidance[topic]),
+        ]),
       ])
 
       const tarballs = join(workspace, 'tarballs')
@@ -615,13 +660,19 @@ describe('package distribution', () => {
 
       installPackage(replacementConsumer, firstTarball)
       const installedLoader = await readFile(join(replacementConsumer, 'node_modules/focused-spec/skills/focused-spec/SKILL.md'), 'utf8')
-      const first = await expectInstalledGuide(replacementConsumer, 'workflow')
-      expect(first).toEqual({ content: firstWorkflow, version: '0.0.0-compatible-snapshot.1' })
+      const firstResponses = {} as Record<(typeof topics)[number], string>
+      for (const topic of topics) {
+        const response = await expectInstalledGuide(replacementConsumer, topic)
+        expect(response).toEqual({ content: firstGuidance[topic], version: '0.0.0-compatible-snapshot.1' })
+        firstResponses[topic] = response.content
+      }
 
       installPackage(replacementConsumer, secondTarball)
-      const second = await expectInstalledGuide(replacementConsumer, 'workflow')
-      expect(second).toEqual({ content: secondWorkflow, version: '0.0.0-compatible-snapshot.2' })
-      expect(second.content).not.toBe(first.content)
+      for (const topic of topics) {
+        const response = await expectInstalledGuide(replacementConsumer, topic)
+        expect(response).toEqual({ content: secondGuidance[topic], version: '0.0.0-compatible-snapshot.2' })
+        expect(response.content).not.toBe(firstResponses[topic])
+      }
       expect(await readFile(join(replacementConsumer, 'node_modules/focused-spec/skills/focused-spec/SKILL.md'), 'utf8')).toBe(installedLoader)
     } finally {
       await rm(workspace, { recursive: true, force: true })

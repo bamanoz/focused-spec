@@ -90,6 +90,37 @@ describe('native pilot evaluation boundaries', () => {
     expect(creationGate('gherkin', feature.replace('Then authentication is rejected', 'Then authentication succeeds')).passed).toBe(false)
   })
 
+  it('distinguishes an unjudged bound outcome from a behavioral mismatch', () => {
+    const source = '# Requirements\n\n## Acceptance Criteria\n\n1. **BLOCKED-LOGIN-1**: WHEN an administrator-blocked account logs in with valid credentials, THE authentication service SHALL reject login.\n'
+    const binding = { id: 'login-denied', nativeId: 'BLOCKED-LOGIN-1' }
+    const unbound = [nativeSingleSourceGate('kiro', source), creationGate('kiro', source)]
+    const ambiguous = [nativeSingleSourceGate('kiro', `${source}\n${source}`, binding), creationGate('kiro', `${source}\n${source}`, binding)]
+
+    for (const result of [...unbound, ...ambiguous]) {
+      expect(result.passed).toBe(false)
+      expect(result.detail).toContain('bound outcome=unjudged')
+      expect(result.detail).not.toContain('bound outcome=mismatch')
+    }
+    expect(judged(unbound, unbound.map(result => result.name)).status).toBe('failed')
+
+    const correct = [nativeSingleSourceGate('kiro', source, binding), creationGate('kiro', source, binding)]
+    for (const result of correct) {
+      expect(result.passed).toBe(true)
+      expect(result.detail).toContain('bound outcome=match')
+    }
+
+    const wrong = [
+      nativeSingleSourceGate('kiro', source.replace('SHALL reject', 'SHALL allow'), binding),
+      creationGate('kiro', source.replace('SHALL reject', 'SHALL allow'), binding),
+    ]
+    for (const result of wrong) {
+      expect(result.passed).toBe(false)
+      expect(result.detail).toContain('bound outcome=mismatch')
+      expect(result.detail).not.toContain('bound outcome=unjudged')
+    }
+    expect(judged(wrong, wrong.map(result => result.name)).status).toBe('failed')
+  })
+
   it('blocks CLI judgment rather than inventing execution failures without a valid selection', async () => {
     const gates = await focusedCliGates('/not-an-evaluation-workspace', { references: [] })
     expect(gates).toEqual([

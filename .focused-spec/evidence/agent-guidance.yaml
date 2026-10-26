@@ -44,3 +44,13 @@ scopes:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects missing or empty
           integration guidance without fallback
+    guidance.delivery.installation-independent:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > serves guidance from an installation outside the project
+    guidance.delivery.focused-topic:
+      evidence:
+        - vitest::test/cli.spec.ts::focused-spec CLI > serves focused guidance topics without project setup
+        - vitest::test/cli.spec.ts::focused-spec CLI > rejects missing or empty focused guidance without fallback
+    guidance.plugins.router:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > ships a compact loader and complete focused guidance topics

@@ -17,4 +17,4 @@ specifications:
 runners:
   vitest:
     package: "@focused-spec/runner-vitest"
-    timeoutMs: 120000
+    timeoutMs: 300000

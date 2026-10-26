@@ -68,7 +68,7 @@ npm pack --dry-run --workspace @focused-spec/format-scenarios-go
 npm pack --dry-run --workspace @focused-spec/runner-scenarios-go
 ```
 
-Inspect each dry-run independently. Core must contain `dist/cli.js`, `dist/index.js`, `dist/format-api.js`, `dist/runner-api.js`, declarations, staged `skills/`, all three `guidance/workflow.md`, `guidance/formats.md`, and `guidance/runners.md` assets, root `README.md`, and `LICENSE`; it must not contain tests, `.focused-spec/`, a native parser, or registry loader. Each adapter must contain its own compiled ESM and declarations, package metadata, public README and any runtime helper assets it owns, without repository tests or another package's source. Root `src`/`dist` are obsolete; core output is `packages/core/dist`. Build stages root-owned assets into core so they are authored only once.
+Inspect each dry-run independently. Core must contain `dist/cli.js`, `dist/index.js`, `dist/format-api.js`, `dist/runner-api.js`, declarations, staged `skills/`, all eight guidance assets (`workflow`, `review`, `author-revise`, `upgrade`, `verify`, `integration`, `formats`, and `runners`), root `README.md`, and `LICENSE`; it must not contain tests, `.focused-spec/`, a native parser, or registry loader. Each adapter must contain its own compiled ESM and declarations, package metadata, public README and any runtime helper assets it owns, without repository tests or another package's source. Root `src`/`dist` are obsolete; core output is `packages/core/dist`. Build stages root-owned assets into core so they are authored only once.
 
 Check that the packed core `dist/cli.js` retains executable mode; a shebang alone is insufficient for `npx focused-spec` in the built workspace.
 

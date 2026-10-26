@@ -51,7 +51,7 @@ Agent evaluations SHALL install the packed CLI into disposable workspaces, prote
 #### Scenario: Failed agent turn stops downstream judges
 - **WHEN** an evaluated agent turn exits unsuccessfully
 - **THEN** the eval result records the failed turn and does not claim downstream behavior gates passed
-- **AND** An unsuccessful agent turn SHALL prevent downstream success claims. A successful turn using the loader SHALL have loaded the focused-spec skill and successfully obtained valid authoritative workflow guidance from the installed project-local CLI before its behavior is judged; reading only the loader, a failed command, or a command start without a usable response SHALL NOT certify activation. Guidance delivery SHALL NOT count as executable evidence. A coincidental passing result without skill and guidance activation SHALL NOT certify the skill workflow. Native evidence judgment SHALL recognize successfully completed selected tests executed through the installed focused-spec CLI as well as direct project test commands. It SHALL match the actual selected references in execution results, not count command starts, validation-only calls, failed commands, or unrelated targets as successful evidence execution. Saved model results SHALL remain immutable; a later gate correction MAY be checked against captured transcripts without claiming a new model run or rewriting the original score. The new loader activation contract SHALL apply to new runs and SHALL NOT retroactively relabel historical full-text-skill results.
+- **AND** An unsuccessful agent turn SHALL prevent downstream success claims. A successful turn using the loader SHALL have loaded the focused-spec skill and successfully obtained valid authoritative workflow guidance from the selected installed CLI before its behavior is judged; reading only the loader, a failed command, or a command start without a usable response SHALL NOT certify activation. Guidance delivery SHALL NOT count as executable evidence. A coincidental passing result without skill and guidance activation SHALL NOT certify the skill workflow. Native evidence judgment SHALL recognize successfully completed selected tests executed through the installed focused-spec CLI as well as direct project test commands. It SHALL match the actual selected references in execution results, not count command starts, validation-only calls, failed commands, or unrelated targets as successful evidence execution. Saved model results SHALL remain immutable; a later gate correction MAY be checked against captured transcripts without claiming a new model run or rewriting the original score. The new loader activation contract SHALL apply to new runs and SHALL NOT retroactively relabel historical full-text-skill results.
 
 <!-- focused-spec:id=agent.eval.protected-files -->
 #### Scenario: Protected files cannot be altered for a pass
@@ -70,7 +70,7 @@ Agent evaluations SHALL install the packed CLI into disposable workspaces, prote
 
 <!-- focused-spec:id=agent.eval.guidance-activation -->
 #### Scenario: Reading the loader alone does not activate the workflow
-- **WHEN** a successful evaluated turn reads the loader but does not complete a valid workflow-guidance request to the project-local CLI
+- **WHEN** a successful evaluated turn reads the loader but does not complete a valid workflow-guidance request to the selected installed CLI
 - **THEN** the guidance-activation gate rejects the turn even if unrelated tests pass
 
 <!-- focused-spec:id=agent.eval.direct-exact -->
@@ -218,29 +218,29 @@ When a task names an OpenSpec change but does not prescribe a focused scope labe
 - **WHEN** a named change is assigned one explicit scope different from its change name
 - **THEN** the pre-transition checkpoint freezes and executes that scope; missing or ambiguous scope fails
 
-### Requirement: Project-local guidance bootstrap
-The focused-spec loader SHALL obtain protocol-1 JSON workflow guidance from the consuming project's installed CLI before each focused-spec workflow step.
+### Requirement: Installed guidance bootstrap
+The focused-spec loader SHALL obtain protocol-1 JSON workflow guidance from a selected installed CLI before each focused-spec workflow step. The selected CLI MAY be project-local, global, or explicitly located. Guidance SHALL belong to that executable's package, while configuration and plugins SHALL resolve from the consuming project root.
 
 <!-- focused-spec:id=agent.guidance.project-local -->
-#### Scenario: A global installation does not override the project's workflow
-- **WHEN** an agent loads focused-spec in a project with a local CLI and a different global CLI earlier on PATH
-- **THEN** it obtains guidance and executes focused-spec commands from the local installation
-- **AND** It SHALL identify the project or declared workspace installation root from project context and invoke that installation explicitly, rather than choosing an unverified global binary on PATH or downloading `latest`. The loader SHALL use that same installation for subsequent focused-spec commands in the step and obtain the `runners` topic when runner work is needed. It SHALL verify successful command completion, matching protocol, package identity, requested topic, and nonempty content before treating the returned workflow as authoritative. Loading guidance SHALL NOT authorize writes forbidden by the host's current phase or replace its approval, validation, lifecycle, or evidence requirements.
+#### Scenario: A selected installation supplies its own workflow
+- **WHEN** an agent selects a compatible installed CLI outside the project, whether or not a different project-local CLI exists
+- **THEN** it obtains that executable's package-owned guidance and does not substitute the project's installation
+- **AND** The loader SHALL retain the same executable during the step, request applicable focused topics, and preserve host approval, lifecycle, and evidence boundaries. A local dependency MAY pin a version but SHALL NOT be mandatory. Ordinary guidance acquisition SHALL NOT download a package or use stale embedded procedure.
 
 <!-- focused-spec:id=agent.guidance.unavailable -->
-#### Scenario: An absent or legacy local CLI stops focused-spec work
-- **WHEN** the project's CLI is absent or predates the `instructions` command
-- **THEN** the loader reports the missing compatible installation and does not continue using global, downloaded, or embedded stale focused-spec instructions
+#### Scenario: An unavailable or legacy selected CLI stops focused-spec work
+- **WHEN** the selected CLI is absent or predates the required guidance protocol or topic
+- **THEN** the loader reports the missing compatible installation and does not continue using downloaded or embedded stale instructions
 
 <!-- focused-spec:id=agent.guidance.invalid-response -->
 #### Scenario: A successful but unusable response is not authority
 - **WHEN** a guidance command exits successfully but its response has a mismatched protocol or topic, wrong package identity, malformed JSON, or empty content
-- **THEN** the loader stops focused-spec work with a diagnostic instead of applying the response as instructions
+- **THEN** focused-spec work stops with a diagnostic instead of applying the response as instructions
 
 <!-- focused-spec:id=agent.guidance.session-refresh -->
-#### Scenario: A subsequent step reloads an updated local package
-- **WHEN** the local CLI is updated between two focused-spec workflow steps in the same agent session
-- **THEN** the second step reloads the authoritative workflow from that installation rather than relying solely on instructions retained from the first step
+#### Scenario: A subsequent step reloads an updated package
+- **WHEN** the selected CLI is updated between two focused-spec workflow steps in the same agent session
+- **THEN** the second step reloads the authoritative workflow from that installation rather than relying solely on retained instructions
 
 ### Requirement: Self-guided authorized project upgrades
 An explicit update SHALL upgrade the local package/integration, load fresh guidance and migrate config/format APIs. It SHALL preserve behavior, exact opaque scope-local IDs, evidence, AND obligations and runner settings. Explicit adapter selection MAY retain inline authoring; REVISES SHALL be removed without inheritance, identity loss or forced YAML conversion. Legacy APIs SHALL NOT remain runtime fallbacks.
