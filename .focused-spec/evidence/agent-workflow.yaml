@@ -1,5 +1,50 @@
 scopes:
   current:
+    agent.eval.guidance-approval-reuse:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > reuses unchanged guidance across a resumed approval dialogue
+    agent.eval.guidance-invalidation:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > invalidates retained guidance without retroactively rejecting an acquired version
+    agent.eval.guidance-initial-boundary:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > does not repair missing initial acquisition with a later read
+    agent.eval.guidance-context-boundary:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > requires independent acquisition for a fresh execution context
+    agent.eval.guidance-repeat-observation:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > keeps missing repeat acquisition outside publication success gates
+    agent.eval.native-measurements:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > measures scored native phases once without responder or diagnostic usage
+    agent.eval.native-partial-usage:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > retains incomplete native measurements after an interrupted phase
+    agent.eval.report-verdicts:
+      evidence:
+        - vitest::test/eval-report.spec.ts::evaluation reports > preserves mixed verdicts and measurement coverage without changing results
+    agent.eval.report-invocations:
+      evidence:
+        - vitest::test/eval-report.spec.ts::evaluation reports > retains missing-result invocations and attempts without duplicate result counts
+    agent.eval.report-guidance:
+      evidence:
+        - vitest::test/eval-report.spec.ts::evaluation reports > separates guidance failures from unobserved and interrupted judgments
+    agent.eval.report-observations:
+      evidence:
+        - vitest::test/eval-report.spec.ts::evaluation reports > keeps acquisition observations separate from saved task success
+    agent.eval.host-capability-limits:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > leaves unavailable host operations unverified without certification
+    agent.eval.host-executed-check:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > distinguishes an executed host failure from an unavailable capability
+    agent.eval.native-publication-stop:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > blocks OpenSpec publication when working evidence fails
+    agent.eval.native-publication-survival:
+      evidence:
+        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > rejects lost or redirected final evidence after OpenSpec archive
     agent.proposal.planning-only:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > rejects a proposal that creates configuration or a planned evidence registry
@@ -91,7 +136,7 @@ scopes:
         - vitest::test/evals.spec.ts::agent eval harness > rejects completed but unusable guidance responses
     agent.guidance.session-refresh:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > requires fresh guidance for a subsequent workflow step
+        - vitest::test/evals.spec.ts::agent eval harness > invalidates retained guidance without retroactively rejecting an acquired version
     agent.eval.guidance-activation:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > requires completed local workflow guidance after loader activation
@@ -264,9 +309,9 @@ scopes:
         - vitest::test/evals.spec.ts::agent eval harness > keeps post-failure recommendations outside scored agent turns
     agent.eval.responder-failure:
       evidence:
-        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains the unanswered host question and responder failure (exit)
-        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains the unanswered host question and responder failure (malformed)
-        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains the unanswered host question and responder failure (throw)
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains completed journal usage while excluding responder waits on partial failure (exit)
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains completed journal usage while excluding responder waits on partial failure (malformed)
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains completed journal usage while excluding responder waits on partial failure (throw)
   repair-portable-evidence-completion:
     agent.guidance.project-local:
       evidence:
@@ -279,7 +324,7 @@ scopes:
         - vitest::test/evals.spec.ts::agent eval harness > rejects completed but unusable guidance responses
     agent.guidance.session-refresh:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > requires fresh guidance for a subsequent workflow step
+        - vitest::test/evals.spec.ts::agent eval harness > invalidates retained guidance without retroactively rejecting an acquired version
     agent.guidance.effective-path:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > resolves guidance with the evaluated driver executable search path
@@ -318,4 +363,4 @@ scopes:
         - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > distinguishes an unjudged bound outcome from a behavioral mismatch
     agent.eval.integration-outcome:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > scores SDK repair by verified outcome rather than integration reading
+        - vitest::test/evals.spec.ts::agent eval harness > recognizes SDK dependency repair without requiring integration reading while rejecting false-green evidence

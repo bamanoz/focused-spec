@@ -2,7 +2,7 @@ import { access, readFile, realpath, rename, writeFile } from 'node:fs/promises'
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
 import { glob } from 'glob'
 import { discoverDocuments, loadConfig } from '../packages/core/dist/index.js'
-import type { EvalCase, EvalGate } from './types.ts'
+import type { AgentRequest, EvalCase, EvalGate } from './types.ts'
 import { runProcess } from './process.ts'
 import { judgeEvidenceRepair } from './evidence-repair.ts'
 import { evalRepositoryRoot } from './provision.ts'
@@ -249,17 +249,28 @@ function validGuideResponse(output: string, identity: PackageIdentity, topic: st
   return value.package.name === identity.name && value.package.version === identity.version
 }
 
-async function stepHasGuidance(transcript: string, workspace: string, topic: string): Promise<boolean> {
-  const commands = new Map<string, PackageIdentity>()
-  const artifacts = new Map<string, PackageIdentity>()
-  const reads = new Map<string, PackageIdentity>()
-  for (const event of transcriptEvents(transcript)) {
+interface GuidanceAcquisition {
+  readonly command: string
+  readonly packageRoot: string
+  readonly identity: PackageIdentity
+}
+
+async function acquiredGuidance(transcript: string, workspace: string, topic: string, seenCalls?: Set<string>): Promise<GuidanceAcquisition | undefined> {
+  const commands = new Map<string, GuidanceAcquisition>()
+  const artifacts = new Map<string, GuidanceAcquisition>()
+  const reads = new Map<string, GuidanceAcquisition>()
+  const events = transcriptEvents(transcript)
+  const fresh = seenCalls === undefined ? events : events.filter(event => typeof event.toolCallId !== 'string' || !seenCalls.has(event.toolCallId))
+  if (seenCalls !== undefined) for (const event of fresh) {
+    if (event.type === 'tool_execution_start' && typeof event.toolCallId === 'string') seenCalls.add(event.toolCallId)
+  }
+  for (const event of fresh) {
     if (typeof event.toolCallId !== 'string') continue
     if (event.type === 'tool_execution_start' && object(event.args)) {
       if (event.toolName === 'bash' && typeof event.args.command === 'string') {
         const packageRoot = await guidanceCommand(event.args.command, workspace, topic)
         const identity = packageRoot === undefined ? undefined : await installedPackageIdentity(packageRoot, topic)
-        if (identity !== undefined) commands.set(event.toolCallId, identity)
+        if (packageRoot !== undefined && identity !== undefined) commands.set(event.toolCallId, { command: event.args.command, packageRoot, identity })
       } else if (event.toolName === 'read' && typeof event.args.path === 'string') {
         const artifact = event.args.path.match(/^(artifact:\/\/[A-Za-z0-9_-]+)(?::|$)/u)?.[1]
         const identity = artifact === undefined ? undefined : artifacts.get(artifact)
@@ -275,7 +286,7 @@ async function stepHasGuidance(transcript: string, workspace: string, topic: str
       if (!successfulToolCompletion(event)) continue
       const output = toolText(event)
       if (output === undefined) continue
-      if (validGuideResponse(output, identity, topic)) return true
+      if (validGuideResponse(output, identity.identity, topic)) return identity
       const display = output.trim().replace(/\n+Wall time: [^\n]+$/u, '')
       const artifact = display.match(/\n\[[^\n]*Read (artifact:\/\/[A-Za-z0-9_-]+) for full output\]$/u)?.[1]
         ?? display.match(/\n\[raw output: (artifact:\/\/[A-Za-z0-9_-]+)\]$/u)?.[1]
@@ -283,21 +294,62 @@ async function stepHasGuidance(transcript: string, workspace: string, topic: str
     } else if (event.toolName === 'read' && recoveredIdentity !== undefined) {
       reads.delete(event.toolCallId)
       const output = toolText(event)
-      if (successfulToolCompletion(event) && output !== undefined && validGuideResponse(output, recoveredIdentity, topic)) return true
+      if (successfulToolCompletion(event) && output !== undefined && validGuideResponse(output, recoveredIdentity.identity, topic)) return recoveredIdentity
     }
   }
-  return false
+  return undefined
 }
 
 export async function guidanceActivationGate(workspace: string, workflowSteps: readonly string[], topic = 'workflow'): Promise<EvalGate> {
   let failedStep = -1
   for (let index = 0; index < workflowSteps.length; index++) {
-    if (!await stepHasGuidance(workflowSteps[index]!, workspace, topic)) { failedStep = index; break }
+    if (await acquiredGuidance(workflowSteps[index]!, workspace, topic) === undefined) { failedStep = index; break }
   }
   const passed = workflowSteps.length > 0 && failedStep === -1
   return gate(`focused-${topic}-acquired`, passed, passed
     ? `completed valid installed ${topic} guidance for ${workflowSteps.length} workflow step${workflowSteps.length === 1 ? '' : 's'}`
     : `workflow step ${failedStep === -1 ? 1 : failedStep + 1} did not complete valid installed ${topic} guidance`)
+}
+
+export function createGuidanceSession(workspace: string, topic = 'workflow') {
+  let acquisition: GuidanceAcquisition | undefined
+  let sessionDir: string | undefined
+  let journal: string | undefined
+  let count = 0
+  let failure: EvalGate | undefined
+  const observations: EvalGate[] = []
+  const seenCalls = new Set<string>()
+  return {
+    observations,
+    async record(request: Pick<AgentRequest, 'sessionDir' | 'resume'>, transcript: string): Promise<void> {
+      const directory = request.sessionDir === undefined ? undefined : resolve(workspace, request.sessionDir)
+      const resume = request.resume === undefined ? undefined : resolve(workspace, request.resume)
+      const continuation = count > 0 && directory !== undefined && directory === sessionDir && resume !== undefined
+        && dirname(resume) === directory && (journal === undefined || journal === resume)
+      if (!continuation) acquisition = undefined
+      sessionDir = directory
+      journal = continuation ? resume : undefined
+      count++
+      const current = await acquiredGuidance(transcript, workspace, topic, seenCalls)
+      let reusable = false
+      if (acquisition !== undefined) {
+        const packageRoot = await guidanceCommand(acquisition.command, workspace, topic)
+        const identity = packageRoot === undefined ? undefined : await installedPackageIdentity(packageRoot, topic)
+        reusable = packageRoot === acquisition.packageRoot && identity !== undefined
+          && identity.version === acquisition.identity.version && identity.workflow === acquisition.identity.workflow
+      }
+      if (continuation) observations.push(gate(`focused-${topic}-reacquired`, current !== undefined,
+        `continuation ${count}: ${current !== undefined ? 'completed fresh acquisition' : 'no fresh acquisition'}; retained guidance ${reusable ? 'reuse allowed' : 'invalidated or unavailable'}`))
+      if (current !== undefined) acquisition = current
+      else if (!reusable) acquisition = undefined
+      if (acquisition === undefined && failure === undefined) failure = gate(`focused-${topic}-acquired`, false,
+        `workflow execution ${count} did not complete required valid installed ${topic} guidance (${continuation ? 'retained acquisition invalidated or unavailable' : 'fresh execution context'})`)
+    },
+    verdict(): EvalGate {
+      return failure ?? gate(`focused-${topic}-acquired`, count > 0,
+        count > 0 ? `valid installed ${topic} acquisition retained across ${count} executions` : 'no executed acquisition boundary')
+    },
+  }
 }
 
 export async function snapshotProtectedFiles(workspace: string, editablePaths: readonly string[] = []): Promise<ReadonlyMap<string, string>> {
@@ -604,7 +656,7 @@ export async function mutationGate(
   const checkPython = pythonReferences.length === 1
   if (!expectedEvidenceCountValid(evidence.length, evalCase) || !expectedSelectorsPresent(evidence, evalCase)
     || evidence.length !== Number(checkGo) + Number(checkPython)
-    || (evalCase.id !== 'full-skill-routing' && (!checkGo || !checkPython))) {
+    || (evalCase.expectedEvidenceCount > 1 && (!checkGo || !checkPython))) {
     return gate('mutation-sensitivity', false, 'selected normalized evidence is not supported by independent product tests')
   }
   if ((checkGo && goMutated === goSource) || (checkPython && pythonMutated === pythonSource)) {

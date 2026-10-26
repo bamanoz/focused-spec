@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 import { glob } from 'glob'
 import { discoverDocuments, loadConfig } from '../packages/core/dist/index.js'
-import { readCatalog } from '@focused-spec/format-scenarios-typescript/catalog'
+import { CatalogError, readCatalog } from '@focused-spec/format-scenarios-typescript/catalog'
 import { guidanceActivationGate, inspectsImplementation, localCommandArguments, mutationGate } from './judge.ts'
 import { runProcess } from './process.ts'
 import { serveUpgradeCandidate } from './upgrade.ts'
@@ -65,6 +65,17 @@ function goDirectiveEntries(source: string, directive: 'require' | 'replace'): s
 
 export async function inspectEstablishedComposition(workspace: string, packages: readonly string[]): Promise<string[]> {
   const established = new Set(packages)
+  const suites = await glob('**/*.scenarios.{mjs,js,ts,mts}', { cwd: workspace, nodir: true, ignore: ['node_modules/**', '.dependencies/**'] })
+  for (const path of suites) {
+    const source = await readFile(join(workspace, path), 'utf8')
+    try {
+      readCatalog(path, source)
+      established.add('@focused-spec/scenarios-typescript')
+      break
+    } catch (error) {
+      if (!(error instanceof CatalogError)) throw error
+    }
+  }
   const goMod = await text(workspace, 'go.mod')
   if (goMod === undefined || !goDirectiveEntries(goMod, 'require').some(entry => entry[0] === GO_SCENARIOS_MODULE)) return [...established].sort()
   const replacement = goDirectiveEntries(goMod, 'replace').find(entry => entry[0] === GO_SCENARIOS_MODULE)

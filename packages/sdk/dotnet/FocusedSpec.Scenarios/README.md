@@ -4,7 +4,7 @@ Independent typed Given/When/Expect scenario execution for .NET 9 and later. The
 
 ## Install
 
-Version `0.10.1` is available as a public [GitHub Release `.nupkg`](https://github.com/bamanoz/focused-spec/releases/download/v0.10.1/FocusedSpec.Scenarios.0.10.1.nupkg), not on nuget.org. Download it into a local NuGet feed, retain that source in your project's `NuGet.Config`, then add `FocusedSpec.Scenarios` at version `0.10.1`. No Microsoft account is needed. Follow the [installation guide](../../../../docs/guides/install.md#net-sdk-from-github-releases) for download commands, checksum, configuration, and repeatable restore on other machines or CI.
+Download the SDK `.nupkg` from the [GitHub Releases](https://github.com/bamanoz/focused-spec/releases/latest), add it to a project-local NuGet feed, and pin the matching package version in your project. It is not published on nuget.org; no Microsoft account is needed. Follow the [installation guide](../../../../docs/guides/install.md#net-sdk-from-github-releases) for download commands, checksum verification, configuration, and repeatable restore on other machines or CI.
 
 ## Declare and execute a scenario
 

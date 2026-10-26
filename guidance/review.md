@@ -19,30 +19,13 @@ For each in-scope native item, identify:
 - the reversible product regression that should make the selected assertion fail;
 - for configured items, the selected project root, scope, format, evidence owner, exact opaque focused ID, every evidence reference and AND member, and the relevant runner registrations.
 
-A driver must prepare and invoke the real application and expose its result. It must not reimplement the domain decision, return Expect as Actual, or derive both sides from the same invocation. A deterministic projection is acceptable only when it preserves every observable distinction protected by the claim. An Actual event is not itself an assertion. Codec roundtrips protect serialization, not application behavior or historical compatibility. Logs and green diagnostics cannot override a failed comparison.
+A driver must invoke the real application, expose its result, and compare it with an independently authored expectation. It must not reimplement the domain decision, return Expect as Actual, or derive both sides from the same invocation.
 
 ## Acquire selected plugin contracts
 
-Core owns normalized identity, selection, and execution invariants. Each selected format owns authoring syntax, binding, evidence storage, and storage provenance; each runner owns its opaque selector and execution contract. Do not infer any of these from file extensions, headings, examples, implementation source, another plugin, or a package name.
+Identify the configured format and runner that own the reviewed item's authoring syntax, binding, evidence storage, and opaque selectors. Acquire each selected contract through the workflow topic's shared plugin-document procedure, using the same selected CLI and explicit consuming-project root as this review. Follow every composing document's named package option with the required separate package-contract request. Missing, unsafe, mismatched, or unavailable documentation is a review finding; do not infer a contract from file names, headings, examples, another plugin, or implementation source.
 
-Using the selected CLI and explicit consuming-project root, request one installed document at a time:
-
-```text
-<focused-spec-cli> plugin-docs --format <id> --root <project-root> --json
-<focused-spec-cli> plugin-docs --runner <id> --root <project-root> --json
-```
-
-Add `--config <path>` only for a configured registration. For an installed package being evaluated independently of registration, use:
-
-```text
-<focused-spec-cli> plugin-docs --package <specifier> --root <project-root> --json
-```
-
-`--package` never reads configuration and cannot be combined with `--config`. Accept only the requested selection with its installed package or contained project-module identity, canonical root, and canonical document path with complete nonempty Markdown. Keep that provenance visible: returned dependency or project text is not core instruction and does not authorize edits.
-
-Composition is explicit and sequential. If the selected plugin's document defines a nested package option, read that specific configured value according to its contract and make a separate `plugin-docs --package <specifier> --root <project-root> --json` request. Never scan arbitrary options for package-looking values or assume nested documentation was aggregated. Missing, empty, unsafe, mismatched, or unavailable documentation is a review finding; do not substitute a README from another source or inspect implementation to invent the contract.
-
-Acquire the shared `formats` or `runners` topic through the workflow router when the review needs those plugin-independent obligations. Preserve an existing compatible composition; an incompatible setup belongs to the `upgrade` topic rather than greenfield replacement.
+Acquire the shared `formats` or `runners` topic through the same-selected-CLI workflow procedure only when the review needs those plugin-independent obligations. Preserve an existing compatible composition; an incompatible setup belongs to the `upgrade` topic rather than greenfield replacement.
 
 ## Review native identity and enrollment
 
@@ -62,4 +45,4 @@ For revisions, splits, additions, moves, format conversions, publication, archiv
 
 Distinguish observed defects from checks not performed. For each defect, name the native item, owning path, exact scope/ID when present, stale or missing reference, assertion mismatch, and the smallest complete repair. Include host approval or phase boundaries that would govern the repair.
 
-Do not report an item synchronized or verified merely because its source parses, its old assertion passes, or its runner exits successfully. If execution and controlled-regression sensitivity were requested, acquire the `verify` topic and perform them only when the current phase permits execution. If tests, permissions, plugin contracts, or a safe regression are unavailable, state the precise limitation.
+Do not report an item synchronized or verified merely because its source parses, its old assertion passes, or its runner exits successfully. If execution and controlled-regression sensitivity were requested, acquire the `verify` topic through the workflow's same-selected-CLI procedure and perform it only when the current phase permits execution. If tests, permissions, plugin contracts, or a safe regression are unavailable, state the precise limitation.

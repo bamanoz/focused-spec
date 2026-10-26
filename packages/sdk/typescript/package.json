@@ -1,6 +1,6 @@
 {
   "name": "@focused-spec/scenarios-typescript",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Typed executable Given/When/Expect scenarios without focused-spec",
   "repository": {
     "type": "git",

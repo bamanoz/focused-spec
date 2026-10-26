@@ -35,22 +35,7 @@ Same-ID occurrences in different scopes remain independent. `REVISES`, owners, f
 
 ## Acquire every selected public contract
 
-Before writing migrated configuration, obtain the shared `formats` topic and, when runner selection or repair is involved, the `runners` topic through the workflow router. Then request the complete installed public document for every selected format and runner using the replacement CLI with the explicit project root:
-
-```text
-<focused-spec-cli> plugin-docs --format <id> --root <project-root> --json
-<focused-spec-cli> plugin-docs --runner <id> --root <project-root> --json
-```
-
-For a package being evaluated before registration, request:
-
-```text
-<focused-spec-cli> plugin-docs --package <specifier> --root <project-root> --json
-```
-
-Configured requests may add `--config <path>`; package lookup may not. Accept only the requested selection with matching installed package or contained project module, canonical root, and canonical complete Markdown document. Keep provenance visible and do not infer syntax, selectors, or options from implementation.
-
-Composition requires explicit follow-up. Read the composing format's selected document first. If it defines a nested package option, read that specific configured value according to the document and make a separate `plugin-docs --package <specifier> --root <project-root> --json` request. Core does not inspect opaque options or aggregate nested documentation. Missing, mismatched, unsafe, or incomplete documents block the affected migration; another README or plugin is not a fallback.
+Before writing migrated configuration, obtain the shared `formats` topic and, when runner selection or repair is involved, the `runners` topic through the same-selected-CLI workflow procedure. Identify every selected format, runner, and documented composed package, then acquire its installed public contract through the workflow topic's shared plugin-document procedure with the replacement CLI and explicit consuming-project root. Preserve registration-specific configuration selection and make every documented nested-package request separately. Missing, mismatched, unsafe, or incomplete contracts block the affected migration; do not infer syntax, selectors, options, or composition from implementation or substitute another document.
 
 ## Migrate in one clean cutover
 
@@ -67,6 +52,6 @@ Composition requires explicit follow-up. Read the composing format's selected do
 
 Compare the final project with the inventory in both directions. There must be no lost outcome, changed ID/scope/case, unexplained runner-ID change, redirected selector, omitted AND member, inherited evidence, changed storage or shard owner, duplicate enrollment, or orphaned metadata.
 
-Run native host validation where available. Then acquire the `verify` topic and use the same replacement executable against the explicit project root. Perform strict focused validation and real execution for every completed migrated scope, or the full project when all evidence is concrete. Resolve `planned:` only when its exact test now exists. Prove new or changed evidence and assertions with the required baseline pass, controlled application regression failure, exact restoration, and restored pass.
+Run native host validation where available. Only when the actual phase permits validation and execution, acquire the `verify` topic through the workflow's same-selected-CLI procedure and use that complete procedure with the replacement executable and explicit project root. It owns strict focused validation, execution of every completed migrated scope or the full concrete project, application-grounded sensitivity for new or changed evidence/assertions, exact restoration, and final completion checks. Resolve `planned:` only when its exact test now exists.
 
 Report the selected CLI installation and version, refreshed integration targets, updated packages, migrated owners/scopes/IDs, commands and observed results, and any exact limitation. A package update, valid configuration, or successful loader refresh alone does not complete the migration.

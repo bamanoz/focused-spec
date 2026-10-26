@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /** Black-box authoring pilot using the same packed focused-spec CLI exposed to evaluated agents. */
+import { createHash } from 'node:crypto'
 import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -8,7 +9,7 @@ import { glob } from 'glob'
 import { discoverDocuments, loadConfig } from '../packages/core/dist/index.js'
 import { OmpAgentDriver } from './omp-agent.ts'
 import { runProcess } from './process.ts'
-import { guidanceActivationGate, skillActivationGate, inspectsImplementation } from './judge.ts'
+import { createGuidanceSession, guidanceActivationGate, skillActivationGate, inspectsImplementation, mutationGate } from './judge.ts'
 import { runAuthoringDialogue } from './dialogue.ts'
 import type { DialogueResult } from './dialogue.ts'
 import { runPlanningDialogue } from './acp-agent.ts'
@@ -17,9 +18,20 @@ import { interviewFailedAgent } from './diagnostic.ts'
 import { nativeItemText, parseTrustedNativeDocument } from './native-parse.ts'
 import type { TrustedFormat } from './native-parse.ts'
 import { runAgentTurn, saveEvalResult } from './result.ts'
-import type { AgentDriver, AgentRequest } from './types.ts'
+import type { AgentDriver, AgentRequest, AgentResult } from './types.ts'
 import type { EvalDiagnostic } from './types.ts'
 import { loadConfiguredRegistries } from './evidence.ts'
+import { measureAgentTurns } from './activation.ts'
+
+export function nativeMeasurements(authoring: readonly AgentResult[], lifecycle: readonly AgentResult[] = []) {
+  return {
+    measurements: measureAgentTurns([...authoring, ...lifecycle]),
+    phaseMeasurements: {
+      ...(authoring.length === 0 ? {} : { authoring: measureAgentTurns(authoring) }),
+      ...(lifecycle.length === 0 ? {} : { lifecycle: measureAgentTurns(lifecycle) }),
+    },
+  }
+}
 
 export const nativePilotRoot = fileURLToPath(new URL('..', import.meta.url))
 const root = nativePilotRoot
@@ -71,7 +83,17 @@ export type NativeCase = keyof typeof nativeCases
 export interface Gate { name: string; passed: boolean | null; detail: string; blockedBy?: string }
 export const gate = (name: string, passed: boolean | null, detail: string): Gate => ({ name, passed, detail })
 export type Verdict = 'passed' | 'failed' | 'unverified'
-export interface Outcome { status: Verdict; detail: string }
+export interface NativeCheckProvenance {
+  source: string
+  version: string | null
+  installedAsset: string | null
+  assetSha256: string | null
+  operation: string | null
+  executed: boolean
+  runtime: 'available' | 'unavailable' | 'not-applicable'
+  limitation: string
+}
+export interface Outcome { status: Verdict; detail: string; provenance?: NativeCheckProvenance }
 export const outcome = (status: Verdict, detail: string): Outcome => ({ status, detail })
 export function judged(gates: Gate[], names: string[]): Outcome {
   const selected = gates.filter(item => names.includes(item.name))
@@ -338,8 +360,8 @@ export function creationGate(name: NativeCase, source: string, binding?: NativeB
   return gate('native-item-created', passed,
     `native form=${forms[name]} bound outcome=${boundOutcome.status} bound native items=${identity.bound.length} identity valid=${identity.valid} extra scenario=${!noDuplicate} parser violations=${identity.parsed.violations.length}`)
 }
-export function hostWorkflowGate(name: NativeCase, transcript: string, create = false): Gate {
-  const skill = name === 'openspec' ? create ? 'openspec-propose' : 'openspec-update-change'
+export function hostWorkflowGate(name: NativeCase, transcript: string, create = false, operation?: 'sync' | 'archive'): Gate {
+  const skill = name === 'openspec' ? operation === 'sync' ? 'openspec-sync-specs' : operation === 'archive' ? 'openspec-archive-change' : create ? 'openspec-propose' : 'openspec-update-change'
     : name === 'spec-kit' ? 'speckit-specify'
       : name === 'kiro' ? 'kiro-requirements' : name === 'agent-os' ? 'agent-os-shape-spec'
         : name === 'gsd' ? create ? 'gsd-new-project' : 'gsd-requirements' : name === 'bmad' ? 'bmad-spec' : undefined
@@ -461,7 +483,7 @@ export function canonicalMemlogReadGate(workspace: string, transcript: string): 
   return gate('canonical-memlog-read', read, `canonical memlog successfully read before regeneration=${read}`)
 }
 
-async function regenerateBmad(workspace: string, model: string, driver: AgentDriver, attempted: (request: AgentRequest) => void, captured: (output: string) => void): Promise<{ gates: Gate[]; verdict: Outcome; transcript: string }> {
+async function regenerateBmad(workspace: string, model: string, driver: AgentDriver, attempted: (request: AgentRequest) => void, captured: (agent: AgentResult) => void): Promise<{ gates: Gate[]; verdict: Outcome; transcript: string }> {
   const path = cases.bmad.path
   const before = await readFile(join(workspace, path), 'utf8')
   const registry = await registrySnapshot(workspace)
@@ -471,7 +493,7 @@ async function regenerateBmad(workspace: string, model: string, driver: AgentDri
     prompt: `Regenerate the existing BMad specification at ${path} from its recorded decisions. No new behavior is requested.` }
   attempted(request)
   const agent = await runAgentTurn(driver, request)
-  captured(agent.output)
+  captured(agent)
   if (!agent.success) return { gates: [gate('bmad-regenerated-kernel', false, agent.output)], verdict: outcome('failed', 'regeneration agent failed'), transcript: agent.output }
   const focusedSkill = skillActivationGate(agent.output)
   const workflow = await guidanceActivationGate(workspace, [agent.output])
@@ -496,20 +518,21 @@ async function regenerateBmad(workspace: string, model: string, driver: AgentDri
 }
 
 export async function evaluateBmadLifecycle(workspace: string, model: string, driver: AgentDriver, authoringRequest: AgentRequest): Promise<{
-  gates: Gate[]; verdict: Outcome; transcript: string; request: AgentRequest; diagnostic: EvalDiagnostic | null
+  gates: Gate[]; verdict: Outcome; transcript: string; request: AgentRequest; diagnostic: EvalDiagnostic | null; turns: AgentResult[]
 }> {
   let request = authoringRequest
   let transcript = ''
+  const turns: AgentResult[] = []
   let phase: { gates: Gate[]; verdict: Outcome; transcript: string }
   try {
-    phase = await regenerateBmad(workspace, model, driver, attempted => { request = attempted }, output => { transcript = output })
+    phase = await regenerateBmad(workspace, model, driver, attempted => { request = attempted }, agent => { transcript = agent.output; turns.push(agent) })
   } catch (error) {
     const failed = await runAgentTurn({ async run() { throw error } }, request)
     phase = { gates: [gate('bmad-regenerated-kernel', false, failed.output)], verdict: outcome('failed', failed.output), transcript: [transcript, failed.output].join('\n') }
   }
   const diagnostic = phase.gates.some(item => item.passed === false)
     ? await interviewFailedAgent(request, phase.gates, 'Regenerate the existing BMad specification from its recorded decisions.', driver) : null
-  return { ...phase, request, diagnostic }
+  return { ...phase, request, diagnostic, turns }
 }
 
 export async function companionGate(workspace: string, name: NativeCase, binding?: NativeBinding): Promise<Gate> {
@@ -718,19 +741,52 @@ export async function focusedCliGates(workspace: string, selection: { scope?: st
   ]
 }
 export async function nativeGate(workspace: string, name: NativeCase): Promise<{ gate: Gate | null; verdict: Outcome }> {
-  if (name === 'openspec') {
-    const command = 'openspec validate link-blocked-account --strict --no-interactive'
-    const result = await runProcess('openspec', ['validate', 'link-blocked-account', '--strict', '--no-interactive'], { cwd: workspace, timeoutMs: 60_000 })
-    return { gate: gate('host-validation', result.code === 0, `${command}: ${(result.stderr || result.stdout).trim()}`),
-      verdict: outcome(result.code === 0 ? 'passed' : 'failed', command) }
+  const contracts = {
+    openspec: { source: 'https://github.com/Fission-AI/OpenSpec', asset: '.omp/skills/openspec-archive-change/SKILL.md', limitation: 'Native change validation; publication/archive is independently judged.' },
+    gherkin: { source: 'https://github.com/cucumber/gherkin', asset: 'node_modules/@cucumber/gherkin/package.json', limitation: 'Syntax only; no step definitions or Cucumber execution/lifecycle are provisioned.' },
+    'spec-kit': { source: 'https://github.com/github/spec-kit', asset: '.specify/integration.json', limitation: 'Installed specify-cli authoring/templates expose no applicable standalone specification validator in this fixture; check installs tools, not specification validity.' },
+    kiro: { source: 'https://kiro.dev/docs/specs/feature-specs/requirements-first.md', asset: '.omp/skills/kiro-requirements/SKILL.md', limitation: 'Only official requirements-first guidance is installed; no Kiro IDE/CLI spec runtime is provisioned.' },
+    bmad: { source: 'https://github.com/bmad-code-org/BMAD-METHOD/tree/48f0ce37e1fc378d6255c90e1b155f2212a6fe33', asset: '.omp/skills/bmad-spec/SKILL.md', limitation: 'Official generated-kernel workflow and memlog tools provide no standalone format validator; real regeneration is a separate lifecycle check.' },
+    gsd: { source: 'https://github.com/open-gsd/gsd-core', asset: '.omp/skills/gsd-requirements/SKILL.md', limitation: 'The pinned GSD Core 1.16.0 authoring assets do not provide an applicable standalone validator for this isolated REQUIREMENTS.md fixture; verify/ship needs its broader project runtime.' },
+    'agent-os': { source: 'https://github.com/buildermethods/agent-os/blob/main/commands/agent-os/shape-spec.md', asset: '.omp/skills/agent-os-shape-spec/SKILL.md', limitation: 'Official shape-spec guidance runs with genuine ACP plan/approval transport; no standalone shape.md validator or publication command is installed.' },
+  } satisfies Record<NativeCase, { source: string; asset: string; limitation: string }>
+  const contract = contracts[name]
+  const asset = await readFile(join(workspace, contract.asset), 'utf8').catch(() => undefined)
+  const provenance: NativeCheckProvenance = { source: contract.source, version: null,
+    installedAsset: asset === undefined ? null : contract.asset, assetSha256: asset === undefined ? null : createHash('sha256').update(asset).digest('hex'),
+    operation: null, executed: false, runtime: 'not-applicable', limitation: contract.limitation }
+  if ((name === 'spec-kit' || name === 'gherkin') && asset !== undefined) {
+    try { const parsed = JSON.parse(asset) as { version?: unknown }; if (typeof parsed.version === 'string') provenance.version = parsed.version } catch { /* Unknown installed version remains unknown. */ }
   }
-  if (name === 'gherkin') {
+  if (name !== 'openspec' && name !== 'gherkin') {
+    return { gate: null, verdict: { ...outcome('unverified', contract.limitation), provenance } }
+  }
+  try {
+    if (name === 'openspec') {
+      provenance.operation = 'openspec validate link-blocked-account --strict --no-interactive'
+      const version = await runProcess('openspec', ['--version'], { cwd: workspace, timeoutMs: 30_000 })
+      provenance.version = version.code === 0 ? version.stdout.trim() : null
+      const result = await runProcess('openspec', ['validate', 'link-blocked-account', '--strict', '--no-interactive'], { cwd: workspace, timeoutMs: 60_000 })
+      provenance.executed = true
+      provenance.runtime = 'available'
+      return { gate: gate('host-validation', result.code === 0, `${provenance.operation}: ${(result.stderr || result.stdout).trim()}`),
+        verdict: { ...outcome(result.code === 0 ? 'passed' : 'failed', provenance.operation), provenance } }
+    }
+    provenance.operation = '@cucumber/gherkin Parser.parse(features/blocked_login.feature)'
+    if (asset === undefined) return { gate: null, verdict: { ...outcome('unverified', 'official Gherkin parser package is unavailable in this fixture'), provenance: { ...provenance, runtime: 'unavailable' } } }
     const source = `import { AstBuilder, GherkinClassicTokenMatcher, Parser } from '@cucumber/gherkin'; import { IdGenerator } from '@cucumber/messages'; import { readFileSync } from 'node:fs'; const parser = new Parser(new AstBuilder(IdGenerator.uuid()), new GherkinClassicTokenMatcher()); const feature = parser.parse(readFileSync('features/blocked_login.feature', 'utf8')).feature; if (feature?.children.length !== 1) process.exit(1);`
     const result = await runProcess(process.execPath, ['--input-type=module', '-e', source], { cwd: workspace, timeoutMs: 30_000 })
+    provenance.executed = true
+    provenance.runtime = 'available'
     return { gate: gate('host-validation', result.code === 0, result.code === 0 ? 'official Gherkin parser accepted one scenario' : (result.stderr || result.stdout).trim()),
-      verdict: outcome(result.code === 0 ? 'passed' : 'failed', 'official @cucumber/gherkin parser (syntax only)') }
+      verdict: { ...outcome(result.code === 0 ? 'passed' : 'failed', 'official @cucumber/gherkin parser (syntax only)'), provenance } }
+  } catch (error) {
+    const unavailable = error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
+    provenance.runtime = unavailable ? 'unavailable' : 'available'
+    provenance.executed = !unavailable
+    return { gate: unavailable ? null : gate('host-validation', false, String(error)),
+      verdict: { ...outcome(unavailable ? 'unverified' : 'failed', `${provenance.operation}: ${String(error)}`), provenance } }
   }
-  return { gate: null, verdict: outcome('unverified', `${name} has no runnable native format validator in this fixture`) }
 }
 export async function behaviorGate(workspace: string, references: string[]): Promise<Gate> {
   if (references.length === 0) return { name: 'selected-test-executes', passed: null,
@@ -745,18 +801,142 @@ export async function behaviorGate(workspace: string, references: string[]): Pro
   return gate('selected-test-executes', results.every(result => result.passed), results.map(result => `${result.reference}: ${result.output}`).join('\n'))
 }
 
+export interface NativePublicationCheckpoint {
+  readonly id: string
+  readonly scope: string
+  readonly references: string[]
+}
+
+export async function nativePublishedEvidence(workspace: string, checkpoint: NativePublicationCheckpoint): Promise<Gate[]> {
+  const loaded = await loadConfig(workspace)
+  if (loaded.config === undefined) return [gate('lifecycle-final-binding', false, loaded.violations.map(item => item.message).join('; '))]
+  const discovery = await discoverDocuments(workspace, loaded.config)
+  const documents = [...discovery.scopes.values()].flat()
+  const final = documents.filter(document => document.path.startsWith('openspec/specs/') && document.scenarios.length > 0)
+  if (discovery.violations.length > 0 || final.length !== 1 || documents.some(document => document.path.startsWith('openspec/changes/') && document.scenarios.length > 0)) {
+    return [gate('lifecycle-final-binding', false, 'expected one independently enrolled final document and no selected working occurrence')]
+  }
+  const document = final[0]!
+  const source = await readFile(join(workspace, document.path), 'utf8')
+  const evidence = await evidenceGate(workspace, 'openspec', source, document.scope)
+  const native = nativeSingleSourceGate('openspec', source, evidence.binding)
+  const stable = evidence.gate.passed && native.passed && evidence.id === checkpoint.id
+    && JSON.stringify(evidence.references) === JSON.stringify(checkpoint.references)
+  const gates = [gate('lifecycle-final-binding', stable, `${evidence.gate.detail}; native=${native.detail}; frozen identity/references=${stable}`)]
+  if (!stable) return gates
+  gates.push(...(await focusedCliGates(workspace, evidence)).map(item => ({ ...item, name: `lifecycle-${item.name}` })))
+  const host = await runProcess('openspec', ['validate', '--specs', '--strict', '--no-interactive'], { cwd: workspace, timeoutMs: 60_000 })
+  gates.push(gate('lifecycle-host-validation', host.code === 0, `openspec validate --specs --strict --no-interactive: ${host.stdout || host.stderr}`))
+  const completed = await runProcess(process.execPath,
+    [join(workspace, 'node_modules/focused-spec/dist/cli.js'), 'run', '--scope', evidence.scope!, '--json'], { cwd: workspace, timeoutMs: 120_000 })
+  let completedPayload: { success?: boolean; executionStarted?: boolean } = {}
+  try { completedPayload = JSON.parse(completed.stdout) as typeof completedPayload } catch { /* Invalid output fails the completed-scope check. */ }
+  gates.push(gate('lifecycle-completed-scope', completed.code === 0 && completedPayload.success === true && completedPayload.executionStarted === true,
+    (completed.stdout || completed.stderr).trim()))
+  const mutation = await mutationGate(workspace, {
+    id: 'native-openspec-publication', description: 'native published blocked-login evidence', source: 'openspec', turns: [],
+    expectedEvidenceCount: checkpoint.references.length, expectedSelectorFragments: [],
+  }, evidence.scope, checkpoint.id)
+  gates.push({ ...mutation, name: 'lifecycle-final-sensitivity' })
+  return gates
+}
+
+function completedNativeArchive(transcript: string): boolean {
+  const starts = new Set<string>()
+  for (const line of transcript.split('\n')) {
+    try {
+      const event = JSON.parse(line) as { type?: string; toolName?: string; toolCallId?: string; args?: { command?: string }; isError?: boolean;
+        result?: { isError?: boolean; details?: { exitCode?: number } } }
+      if (event.toolName !== 'bash' || event.toolCallId === undefined) continue
+      const command = event.args?.command
+      if (event.type === 'tool_execution_start' && command !== undefined) {
+        const tokens = command.match(/'[^']*'|"[^"]*"|[^\s]+/gu)?.map(token => token.replace(/^['"]|['"]$/gu, '')) ?? []
+        const cli = /(?:^|&&|;)\s*(?:(?:npx(?:\s+--[\w-]+)*\s+)?(?:\S*\/)?openspec|node\s+\S*openspec(?:\.js|\/bin\/openspec\.js))\s+archive\b/u.test(command)
+          && tokens.includes('link-blocked-account') && !tokens.some(token => ['--help', '-h', '--no-validate'].includes(token))
+        const move = tokens.findIndex(token => token === 'mv' || token.endsWith('/mv'))
+        const paths = move < 0 ? [] : tokens.slice(move + 1).filter(token => !token.startsWith('-'))
+        const officialMove = paths.length === 2 && /(?:^|\/)openspec\/changes\/link-blocked-account\/?$/u.test(paths[0]!)
+          && /(?:^|\/)openspec\/changes\/archive\/\d{4}-\d{2}-\d{2}-link-blocked-account\/?$/u.test(paths[1]!)
+        if (cli || officialMove) starts.add(event.toolCallId)
+      }
+      if (event.type === 'tool_execution_end' && starts.has(event.toolCallId)
+        && event.isError !== true && event.result?.isError !== true && (event.result?.details?.exitCode ?? 0) === 0) return true
+    } catch { /* Only a completed host command establishes the archive operation. */ }
+  }
+  return false
+}
+
+export async function evaluateOpenSpecLifecycle(workspace: string, model: string, driver: AgentDriver) {
+  const request: AgentRequest = { workspace, model, sessionDir: join(workspace, '.omp-lifecycle-sessions'),
+    skills: ['focused-spec', 'openspec-sync-specs', 'openspec-archive-change'], timeoutMs: 600_000,
+    prompt: 'Publish the completed link-blocked-account change into the main specifications and archive it through the OpenSpec workflow. Preserve its existing blocked-account outcome and complete the surviving project integration. No new behavior or changes to application code or tests are requested.' }
+  const gates: Gate[] = []
+  const turns: AgentResult[] = []
+  const guidance = createGuidanceSession(workspace)
+  const observations = () => guidance.observations.map(item => ({ ...item, name: `lifecycle-${item.name}` }))
+  let transcript = ''
+  let checkpoint: NativePublicationCheckpoint | undefined
+  try {
+    const source = await readFile(join(workspace, cases.openspec.path), 'utf8').catch(() => '')
+    const selected = await evidenceGate(workspace, 'openspec', source)
+    const native = nativeSingleSourceGate('openspec', source, selected.binding)
+    const working = await focusedCliGates(workspace, selected)
+    const valid = selected.gate.passed && native.passed && working.every(item => item.passed === true)
+      && selected.scope !== undefined && selected.id !== undefined
+    gates.push(gate('lifecycle-working-checkpoint', valid, `${selected.gate.detail}; ${native.detail}; ${working.map(item => `${item.name}=${item.passed}: ${item.detail}`).join('; ')}`))
+    if (!valid) return { gates, observations: observations(), verdict: outcome('unverified', 'publication blocked by failed working checkpoint'), transcript, request, turns, checkpoint }
+    checkpoint = { scope: selected.scope!, id: selected.id!, references: selected.references }
+    const protectedFiles = await infrastructureSnapshot(workspace)
+    const product = await Promise.all(['auth/auth.go', 'auth/auth_test.go', 'app/auth.py', 'tests/functional/test_auth.py']
+      .map(async path => [path, await readFile(join(workspace, path), 'utf8')] as const))
+    const dialogue = await runAuthoringDialogue(request, { async run(request) {
+      const agent = await runAgentTurn(driver, request)
+      if (agent.success && request.skills.length > 0) await guidance.record(request, agent.output)
+      return agent
+    } }, () => authoringSnapshot(workspace, 'openspec'), false)
+    turns.push(...dialogue.turns.map(turn => turn.scoredAgent))
+    transcript = dialogue.agent.output
+    gates.push(gate('lifecycle-agent-turn', dialogue.agent.success && dialogue.completed, dialogue.detail))
+    if (!dialogue.agent.success) return { gates, observations: observations(), verdict: outcome('failed', 'native publication agent failed'), transcript, request, turns, checkpoint }
+    gates.push({ ...skillActivationGate(transcript), name: 'lifecycle-focused-skill-loaded' },
+      { ...guidance.verdict(), name: 'lifecycle-focused-workflow-acquired' })
+    gates.push(...(['sync', 'archive'] as const).map(operation => ({
+      ...hostWorkflowGate('openspec', transcript, false, operation), name: `lifecycle-host-${operation}-guidance`,
+    })))
+    const archive = await glob('openspec/changes/archive/*-link-blocked-account/specs/**/spec.md', { cwd: workspace, nodir: true })
+    const active = await glob('openspec/changes/link-blocked-account/specs/**/spec.md', { cwd: workspace, nodir: true })
+    const version = await runProcess('openspec', ['--version'], { cwd: workspace, timeoutMs: 30_000 })
+    gates.push(gate('lifecycle-host-archive', archive.length > 0 && active.length === 0 && completedNativeArchive(transcript),
+      `OpenSpec ${version.stdout.trim()}; source=https://github.com/Fission-AI/OpenSpec; archived=${archive.join(', ')}; active=${active.length}; completed host archive=${completedNativeArchive(transcript)}`))
+    gates.push(...await nativePublishedEvidence(workspace, checkpoint))
+    const preserved = (await Promise.all(product.map(async ([path, original]) => await readFile(join(workspace, path), 'utf8') === original))).every(Boolean)
+    gates.push(gate('lifecycle-product-preserved', preserved, 'application and selected test bytes compared with pre-transition snapshot'),
+      { ...await infrastructureIntegrityGate(workspace, protectedFiles, [transcript]), name: 'lifecycle-infrastructure-integrity' })
+    return { gates, observations: observations(), verdict: outcome(gates.every(item => item.passed === true) ? 'passed' : 'failed', gates.filter(item => item.passed !== true).map(item => item.name).join(', ') || 'working evidence, genuine archive and surviving evidence independently passed'), transcript, request, turns, checkpoint }
+  } catch (error) {
+    gates.push(gate('lifecycle-evaluation-error', false, String(error)))
+    return { gates, observations: observations(), verdict: outcome('failed', String(error)), transcript, request, turns, checkpoint }
+  }
+}
+
 export async function evaluateNativePilot(name: NativeCase, model: string, keep: boolean, create: boolean): Promise<void> {
   const workspace = await mkdtemp(join(tmpdir(), `focused-native-${name}-`))
   const sessionDir = join(workspace, '.omp-eval-sessions')
   const gates: Gate[] = []
+  const observations: Gate[] = []
   let validation = outcome('unverified', 'native validation not attempted')
   let lifecycle = outcome('unverified', 'no independent host lifecycle transition exercised')
   let transcript = ''
   let regenerationTranscript = ''
+  let lifecycleTranscript = ''
+  let publicationCheckpoint: NativePublicationCheckpoint | undefined
+  const authoringTurns: AgentResult[] = []
+  const lifecycleTurns: AgentResult[] = []
   let dialogue: DialogueResult | null = null
   let planning: PlanningResult | null = null
   let lastRequest: AgentRequest | undefined
   const driver = new OmpAgentDriver()
+  const authoringGuidance = name === 'agent-os' ? null : createGuidanceSession(workspace)
   let lifecycleDiagnostic: EvalDiagnostic | null = null
   try {
     await prepareNativeWorkspace(workspace, name, create)
@@ -771,7 +951,11 @@ export async function evaluateNativePilot(name: NativeCase, model: string, keep:
           : name === 'gsd' ? ['focused-spec', 'gsd-new-project', 'gsd-requirements']
             : name === 'kiro' ? ['focused-spec', 'kiro-requirements']
               : name === 'agent-os' ? ['focused-spec', 'agent-os-shape-spec'] : ['focused-spec']
-    const safeDriver: AgentDriver = { run: request => runAgentTurn(driver, request) }
+    const safeDriver: AgentDriver = { async run(request) {
+      const agent = await runAgentTurn(driver, request)
+      if (agent.success && request.skills.length > 0) await authoringGuidance?.record(request, agent.output)
+      return agent
+    } }
     const request = { workspace, sessionDir, prompt, skills, model, timeoutMs: 600_000 }
     lastRequest = request
     try {
@@ -787,10 +971,11 @@ export async function evaluateNativePilot(name: NativeCase, model: string, keep:
         dialogue.unauthorizedPaths.length === 0 ? 'each authored revision followed test-user approval' : `files changed before approval: ${dialogue.unauthorizedPaths.join(', ')}`))
     }
     const agent = planning?.agent ?? dialogue?.agent ?? await runAgentTurn(driver, request)
+    authoringTurns.push(...(planning === null ? dialogue === null ? [agent] : dialogue.turns.map(turn => turn.scoredAgent) : [planning.agent]))
     transcript = agent.output
     gates.push(gate('agent-turn', agent.success, `exit=${agent.exitCode} durationMs=${agent.durationMs}`))
     if (agent.success) {
-      gates.push(skillActivationGate(agent.output), await guidanceActivationGate(workspace, [agent.output]))
+      gates.push(skillActivationGate(agent.output), authoringGuidance?.verdict() ?? await guidanceActivationGate(workspace, [agent.output]))
       gates.push(hostWorkflowGate(name, agent.output, create))
       if (prerequisite === null || prerequisite.passed === true) {
         const source = await readFile(join(workspace, fixture.path), 'utf8').catch(() => '')
@@ -825,9 +1010,20 @@ export async function evaluateNativePilot(name: NativeCase, model: string, keep:
         gates.push(...regenerated.gates)
         lifecycle = regenerated.verdict
         regenerationTranscript = regenerated.transcript
+        lifecycleTurns.push(...regenerated.turns)
+      }
+      if (name === 'openspec' && gates.every(item => item.passed === true) && infrastructureBeforeLifecycle.passed === true) {
+        const published = await evaluateOpenSpecLifecycle(workspace, model, driver)
+        lastRequest = published.request
+        gates.push(...published.gates)
+        observations.push(...published.observations)
+        lifecycle = published.verdict
+        lifecycleTranscript = published.transcript
+        publicationCheckpoint = published.checkpoint
+        lifecycleTurns.push(...published.turns)
       }
     }
-    gates.push(await infrastructureIntegrityGate(workspace, protectedInfrastructure, [transcript, regenerationTranscript]))
+    gates.push(await infrastructureIntegrityGate(workspace, protectedInfrastructure, [transcript, regenerationTranscript, lifecycleTranscript]))
     } catch (error) {
       const failed = await runAgentTurn({ async run() { throw error } }, lastRequest ?? request)
       if (lastRequest?.sessionDir === join(workspace, '.omp-regeneration-sessions')) {
@@ -842,9 +1038,12 @@ export async function evaluateNativePilot(name: NativeCase, model: string, keep:
     const certified = [authoring, evidence, validation, lifecycle].every(item => item.status === 'passed')
     const diagnostic = lifecycleDiagnostic ?? (gates.some(item => item.passed === false)
       ? await interviewFailedAgent(lastRequest ?? request, gates, 'One native checkable item for blocked-account login, a stable focused ID tied to exact executable evidence, applicable host workflow and format checks, and successful validation and execution through the installed focused-spec CLI.', driver) : null)
-    const result = { caseId: name, mode: create ? 'create' : 'revise', certified, authoring, evidence, nativeValidation: validation, nativeLifecycle: lifecycle, workspace, model, gates, transcript, dialogue, planning, regenerationTranscript, diagnostic }
-    await saveEvalResult(join(root, 'evals/results'), `native-${create ? 'create-' : ''}${name}`, result)
+    const allObservations = [...(authoringGuidance?.observations ?? []), ...observations]
+    const result = { caseId: name, mode: create ? 'create' : 'revise', certified, authoring, evidence, nativeValidation: validation, nativeLifecycle: lifecycle, workspace, model, gates, observations: allObservations, transcript, dialogue, planning, regenerationTranscript, lifecycleTranscript, publicationCheckpoint, scoredTurns: { authoring: authoringTurns, lifecycle: lifecycleTurns }, ...nativeMeasurements(authoringTurns, lifecycleTurns), diagnostic }
+    const resultPath = await saveEvalResult(join(root, 'evals/results'), `native-${create ? 'create-' : ''}${name}`, result)
+    console.log(`result: ${resultPath}`)
     for (const item of gates) console.log(`${item.passed === null ? 'BLOCKED' : item.passed ? 'PASS' : 'FAIL'} ${name} ${item.name}: ${item.detail}`)
+    for (const item of allObservations) console.log(`OBSERVATION ${name} ${item.name}: observed=${item.passed}; ${item.detail}`)
     for (const [aspect, verdict] of Object.entries({ authoring, evidence, nativeValidation: validation, nativeLifecycle: lifecycle })) console.log(`${verdict.status.toUpperCase()} ${name} ${aspect}: ${verdict.detail}`)
     if (diagnostic !== null) console.log(`DIAGNOSTIC ${name} ${diagnostic.status}: ${diagnostic.detail}`)
     console.log(`workspace: ${workspace}${keep ? '' : ' (removed)'}`)

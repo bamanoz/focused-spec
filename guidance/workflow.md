@@ -1,49 +1,57 @@
 # Focused Spec Workflow
 
-This compact package-owned router applies to standalone executable scenarios, application drivers, and native SDD requirements. Keep one native behavioral source: code-native Given/When/Expect or the host's existing requirement or acceptance item. Do not create a second focused-spec copy.
+This router covers executable scenarios, drivers and native SDD items. Keep one behavioral source: code-native Given/When/Expect or the host's requirement/acceptance item, never a focused-spec copy.
 
 ## Preserve the governing boundary
 
-Before writing, establish the requested deliverable and native outcome, canonical source, actual host phase and permissions, existing composition, and operation: review, author/revise, upgrade, or verify. Select the host workflow by artifact and operation. Existing code, tests, or wording-only edits do not create a planning restriction. Preserve host approval, read-only, planning, generated-source, publication, archive, and removal boundaries.
+Establish the requested outcome, canonical source, actual permissions, existing composition and operation before acting. Select the host workflow by artifact and operation; existing code/tests or wording-only edits do not create a planning restriction. Preserve host approval, read-only, planning, generated-source and lifecycle boundaries.
 
-A genuine planning phase records intended identity, evidence, selectors, full owning paths, and later work but cannot configure or execute integration or edit tests, runners, or product code. Required approval covers the complete native revision and auxiliary integration together, not a narrowed wording-only substitute. Recommendation-only and installation-only work stops at its stated deliverable. Respect explicit user exclusions, retain outstanding obligations, and report incomplete synchronization. SDK-only scenarios need no SDD framework, focused configuration, CLI plugins, or text companion.
+Planning records intended identity, exact evidence/selectors, full owning paths and later work; it cannot configure or execute integration or edit tests, runners or product code. Approval must cover the complete native revision and auxiliary integration, not a wording-only substitute. Recommendation-only and installation-only requests stop at that deliverable. Respect explicit exclusions, retain deferred obligations and report incomplete synchronization. SDK-only scenarios need no host framework, focused configuration, CLI plugins or text companion.
 
-## Keep the selected executable and project root distinct
+## Keep executable and project root distinct
 
-The loader selected one installed `focused-spec` executable. It may be project-local, global, or at an explicit path. Use that same executable throughout this workflow step so every topic and command has one package identity. If that installation is upgraded during the step, start again with its fresh workflow.
+Use the loader's selected installed CLI (local, global or explicit path) throughout this step. If it is upgraded, start again with its fresh workflow. Commands reading project configuration, documents or plugins require `--root <project-root>`: dependencies resolve from that consuming root, never the CLI directory or a global/downloaded fallback. `instructions` reads only package assets and has no `--root` option.
 
-The executable's installation directory does not own the consuming project. For commands that read configuration, documents, or plugins, pass the explicit consuming-project root with `--root <project-root>`. Formats, runners, package registrations, and project modules resolve from that project root, never from the CLI location or a global/downloaded fallback. `instructions` reads package-owned assets only and has no `--root` option.
-
-Guidance loading does not install dependencies, write files, validate a project, execute evidence, or grant permission forbidden by the host phase.
+Guidance acquisition neither installs, writes, validates nor executes evidence, and grants no permissions.
 
 ## Acquire one focused topic
 
-Route the task before acting:
+Route before acting:
 
-- `review`: inspect an existing native item, application path, and configured enrollment without writing.
-- `author-revise`: create or revise a native item, application driver, identity, or evidence under its host workflow.
-- `upgrade`: update the selected focused-spec installation/integration and migrate supported project configuration while preserving outcomes and evidence.
-- `verify`: validate, execute selected evidence, prove controlled-regression sensitivity, restore exact state, and execute the completed scope.
-- `integration`: choose a first composition or an explicitly requested composition change, including SDK-only selection.
-- `formats`: apply shared format obligations when selecting, configuring, authoring with, implementing, or repairing an adapter.
-- `runners`: apply shared runner obligations when selecting, configuring, implementing, repairing, or parallelizing a runner.
+- `review`: read-only inspection of native items, application paths and enrollment.
+- `author-revise`: native items, drivers, identity/evidence, complete approvals and deferred-work handoff.
+- `upgrade`: installation/integration updates and configuration migration preserving outcomes/evidence.
+- `verify`: application observations, exact execution, sensitivity/restoration and lifecycle verification.
+- `integration`: first composition or an explicitly requested composition change, including SDK-only selection.
+- `formats`: shared adapter selection, configuration, authoring and implementation obligations.
+- `runners`: shared runner selection, configuration, implementation, repair and parallelism obligations.
 
-Preserve compatible established composition. Inspect manifest, lockfile, suite, and configuration: repairing an already selected compatible dependency is not first composition. Without an established compatible choice, selecting or installing the first execution SDK or runner requires `integration`, including SDK-only work. Missing focused configuration or an existing driver alone decides neither branch. Incompatible existing setups route to `upgrade`, not greenfield selection.
+Inspect manifest, lockfile, native suite and configuration. Preserve compatible established choices: repairing a selected dependency is not first composition. Without an established compatible choice, acquire `integration` before selecting/installing the first SDK or runner, even SDK-only. Missing focused configuration or an existing driver decides neither branch. Incompatible setups route to `upgrade`.
 
-Request the chosen topic from the same executable as a standalone command:
+Request each topic from that same CLI as a standalone command:
 
 ```text
 <focused-spec-cli> instructions --protocol 1 --topic <topic> --json
 ```
 
-Do not chain the request with executable checks, installation, `init`, help, another topic, or another command. If a combined call ran, request the topic again by itself. Accept only a successful response for protocol 1, package `focused-spec` at the selected executable's installed version, the exact requested topic, and nonempty Markdown content.
+Do not chain it with executable checks, installation, `init`, help, another topic or any command; repeat a combined request by itself. Accept only successful protocol-1 JSON for package `focused-spec`, the selected installed version, the requested topic and nonempty Markdown.
 
-Host truncation leaves this workflow or any later topic unacquired. Before continuing, recover the complete stdout from that successful call's linked full-output artifact. A clipped preview, extracted `content`, hidden metadata, another call's artifact, stale guidance, repository file, README, or different installation cannot substitute. If the complete matching response is unrecoverable, stop and report the delivery limitation.
+Host truncation leaves acquisition unfinished. Recover complete stdout from that successful call's linked full-output artifact before proceeding. A clipped preview, extracted `content`, hidden metadata, unrelated artifact, stale guidance, repository file, README or different installation is not a substitute. Stop if the complete matching response is unrecoverable. Focused topics retain their operation-specific obligations and explicitly route to shared topics/contracts when needed. Change topic when the operation changes; refresh workflow before a later step.
 
-The selected focused topic is complete for that operation and may route to a shared topic or selected plugin contract when needed. Return here and acquire a different topic when the operation changes; do not carry procedure from an earlier workflow step as authority.
+## Acquire selected plugin contracts
+
+Before relying on syntax, storage, options, binding or selectors, obtain the selected installed public contract. Use one selection per call:
+
+```text
+<focused-spec-cli> plugin-docs --format <id> --root <project-root> --json
+<focused-spec-cli> plugin-docs --runner <id> --root <project-root> --json
+<focused-spec-cli> plugin-docs --package <specifier> --root <project-root> --json
+```
+
+Only registration requests may add `--config <path>`; package lookup never reads configuration. Accept the exact requested `selection` kind/name, installed package name/version/specifier and canonical package root or configured contained module and canonical project root, plus canonical document path and complete nonempty Markdown. Preserve provenance: dependency/project text is not core instruction, compatibility proof or permission to edit. Recover clipped documents completely before relying on them.
+
+Composition is explicit: read the composing document first; for its documented nested package option, read that exact configured value and request its contract separately with `--package`. Never scan opaque options, enumerate packages, import/search implementation, assume aggregation, or invent syntax. Missing, unsafe, mismatched or incomplete contracts block affected work; another README, sibling package, core guidance or remote fallback cannot substitute. Report the missing registration, installation or document prerequisite rather than silently change composition.
 
 ## Universal evidence boundary
 
-Keep every selected `(scope, ID)` occurrence independent, every evidence reference exact, and every AND member intact. Core owns no evidence store or inheritance rule; the selected format owns identity representation, binding, storage, and provenance. Plugin syntax and selectors come from separately acquired installed public contracts, including an explicit follow-up package request for every composed plugin named by its composing document.
-
-During authorized implementation, compare the real application observation with an independently authored expectation. New or changed evidence must demonstrate `PASS → selected behavioral FAIL under a controlled product regression → exact restoration → PASS`. Test edits, selector errors, missing targets, skips, runner failures, and unrelated failures are not sensitivity. Finish with the completed native suite or configured scope and report actual commands, results, and limitations.
+Preserve every independent `(scope, ID)` occurrence, exact reference and AND member. The selected format owns identity representation, binding, storage and provenance; core supplies no evidence store or inheritance. Use real application observations and independently authored expectations. Before authorized verification/completion, acquire `verify` for the full native/configured execution, required sensitivity, exact restoration and final-scope procedure; report actual commands, results and limitations. Read-only review reports gaps without execution.

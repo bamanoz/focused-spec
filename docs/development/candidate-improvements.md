@@ -1,6 +1,6 @@
 # Candidate improvements
 
-Improvement register and ordered implementation sequence. Block 1 is implemented and archived; later blocks remain unimplemented and require their own selected OpenSpec work. Candidate ideas outside those blocks still need a decision and, where noted, measurement.
+Improvement register and ordered implementation sequence. Block 1 is implemented and archived; block 3's selected guidance consolidation is implemented and verified locally. Block 4's competing-skill evaluation and initial experiment are implemented; no activation gap was observed in the measured sample, so context-file installation remains deferred. Block 2 remains deferred for its policy decision; block 5 is explicitly deferred pending a demonstrated current need for host hooks, not cancelled. Block 6 is partially complete: product-path documentation and the historical Agent OS rerun are complete, public-harness measurements are implemented, and remaining host-verification/reporting work is retained below. Candidate ideas outside those blocks still need a decision and, where noted, measurement.
 
 ## Ordered implementation blocks
 
@@ -47,15 +47,57 @@ The final fresh frozen matrix `.eval-cache/evals-handoff-retries-20261026-nqMppZ
 
 ### Block 2 — Machine-verifiable completion
 
-- Add `focused-spec probe` for disposable product-regression sensitivity checks and exact restoration.
-- Add `focused-spec status --changed` for machine-readable completion state: affected unenrolled items, planned evidence, unresolved references, and missing sensitivity receipts.
-- Acceptance: host hooks and agents can consume stable exit codes/JSON instead of interpreting the prose completion gate.
+- **Status: implementation deferred pending verification-policy review, not cancelled.** `focused-spec probe` and `focused-spec status --changed` remain candidates, not approved implementation requirements. The command ideas below are conditional on this review.
+- **Observed evidence:** the latest complete matrix passed 40/40 cases. `vacuous-evidence` passed both independent sensitivity verification and `agent-sensitivity-probe`, which checks the agent's own observed PASS → assertion FAIL → PASS sequence. Other sensitivity gates independently mutate the resulting application; their success does not establish that the agent performed the experiment itself.
+- **Unproven benefit:** these results do not demonstrate a defect requiring either new command. No analysis has established excessive manual actions, time, or restoration failures, and no paired comparison with an implemented `probe` exists. Do not present reduced workflow complexity or cost as a measured benefit, or propose rerunning the recent matrix merely to rediscover this baseline.
+- **Next decision:** agree on when sensitivity checks are necessary before automating them. Reconsider blanket per-scenario mutation requirements, especially for native executable specifications whose engine owns the assertion. A driver can still disconnect Actual from the real application; native execution does not eliminate that risk. Existing guidance remains unchanged until a separate authorized change.
+- **Conditional `probe`:** justify it as optional automation of a concrete necessary experiment, not a mandatory ritual for every scenario. Do not introduce another project directory or persistent receipt store. Temporary execution copies and terminal/JSON results do not by themselves justify a new completion-state subsystem.
+- **Independent `status --changed` decision:** identify concrete missing checks beyond existing inspection, validation, and execution before committing to this command. Do not make every scenario incomplete solely because it lacks a sensitivity receipt.
+- **Acceptance before implementation:** establish the agreed verification policy and a specific unmet need for each command; only then define its scope and evidence of benefit. Stable exit codes/JSON for agents or future host hooks are a possible interface benefit, not proof that the commands are needed.
 
 ### Block 3 — One standalone/host workflow contract
 
-- Model standalone SDK execution, CLI-integrated scenarios, and SDD-hosted evidence as adapters over one phase and approval contract.
-- Reduce prose branching while preserving SDK-only independence and host-owned lifecycle boundaries.
-- Acceptance: each adapter retains its native source and exact evidence semantics; no framework or CLI becomes mandatory for SDK-only work.
+- **Selected scope:** [consolidate-guidance-rules](../../openspec/changes/consolidate-guidance-rules/tasks.md) consolidates existing procedure in the eight authored topics. No phase model, host adapters, ninth topic, loader/runtime/build change, or verification-policy change is introduced. This is source-checkout work, not a published release or consumer refresh.
+- **Owners:** `workflow` owns universal permissions, selected executable/root and shared plugin-document acquisition/provenance; `author-revise` owns authoring, identity/evidence reconciliation and complete approval/deferred-work handoff; `verify` owns application observations, sensitivity/restoration and executed lifecycle verification. Other topics retain local safety checks, integration selection and format/runner API obligations.
+- **Measured payload:** all eight topics total **74,940 → 67,477 UTF-8 bytes** (7,463 fewer; 10.0%). Router **5,993 → 5,996**, below the existing 6,000-byte bound; each focused topic remains below 14,000 bytes. These are Markdown bytes, not measured token/time savings or improved model compliance.
+
+| Topic | Before bytes | After bytes |
+| --- | ---: | ---: |
+| workflow | 5,993 | 5,996 |
+| review | 7,127 | 5,757 |
+| author-revise | 13,031 | 11,147 |
+| upgrade | 8,902 | 8,252 |
+| verify | 8,762 | 8,823 |
+| integration | 11,695 | 11,573 |
+| formats | 8,975 | 7,037 |
+| runners | 10,455 | 8,892 |
+
+| Route (one acquisition per named topic) | Before bytes | After bytes |
+| --- | ---: | ---: |
+| workflow + review | 13,120 | 11,753 |
+| workflow + author-revise + verify | 27,786 | 25,966 |
+| workflow + integration + formats + verify | 35,425 | 33,429 |
+| workflow + integration + runners + verify | 36,905 | 35,284 |
+| workflow + upgrade + formats + runners + verify | 43,087 | 39,000 |
+
+- **Acquisition trade-off:** no new topic or unconditional read is added. Authorized format/runner/integration verification now explicitly acquires `verify` rather than relying on the router's former sensitivity paragraph. Review remains read-only; missing requested guidance remains blocking. Route totals compare the same named topics, exclude plugin documents and do not prove fewer actual requests. Fresh agent acquisitions are recorded separately with their results.
+- **Verification:** `npm test` passed **408 tests in 21 files**; `openspec validate consolidate-guidance-rules --strict` passed with the deliberate no-delta declaration. Focused CLI/packed-topic/composed-document and evaluator-oracle checks passed 8 selected tests. A real packed CLI served all eight text/JSON topics in an offline unconfigured consumer (16 successful deliveries); a removed requested topic failed without fallback. All 223 local links across 16 documentation pages resolve, and every page is index-reachable. Measurements and immutable smoke/eval artifacts are retained under `.eval-cache/consolidate-guidance-20261026-cCYf6B/`.
+- **Retained boundaries:** SDK-only work keeps its native suite without focused configuration/plugins; host approval/lifecycle, exact identity, every AND member, controlled regression and exact restoration remain unchanged. Block 2's policy review and other outstanding blocks are neither implemented nor cancelled here.
+
+Fresh black-box consolidation verification passed **6/6** cases on `externcash/gpt-6.1-sol`, concurrency three, with exit 0 for every invocation, unchanged frozen candidate assets and no observed provider interruption or retry. Independent behavior, exact evidence, sensitivity, phase, lifecycle and protected-state gates passed where applicable. That historical SDK result contains a false `focused-integration-acquired` observation; it remains immutable. Subsequent evaluator correction recognizes the existing executable suite as SDK dependency selection, so repairing the missing package does not generate a missing-integration warning. This changes no prompt, application-sensitivity gate or installed guidance. These six cases are not a new complete 40-case matrix or universal native-host certification.
+
+The dependency-selection correction passed **409 repository tests in 21 files**, including a regression that previously reproduced the false warning while still rejecting the expectation-echo driver. A fresh isolated `executable-authoring-sdk` run on `externcash/gpt-6.1-sol` passed every scored gate with unchanged candidate assets and without reading `integration`; routing now reports `established compatible composition retained: @focused-spec/scenarios-typescript`. Evidence is retained under `.eval-cache/sdk-dependency-repair-20261026-1Cm8U8/`. Historical model results and installed guidance are unchanged.
+
+| Fresh case | Result | Historical → fresh topic requests | Historical → fresh plugin-document requests |
+| --- | --- | ---: | ---: |
+| executable-authoring-sdk | PASS | 4 → 3 | 2 → 2 |
+| executable-authoring-cli | PASS | 6 → 4 | 3 → 3 |
+| spec-evidence-revision | PASS | 3 → 3 | 4 → 4 |
+| inline-propose-apply | PASS | 7 → 7 | 5 → 5 |
+| inline-lifecycle | PASS | 9 → 6 | 6 → 6 |
+| project-upgrade | PASS | 4 → 5 | 1 → 1 |
+
+Counts include repeated focused topic requests, excluding help and OpenSpec's own `instructions`. Fresh requests all delivered complete recovered JSON. The historical upgrade used two text requests, counted separately from its two JSON responses; the fresh upgrade additionally requested workflow twice. These are observed unpaired runs, not proof that consolidation causes fewer requests or improves token cost, latency or reliability. Full transcripts, gates, commands, hashes and immutable result paths are indexed by `eval-summary.json`; `fresh-acquisitions.json` records request/recovery details and the unchanged historical comparison.
 
 ### Block 4 — Measure activation before changing installation
 
@@ -64,8 +106,30 @@ The final fresh frozen matrix `.eval-cache/evals-handoff-retries-20261026-nqMppZ
 - Only if the baseline shows a material activation gap, evaluate an opt-in marker block in the host context file (`AGENTS.md`, `CLAUDE.md`, or target-specific equivalent).
 - Acceptance: the decision to add context-file installation is based on paired measured results, not assumption.
 
+**Status: evaluation implemented; initial experiment complete on 2026-10-26.** `blind-skill-activation` is a public-harness case with an explicit `--competing-skills` source. Three fresh workflows per arm used the same `externcash/gpt-6.1-sol` model, ordinary proposal/apply prompts, fixture, tools and independent gates. The baseline exposed seven skills (focused-spec plus all six OpenSpec skills); the competing arm exposed all 22 skills from the supplied installed catalogs, including 15 additional real skills and their assets. Each workflow had two fresh sessions. The first competing run was exercised in isolation, followed by the remaining alternating comparison runs with concurrency one. Instructions, loader, installer and context-file markers were not changed.
+
+| Measurement | Baseline: 7 skills | Competing: 22 skills |
+| --- | ---: | ---: |
+| Complete workflows passed | 3/3 | 3/3 |
+| Skill activation / executed fresh sessions | 6/6 | 6/6 |
+| Installed workflow acquisition / executed fresh sessions | 6/6 | 6/6 |
+| Median summed agent wall seconds | 398.863 | 373.437 |
+| Agent wall seconds range | 364.058–452.932 | 373.394–393.199 |
+| Median reported uncached input tokens | 178,078 | 246,462 |
+| Median reported cached-read tokens | 1,695,232 | 2,015,360 |
+| Median reported output tokens | 10,532 | 10,247 |
+| Median reported total tokens | 1,869,538 | 2,233,810 |
+
+All six invocations exited 0; every scored planning, activation, exact-evidence, application-sensitivity and integrity gate passed. Usage was complete in all six results; reported cache-write tokens were zero. No provider error messages were recorded and the experiment made no retries. Candidate/host/competing-skill source hashes stayed unchanged. Each median is calculated independently, so the median token columns need not add up. Wall time excludes provisioning, independent judges and interviews; total tokens include cached context and are not monetary costs. These three workflows per arm do not establish universal activation reliability, native slash-command behavior, a complete matrix result or a causal speed/cost improvement.
+
+**Decision:** no missed activation was observed, so this sample supplies no evidence for adding an always-loaded context-file pointer or changing installation. Retain the new eval for future model/catalog comparisons; context-file intervention remains conditional rather than cancelled. Immutable invocation logs, raw result paths, candidate/catalog hashes and measurements are indexed by `.eval-cache/blind-activation-20261026-N4Xr1q/manifest.json` and `summary.json`.
+
+Repository verification passed **415 tests in 22 files** with `npm test` (build and test/eval typechecks included); the two affected evaluator test modules separately passed **68 tests**. The real CLI lists the new case and rejects its missing catalog prerequisite. All **223 relative documentation links across 16 pages** resolve, every documentation page is index-reachable, and the new section anchor exists. Root README remains accurate without an evaluator-only addition.
+
 ### Block 5 — Native in-loop host hooks
 
+- **Status: deferred by user decision, not cancelled.** No current reproducible failure has been established here that requires host hooks. Their proposed benefit is returning a failed check to the agent before completion, not repairing a demonstrated current activation defect.
+- **Revisit only with evidence:** identify a reproducible skipped mandatory check or premature completion, a documented hook in the affected host that detects it, and a paired comparison showing improvement without blocking authorized planning-only or read-only work. Block 4's successful activation sample does not establish completion reliability or the need for a hook.
 - Implement only for hosts with documented command/event hooks, beginning with the highest-value host.
 - Consider spec-path reminders and `Stop`/post-task CLI verification that returns failures to the agent for another turn.
 - Keep host-specific adapters optional; do not add hooks where the host only supports prompt injection.
@@ -73,11 +137,29 @@ The final fresh frozen matrix `.eval-cache/evals-handoff-retries-20261026-nqMppZ
 
 ### Block 6 — Documentation, host coverage, and eval quality
 
-- Clarify the two product paths in first-run documentation without duplicating installed workflow guidance.
-- Verify host context-file mappings and extension claims against primary sources before shipping integrations.
-- Repeat `native revise agent-os` and improve native lifecycle/validation coverage where certification remains unverified.
-- Add per-case token and wall-time reporting plus guidance-loading failure rates to eval summaries.
-- Acceptance: documentation matches shipped behavior, host claims have evidence, and eval reports distinguish failed from unverified.
+- **Status: verification/reporting implementation exercised; one observed model failure and external certification limits retained below.** This is not a new product feature, a universal reliability claim, or authorization to implement block 5.
+- **Complete — product-path orientation:** root README already distinguishes independent executable SDK scenarios from binding native requirements to exact tests, without duplicating installed procedures. No additional rewrite is justified by this item alone.
+- **Complete — historical Agent OS rerun:** the subsequent frozen 40-invocation matrix at `.eval-cache/evals-handoff-retries-20261026-nqMppZ/summary.json` passed all 14 native authoring/evidence pairs, including Agent OS revision and creation. Repeating the old revision failure solely to rediscover that outcome is unnecessary. This does not certify unsupported native validation or lifecycle.
+- **Complete — measurement/report implementation:** new public and native results retain scored agent duration and completed assistant-message usage, with per-native-phase coverage, resumed-journal boundaries and explicit missing/incomplete usage. ACP excludes measured test-user waits while retaining interaction elapsed time. Fresh Gherkin and Agent OS revision runs on `externcash/gpt-6.1-sol` passed authoring/evidence with complete usage; ACP recorded 390,360 ms interaction, 25,989 ms responder waits and 364,371 ms scored duration. The [agent evaluation guide](agent-evals.md#native-measurements) owns these semantics.
+- **Complete — immutable cross-case reports:** `evals/report.ts` accepts explicit results and campaign attempts; reports independent verdicts, interruptions, missing results, provenance, measurement coverage and loader/workflow/host-guidance denominators. A historical smoke selected five attempts, four immutable results and one missing-result invocation, retaining one provider and one provisioning interruption; every input hash stayed unchanged. No historical measurement was invented. `.eval-cache/complete-host-20261026/report-smoke-proof.json` records inputs/commands/hashes; all ten new exact evidence targets passed, and each detected its isolated behavioral regression before exact restored PASS (`sensitivity-proof.json`).
+- **Complete — host claim audit:** the source-qualified [context-file survey](#context-file-pointer-written-by-init), [hooks](#event-scoped-host-hooks) and [SDD extension table](#sdd-host-extension-points) distinguish documented capability, pinned fixture/runtime limits and actual execution. This audit installs no context-file pointer or hook and does not alter installer destinations. Native check provenance and executed audit commands are recorded in the [capability table](agent-evals.md#native-capability-provenance).
+- **Executed — applicable native operations:** the fresh five-invocation sample passed all authoring/evidence pairs, real BMad regeneration and OpenSpec creation publication/archive. OpenSpec revision completed native archive, final binding/AND evidence, strict host validation, final selected execution, sensitivity/restoration and protected-state checks, but correctly failed lifecycle certification because its second approval-separated step omitted fresh workflow acquisition. The failed result and interview are retained; no behavioral retry or gate relaxation was made.
+- **External limits retained:** Spec Kit, Kiro, BMad, GSD and Agent OS have no applicable runnable standalone validator in these fixtures; Gherkin validation is syntax-only. Agent OS/Gherkin lifecycle remains unverified. Documented broader runtime capabilities do not certify these fixtures. Unsupported operations are explicit `unverified` results, not substitutes or cancelled obligations.
+- **Acceptance:** documentation matches shipped behavior; host claims identify their primary-source evidence and limits; aggregate reports distinguish failed, blocked/unverified and provider-interrupted cases, with explicit measurement coverage. Native certification requires actually executed applicable checks. Completed items stay closed; remaining items require their own selected work.
+
+Fresh isolated commands used `node --experimental-strip-types evals/native-pilot.ts <host> externcash/gpt-6.1-sol --keep-workspace`, adding `--create` only for OpenSpec creation. `.eval-cache/complete-host-20261026/manifest-1793015762093.json` and `manifest-1793016034552.json` retain all five attempts and exact immutable result paths. `fresh-report.json`/`.txt` and `fresh-report-proof.json` retain selected coverage, command arguments and unchanged input hashes; this is not a rerun of the historical 40-invocation matrix.
+
+| Fresh case | Scored duration (ms) | Reported total tokens | Native lifecycle |
+| --- | ---: | ---: | --- |
+| Gherkin revision | 187,140 | 601,911 | Unverified |
+| Agent OS revision | 364,371 | 879,498 | Unverified |
+| BMad revision | 265,063 | 943,868 | Passed regeneration |
+| OpenSpec creation | 354,368 | 2,166,764 | Passed publication/archive |
+| OpenSpec revision | 324,391 | 1,492,039 | Failed workflow reacquisition |
+
+Usage was complete in all five results; native phase coverage is five authoring and three lifecycle phases. No provider/provisioning interruption was recorded. Saved combined/phase judgments report loader 8/8 passed, workflow 7/8 passed (one failure), and host guidance 9/9 passed. Those denominators are judgments, not five independent per-turn observations. Token totals include cached context and are not monetary cost. OpenSpec creation alone is certified; unsupported aspects and the revision failure remain distinct.
+
+Repository verification: `npm test` passed 426 tests in 23 files; `npm run smoke` executed both Go and pytest evidence successfully. After syncing five requirements/ten scenarios and archiving `complete-host-verification-and-eval-reporting`, all discovered scopes passed strict validation and execution: 359 items, zero planned references, 385 unique targets, no FAIL/SKIP/ERROR. The first all-scope validation exposed four stale selectors in older active changes; their existing behavioral tests were renamed, so those scope-local references were reconciled before the final passing run. All 21 main capability specs passed strict native validation. Documentation verification resolved 231 local links across 16 index-reachable pages; root README remains accurate and intentionally unchanged. No release or consumer refresh was performed.
 
 ## Agent guidance delivery
 
@@ -126,62 +208,62 @@ Earlier advice to make one language/framework path primary is withdrawn. The sup
 
 ### Measure realistic skill activation first
 
-Current agent evals cannot show whether the loader activates on its own: cases pass `--skills focused-spec`, use a small skill set, and the prompt names evidence work. Add an eval variant with a realistic prompt (only a host command such as `/opsx:apply`, no mention of evidence or focused-spec) and the full installed skill set, then measure how often `focused-skill-loaded` passes.
+`full-skill-routing` already tests blind proposal/apply prompts with focused-spec and all six OpenSpec skills; it is not a realistic broad competing catalog. The added `blind-skill-activation` reuses that exact fixture, prompts and behavior gates while exposing every additional skill from an explicitly supplied installed catalog in both fresh sessions. It records immutable skill-file hashes, per-turn activation/workflow gates, agent wall duration and completed assistant-message token usage. Ordinary natural-language host tasks are exercised; native slash-command dispatch and every-host activation remain unverified. The [agent evaluation guide](agent-evals.md#competing-skill-activation-experiment) owns its repeatable commands and measurement boundaries.
 
 This measurement gates every other activation item below: if activation is already reliable, they add cost without benefit.
 
 ### Context-file pointer written by `init`
 
-Status: deferred; no demonstrated benefit yet.
+Status: deferred; no demonstrated benefit yet. `init` does not write any of these files. The audit below records documented host behavior, not an installer contract or observed activation. Sources were inspected on 2026-10-26.
 
-`init` would add a marker-delimited block to the target's always-loaded context file, keeping the skill as the only owner of the procedure:
+| File | Documented support | Boundary relevant to a future pointer |
+| --- | --- | --- |
+| `AGENTS.md` | The [open format](https://github.com/openai/agents.md) defines a conventional project instruction file. [Claude Code](https://code.claude.com/docs/en/memory#agents-md) now reads hierarchical `AGENTS.md` files by default only when no applicable `CLAUDE.md`/`CLAUDE.local.md` exists, unless its instruction mode is changed. [Copilot's support matrix](https://docs.github.com/en/copilot/reference/custom-instructions-support) lists agent instructions for Copilot CLI, cloud agent and selected review/IDE surfaces. | The format itself cannot prove that an arbitrary target loads it. Gemini loads `AGENTS.md` only when `context.fileName` is configured to include it; the [Gemini CLI v0.32.1 contract](https://github.com/google-gemini/gemini-cli/blob/v0.32.1/docs/cli/gemini-md.md) defaults to `GEMINI.md`. |
+| `CLAUDE.md` | [Claude Code memory documentation](https://code.claude.com/docs/en/memory#claudemd-files) documents project `./CLAUDE.md` or `./.claude/CLAUDE.md`, hierarchy and lazy subdirectory loading; these are advisory context, not enforcement. Copilot documents a root `CLAUDE.md` as an alternative agent-instruction file on the surfaces named in its support matrix. | This is not a portable destination for other targets. The exact Claude version was not pinned by the pilot, and no Claude context-file activation was executed by this audit. |
+| `GEMINI.md` | [Gemini CLI v0.32.1](https://github.com/google-gemini/gemini-cli/blob/v0.32.1/docs/cli/gemini-md.md) documents global, workspace/ancestor and just-in-time hierarchical loading, with configurable file names. Copilot documents a root `GEMINI.md` as an alternative agent-instruction file on selected surfaces. | Support is host- and surface-specific. A Gemini default does not establish behavior in Copilot, Claude or any target merely sharing a skill destination. |
+| `.github/copilot-instructions.md` | GitHub documents it as repository-wide Copilot instructions and separately documents path-specific `.github/instructions/**/*.instructions.md` plus agent-instruction files. The [surface matrix](https://docs.github.com/en/copilot/reference/custom-instructions-support) differs across GitHub.com, IDEs, code review, cloud agent and CLI. | The shipped `github-copilot` integration writes `.github/skills/focused-spec/SKILL.md` and `.github/prompts/focused-spec.prompt.md`, not a context file; those IDE assets do not configure Copilot CLI or cloud-agent instructions. |
 
-```md
-<!-- focused-spec:begin -->
-## Behavioral specifications
-Before any step that creates, revises, reviews, or verifies requirements, acceptance criteria, or scenarios — including inside OpenSpec, Spec Kit, Kiro, BMad, or GSD workflows — load the `focused-spec` skill and follow it.
-<!-- focused-spec:end -->
-```
-
-- Value only if the block carries project knowledge the skill description cannot: the detected host commands (for example `openspec-apply-change`) and spec paths (`openspec/specs/**`, `.specify/**`, `.kiro/specs/**`). A generic pointer duplicates the description.
-- Per-target destination in the init catalog (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`); which file each host actually loads is unverified.
-- Explicit consent: interactive prompt; an explicit flag in JSON/noninteractive/CI mode, mirroring `--tools`. Markers let `init --replace` update or remove only the block.
-- Do not inline the loader procedure: it would cost tokens in every session and create a second procedure owner.
-- Ship only if the activation eval shows a measurable gain.
+The earlier proposal to choose one context destination per installer target was therefore too broad. Any future marker needs explicit consent plus a named host surface and its documented precedence/loading rules; it must not infer autoloading from the 50-target skill/wrapper catalog. A generic pointer still duplicates the skill description, consumes every-session context and has no measured benefit in the current activation sample.
 
 ### Event-scoped host hooks
 
-Where the host supports it, inject a short reminder only when the agent touches specification files, instead of loading guidance into every system prompt: `PreToolUse`/`PostToolUse` matchers on spec paths, or Kiro `PostFileSave`. Costs per-host implementations and hook trust approval (for example Codex `/hooks`).
+Documented hooks are surface- and version-specific; none is installed by focused-spec and none was executed in the native pilot:
+
+- [Claude Code hooks](https://code.claude.com/docs/en/hooks) document `PreToolUse`, `PostToolUse` and `Stop`. A synchronous `Stop` hook can continue the conversation with exit code 2 or `{"decision":"block","reason":"..."}`; the current reference also documents an eight-consecutive-continuation cap. This is documented current behavior, not an observed pilot result.
+- [Kiro Hook types](https://kiro.dev/docs/hooks/types.md) (page modified 2026-10-10) document standalone `.kiro/hooks/*.json` definitions for IDE and CLI, while Web stores but does not run file/task triggers. `Agent Stop` continues with exit 1 or an exit-0 `decision: "block"`; `Post Task Execution` runs after a spec task. The native fixture fetches only requirements guidance and installs no Kiro IDE/CLI runtime, so applicability and execution remain unavailable there.
+- Spec Kit `specify-cli` 1.2.3 exposes `specify event run` and the official source defines `session_start`, `pre_tool_use`, `post_tool_use`, `session_end`, `user_prompt_submit` and `stop`. Its [workflow reference](https://github.com/github/spec-kit/blob/main/docs/reference/workflows.md) also documents `type: shell` overlay steps. The native fixture installs only generic authoring assets; it installs no focused-spec extension, event handler, workflow or overlay, so these mechanisms are not applicable checks for that fixture.
+
+No hook or context pointer is implemented. Revisit only after a reproducible skipped check identifies a specific surface and a paired experiment demonstrates benefit without blocking read-only or planning-only work.
 
 ## Completion enforcement
 
 ### `Stop` hook that runs the CLI
 
-Hosts that run a command at turn end and feed failure back to the agent can enforce evidence inside the agent loop, which git hooks and CI cannot: the agent gets another turn with the failure output.
+Where a documented end-of-turn event can synchronously return failed verification to the same agent loop, it could provide earlier feedback than CI. The exact audited claims are:
 
-- Kiro: `Stop` / `PostTaskExecution` hook with `type: command`; exit 1 on `Stop` gives the agent another turn.
-- Claude Code: `Stop` hook returning `decision: block`.
-- Spec Kit: runtime events (`stop`, `post_tool_use`) run `scripts` directly; a workflow overlay step `type: shell` after `implement` runs only under `specify workflow run`.
+- **Kiro IDE/CLI:** `Agent Stop` exit 1 or an exit-0 JSON `decision: "block"` starts another turn. Other nonzero exit codes leave the response finished. `PostTaskExecution` exists for completed spec tasks, but the docs do not say every such failure starts another turn. The previous unqualified “exit 1 on `Stop`” claim is valid only for the documented local IDE/CLI surfaces, not Web or this runtime.
+- **Claude Code:** `Stop` with exit code 2 or `decision: "block"` prevents stopping and returns the reason to Claude, subject to its continuation guard/cap.
+- **Spec Kit 1.2.3:** runtime events can dispatch a command template's declared `scripts`, and a workflow overlay can add a `type: shell` step. Extension `hooks` are command invocations handled through the extension/event mechanism; they are not proof that an agent itself runs a magic `EXECUTE_COMMAND`, and workflow shell steps run only inside `specify workflow run`.
 
-This addresses failures that a context pointer cannot: in the `0.10.1` baseline, `native revise agent-os` loaded the skill and workflow guidance, then stopped after plan approval without applying the native marker or `.focused-spec/evidence.yaml`.
+These are candidates, not a completion guarantee. The project has not selected a hook, installed one, or observed one in the native fixtures. Historical Agent OS motivation remains non-current: the later frozen matrix passed Agent OS revision/creation authoring and evidence, while Agent OS's inspected source exposes plan-mode shaping and standards injection rather than a native command hook.
 
 ## SDD host extension points
 
-Survey of host-native integration points, from documentation (Kiro and GSD were not verified against source):
+Primary-source audit, inspected 2026-10-26. “Runs command” means the documented host mechanism can launch a process; it does not mean focused-spec configured or observed that path.
 
-| Host | Mechanism | Host runs a command itself |
+| Host / inspected fixture | Documented mechanism and primary source | Applicability, runtime and observed limit |
 | --- | --- | --- |
-| Spec Kit | runtime events with `scripts`; workflow overlay `insert_after: implement` with `type: shell`; `after_implement` hooks with `optional: false` | events and workflow steps yes; hooks are executed by the agent via `EXECUTE_COMMAND` |
-| Kiro | `.kiro/hooks/*.json`, `PostTaskExecution` / `Stop` triggers, `type: command` action | yes |
-| GSD Core | `agent_skills.gsd-verifier` / `gsd-executor` in `.planning/config.json` inject `SKILL.md` into the spawned agent prompt | no; guarantees the skill is in context |
-| OpenSpec | `config.yaml` `context` and `operations.apply.guidance`, surfaced by `openspec instructions`; `apply.instruction` in a schema copy | no; agent-facing text |
-| BMad | `_bmad/custom/<skill>.toml`: `activation_steps_*`, `persistent_facts`, `on_complete` | no; agent-facing text |
-| Agent OS | standards via `/inject-standards`; no hooks | no |
+| Spec Kit / `specify-cli` 1.2.3 observed by `specify version --json` | [`specify event run`](https://github.com/github/spec-kit/blob/main/src/specify_cli/events/command_run.py) dispatches scripts for six canonical events; [workflow overlays](https://github.com/github/spec-kit/blob/main/docs/reference/workflows.md#workflow-overlays) can insert a `type: shell` step. | Current CLI surfaces were observed with `event --help` and `workflow --help`. The pilot's generic init installs authoring command/template assets only; no applicable validator, event handler or workflow is installed or executed. `self check` checks CLI releases, not spec validity. |
+| Kiro / current requirements page, no runtime version | [Hook types](https://kiro.dev/docs/hooks/types.md) and [actions](https://kiro.dev/docs/hooks/actions.md) document shell-command hooks in IDE/CLI, including stop, tool, file and task events; Web does not execute file/task triggers. | The pilot downloads requirements Markdown only. No Kiro executable/IDE, hook configuration or version is installed, so native validation, lifecycle and hook execution are unavailable rather than failed. |
+| GSD Core / npm `@opengsd/gsd-core@1.16.0`, registry `gitHead` [`87e87d34`](https://github.com/open-gsd/gsd-core/tree/87e87d34b2d8519e30d1af7d910fc98f2af4bc8d) | The exact-revision [command reference](https://github.com/open-gsd/gsd-core/blob/87e87d34b2d8519e30d1af7d910fc98f2af4bc8d/docs/COMMANDS.md) defines agent-driven project/phase verify and ship workflows; `gsd-tools.cjs` is their orchestration utility. | The pilot installs Pi assets and supplies the new-project workflow plus requirements template. A lone authored `REQUIREMENTS.md` has no initialized phase/project state for verify/ship, and there is no standalone requirements validator. No applicable native validator or lifecycle command was executed. |
+| OpenSpec / CLI 1.14.1 | [Customization](https://github.com/Fission-AI/OpenSpec/blob/v1.14.1/docs/customization.md) documents prompt-level `context`, artifact `rules` and `operations.apply/archive.guidance`; official sync/archive skills own publication. | Guidance is agent-facing, not an enforcement hook. `openspec validate <change> --strict` is an applicable native validator and was already executed in both historical fixture modes. Archive is a genuine lifecycle operation and remains for Main's selected pilot extension, not this survey. |
+| BMad / commit [`48f0ce37`](https://github.com/bmad-code-org/BMAD-METHOD/tree/48f0ce37e1fc378d6255c90e1b155f2212a6fe33) | The pinned `bmad-spec` skill owns kernel update/validation and the pinned [`setup.py`](https://github.com/bmad-code-org/BMAD-METHOD/blob/48f0ce37e1fc378d6255c90e1b155f2212a6fe33/skills/bmad/scripts/setup.py) exposes read-only `--status` for installation state. | Existing pilot regeneration through the memlog-backed official workflow is the applicable lifecycle check and passed historically. `setup.py --status` validates installation state, not a SPEC's semantics; no separate non-model native SPEC validator was found. Earlier `_bmad/custom/*.toml` hook-like field claims were not found in this pinned source and are withdrawn. |
+| Agent OS / unpinned `main`, inspected at [`e892e61d`](https://github.com/buildermethods/agent-os/tree/e892e61d322759165e7d9173e92c1010406c9f4d) | [`shape-spec.md`](https://github.com/buildermethods/agent-os/blob/e892e61d322759165e7d9173e92c1010406c9f4d/commands/agent-os/shape-spec.md) requires plan mode and approval; standards are selected from `agent-os/standards/index.yml` and copied into spec planning artifacts. | The pilot fetches `main` at runtime and adds an OMP question bridge; it does not install an Agent OS CLI or pin a version. No native validator, lifecycle command or hook is present in the inspected fixture. The absence is limited to that revision/fixture, not a claim about every external Agent OS host integration. |
 
-Two integration levels follow: hosts that execute a check and return its result to the agent (Kiro, Spec Kit), and hosts that only guarantee the instruction reaches the agent (GSD, OpenSpec, BMad). Git hooks and CI already work with any host and need no product change.
+The audit leaves only documented command-running extension points in Spec Kit and Kiro (plus Claude Code as a non-SDD host example). GSD, OpenSpec, BMad and Agent OS mechanisms inspected here are agent-facing workflow/context or host-owned lifecycle operations, not generic synchronous enforcement. Git hooks and CI remain host-independent alternatives but do not return failures inside every agent loop.
 
 ## Eval follow-ups from the `0.10.1` baseline
 
-- Rerun `native revise agent-os` to tell a stable regression from a one-off model miss.
-- Native pilots stay uncertified because host phases are not independently checked: `nativeValidation` is unverified for Spec Kit, Kiro, BMad, GSD, and Agent OS; `nativeLifecycle` is unverified for every host except BMad.
-- Add per-case token and wall-time cost, and the guidance-loading failure rate, to eval reports. Target zero loading failures by removing loader gates, not by polishing their wording.
+- **Closed:** the Agent OS revision rerun was completed in the later frozen 40-invocation matrix; all native authoring/evidence pairs passed. Historical failures remain immutable, not evidence that the same defect persists.
+- **Open:** the observed OpenSpec revision workflow-reacquisition failure and unsupported native certification aspects remain visible in block 6. Authoring/evidence success and a successful final host operation cannot substitute for a missing mandatory guidance step. No new context pointer or hook has been justified by this unpaired observation.
+- **Closed implementation:** public/native measurements and immutable aggregate reports are implemented and exercised with explicit denominators/provenance. Block 6 records actual selected results and limitations; block 4 retains the activation experiment, not a universal zero-failure claim.

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentDriver, AgentRequest, AgentResult, EvalCase } from '../evals/types.ts'
 import { runEval } from '../evals/harness.ts'
-import { brownfieldGate, guidanceActivationGate, integrityGate, judgeCompletedWorkspace, judgeProposalCheckpoint, judgeWorkingCheckpoint, mutationGate, registryPlacementGate, scenarioGate, skillActivationGate, snapshotProtectedFiles } from '../evals/judge.ts'
+import { brownfieldGate, createGuidanceSession, guidanceActivationGate, integrityGate, judgeCompletedWorkspace, judgeProposalCheckpoint, judgeWorkingCheckpoint, mutationGate, registryPlacementGate, scenarioGate, skillActivationGate, snapshotProtectedFiles } from '../evals/judge.ts'
 import { judgeEvidenceRepair } from '../evals/evidence-repair.ts'
 import { specRevisionGate } from '../evals/spec-revision.ts'
 import { evalCase } from '../evals/cases.ts'
@@ -94,8 +94,10 @@ interface GuideTranscriptOptions {
   readonly failed?: boolean
 }
 
+let guidanceCall = 0
+
 function guidanceTranscript(workspace: string, options: GuideTranscriptOptions = {}): string {
-  const callId = 'workflow-guide'
+  const callId = `workflow-guide-${guidanceCall++}`
   const cli = join(workspace, 'node_modules', 'focused-spec', 'dist', 'cli.js')
   const command = options.command ?? `${JSON.stringify(process.execPath)} ${JSON.stringify(cli)} instructions --protocol 1 --topic workflow --json`
   const response = options.response ?? {
@@ -378,6 +380,24 @@ describe('agent eval harness', () => {
     expect(await integrationRoutingGate(root, [], { source: 'typescript', mode: 'integrate', cli: false }, absent)).toMatchObject({ passed: false })
     expect(await integrationRoutingGate(root, [], { source: 'go', mode: 'integrate', cli: true }, baseline)).toMatchObject({ passed: false })
     expect(await integrationRoutingGate(root, [], { source: 'go', mode: 'recommend', cli: false }, baseline)).toMatchObject({ passed: false })
+  })
+
+  it('treats an existing executable SDK suite as dependency repair rather than first SDK selection', async () => {
+    const root = await activationFixture()
+    const path = 'specifications/account.scenarios.mjs'
+    await put(root, path, await readFile(join(repository, 'examples/scenarios/typescript', path), 'utf8'))
+    const baseline: IntegrationBaseline = {
+      files: await integrationFiles(root), protected: new Map(), candidates: new Map(), native: new Map(),
+      packages: ['focused-spec'], establishedComposition: await inspectEstablishedComposition(root, ['focused-spec']),
+    }
+    const choice: IntegrationCase = { source: 'typescript', mode: 'author', cli: false }
+    expect(await integrationRoutingGate(root, [], choice, baseline)).toMatchObject({ passed: true })
+    expect(await integrationRoutingGate(root, [], { ...choice, cli: true }, baseline)).toMatchObject({ passed: false })
+
+    await put(root, path, "// import { defineSuite } from '@focused-spec/scenarios-typescript';\nexport default {};\n")
+    const unselected = { ...baseline, establishedComposition: await inspectEstablishedComposition(root, ['focused-spec']) }
+    expect(await integrationRoutingGate(root, [], choice, unselected)).toMatchObject({ passed: false })
+    expect(await integrationRoutingGate(root, [], choice, baseline)).toMatchObject({ passed: true })
   })
 
   it('rejects replacement of native acceptance items during integration', async () => {
@@ -929,7 +949,7 @@ describe('agent eval harness', () => {
     expect(result.gates.some(gate => gate.name === 'main-scope-evidence')).toBe(false)
   }, 120_000)
 
-  it('scores SDK repair by verified outcome rather than integration reading', async () => {
+  it('recognizes SDK dependency repair without requiring integration reading while rejecting false-green evidence', async () => {
     const driver = (repair: boolean): AgentDriver => ({
       async run(request) {
         const packages = await glob('../packages/focused-spec-scenarios-typescript-*.tgz', { cwd: request.workspace, absolute: true })
@@ -946,11 +966,11 @@ describe('agent eval harness', () => {
     const repaired = await runEval({ caseId: 'executable-authoring-sdk' }, driver(true))
     expect(repaired.gates.filter(gate => !gate.passed)).toEqual([])
     expect(repaired.passed).toBe(true)
-    expect(repaired.observations).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'focused-integration-acquired', passed: false })]))
+    expect(repaired.observations).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'focused-integration-acquired', passed: true })]))
     const falseGreen = await runEval({ caseId: 'executable-authoring-sdk' }, driver(false))
     expect(falseGreen.passed).toBe(false)
     expect(falseGreen.gates.find(gate => gate.name === 'executable-application-sensitivity')).toMatchObject({ passed: false })
-    expect(falseGreen.observations).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'focused-integration-acquired', passed: false })]))
+    expect(falseGreen.observations).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'focused-integration-acquired', passed: true })]))
   }, 180_000)
 
   it('records a failed agent turn without running downstream judges', async () => {
@@ -1146,29 +1166,101 @@ describe('agent eval harness', () => {
     }
   })
 
-  it('requires fresh guidance for a subsequent workflow step', async () => {
+  it('reuses unchanged guidance across a resumed approval dialogue', async () => {
     const root = await activationFixture()
-    const first = guidanceTranscript(root)
-    expect(await guidanceActivationGate(root, [first, guidanceTranscript(root, { complete: false })])).toMatchObject({ passed: false,
-      detail: expect.stringContaining('workflow step 2') })
-    expect(await guidanceActivationGate(root, [first, guidanceTranscript(root)])).toMatchObject({ passed: true })
-    expect(await guidanceActivationGate(root, [artifactGuidanceTranscript(root),
-      artifactGuidanceTranscript(root, { omitCommand: true })])).toMatchObject({ passed: false,
-      detail: expect.stringContaining('workflow step 2') })
+    const sessionDir = join(root, '.authoring')
+    const session = createGuidanceSession(root)
+    const acquired = artifactGuidanceTranscript(root)
+    await session.record({ sessionDir }, acquired)
+    expect(session.verdict()).toMatchObject({ passed: true })
+    await session.record({ sessionDir, resume: join(sessionDir, 'session.jsonl') }, '')
+    expect(session.verdict()).toMatchObject({ passed: true })
+    expect(session.observations).toEqual([expect.objectContaining({ name: 'focused-workflow-reacquired', passed: false,
+      detail: expect.stringContaining('reuse allowed') })])
+    await session.record({ sessionDir, resume: join(sessionDir, 'session.jsonl') }, acquired)
+    expect(session.verdict()).toMatchObject({ passed: true })
+    expect(session.observations[1]).toMatchObject({ passed: false })
+    await session.record({ sessionDir, resume: join(sessionDir, 'session.jsonl') }, guidanceTranscript(root))
+    expect(session.verdict()).toMatchObject({ passed: true })
+    expect(session.observations[2]).toMatchObject({ passed: true })
+  })
 
-    const updatedWorkflow = '# Updated authoritative workflow\n\nFollow the replacement package.\n'
-    await Promise.all([
-      put(root, 'node_modules/focused-spec/package.json', JSON.stringify({ name: 'focused-spec', version: '0.7.0' })),
-      put(root, 'node_modules/focused-spec/guidance/workflow.md', updatedWorkflow),
-    ])
-    const updated = guidanceTranscript(root, { response: {
-      protocolVersion: 1,
-      package: { name: 'focused-spec', version: '0.7.0' },
-      topic: 'workflow',
-      content: updatedWorkflow,
-    } })
-    expect(await guidanceActivationGate(root, [updated])).toMatchObject({ passed: true })
-    expect(await guidanceActivationGate(root, [first])).toMatchObject({ passed: false })
+  it('invalidates retained guidance without retroactively rejecting an acquired version', async () => {
+    for (const mutation of ['version', 'content', 'canonical', 'shadowed', 'missing'] as const) {
+      const root = await activationFixture()
+      const replacement = await activationFixture()
+      const sessionDir = join(root, '.authoring')
+      const initial = { sessionDir }
+      const resumed = { sessionDir, resume: join(sessionDir, 'session.jsonl') }
+      const args = 'instructions --protocol 1 --topic workflow --json'
+      const command = mutation === 'shadowed' ? `focused-spec ${args}` : `${JSON.stringify(join(root, 'node_modules/.bin/focused-spec'))} ${args}`
+      const old = guidanceTranscript(root, { command })
+      const stale = createGuidanceSession(root)
+      const refreshed = createGuidanceSession(root)
+      await stale.record(initial, old)
+      await refreshed.record(initial, old)
+      const acquiredVerdict = refreshed.verdict()
+      let version = '0.6.0'
+      let content = WORKFLOW_GUIDANCE
+      if (mutation === 'version') {
+        version = '0.7.0'
+        await put(root, 'node_modules/focused-spec/package.json', JSON.stringify({ name: 'focused-spec', version }))
+      } else if (mutation === 'content') {
+        content = '# Replacement workflow with unchanged version\n'
+        await put(root, 'node_modules/focused-spec/guidance/workflow.md', content)
+      } else if (mutation === 'canonical' || mutation === 'shadowed') {
+        await rm(join(root, 'node_modules/.bin/focused-spec'))
+        await symlink(join(replacement, 'node_modules/focused-spec/dist/cli.js'), join(root, 'node_modules/.bin/focused-spec'))
+      } else {
+        await rm(join(root, 'node_modules/focused-spec/package.json'))
+      }
+      await stale.record(resumed, '')
+      expect(stale.verdict(), mutation).toMatchObject({ passed: false })
+      expect(stale.observations[0], mutation).toMatchObject({ passed: false, detail: expect.stringContaining('invalidated') })
+      expect(acquiredVerdict, mutation).toMatchObject({ passed: true })
+      if (mutation === 'missing') await put(root, 'node_modules/focused-spec/package.json', JSON.stringify({ name: 'focused-spec', version }))
+      await refreshed.record(resumed, guidanceTranscript(root, { command, response: {
+        protocolVersion: 1, package: { name: 'focused-spec', version }, topic: 'workflow', content,
+      } }))
+      expect(refreshed.verdict(), mutation).toMatchObject({ passed: true })
+      await refreshed.record(resumed, '')
+      expect(refreshed.verdict(), mutation).toMatchObject({ passed: true })
+    }
+  })
+
+  it('does not repair missing initial acquisition with a later read', async () => {
+    const root = await activationFixture()
+    const sessionDir = join(root, '.authoring')
+    for (const first of ['', guidanceTranscript(root, { failed: true }), guidanceTranscript(root, { complete: false }),
+      guidanceTranscript(root, { rawOutput: '{broken}' }), artifactGuidanceTranscript(root, { readComplete: false }),
+      artifactGuidanceTranscript(root, { artifact: 'artifact://wrong' }), artifactGuidanceTranscript(root, { omitCommand: true })]) {
+      const session = createGuidanceSession(root)
+      await session.record({ sessionDir }, first)
+      expect(session.verdict()).toMatchObject({ passed: false })
+      await session.record({ sessionDir, resume: join(sessionDir, 'session.jsonl') }, guidanceTranscript(root))
+      expect(session.verdict()).toMatchObject({ passed: false, detail: expect.stringContaining('execution 1') })
+    }
+  })
+
+  it('requires independent acquisition for a fresh execution context', async () => {
+    const root = await activationFixture()
+    const sessionDir = join(root, '.authoring')
+    for (const context of [{ sessionDir }, { sessionDir: join(root, '.publication'), resume: join(root, '.publication/session.jsonl') },
+      { sessionDir, resume: join(sessionDir, 'different.jsonl') }, { resume: join(sessionDir, 'session.jsonl') },
+      { sessionDir, resume: join(root, '.regeneration/session.jsonl') }]) {
+      const session = createGuidanceSession(root)
+      await session.record({ sessionDir }, guidanceTranscript(root))
+      await session.record({ sessionDir, resume: join(sessionDir, 'session.jsonl') }, '')
+      expect(session.verdict()).toMatchObject({ passed: true })
+      await session.record(context, '')
+      expect(session.verdict()).toMatchObject({ passed: false, detail: expect.stringContaining('fresh execution context') })
+      const fresh = createGuidanceSession(root)
+      await fresh.record(context, guidanceTranscript(root))
+      expect(fresh.verdict()).toMatchObject({ passed: true })
+    }
+    const publication = createGuidanceSession(root)
+    await publication.record({ sessionDir: join(root, '.publication') }, '')
+    expect(publication.verdict()).toMatchObject({ passed: false })
   })
 
   it('rejects SDK-only BDD turns without skill and local workflow activation', async () => {
@@ -1203,6 +1295,43 @@ describe('agent eval harness', () => {
     expect(result.passed).toBe(false)
     expect(result.gates.find(gate => gate.name === 'focused-skill-loaded')).toMatchObject({ passed: false })
     expect(result.gates.some(gate => ['proposal-artifacts', 'planning-boundary', 'planned-evidence', 'focused-validation'].includes(gate.name))).toBe(false)
+  }, 30_000)
+
+  it('exposes every competing skill without replacing candidate guidance and fails skipped activation', async () => {
+    const source = await mkdtemp(join(tmpdir(), 'focused-eval-competing-'))
+    roots.push(source)
+    const document = '---\nname: diagnose\ndescription: Diagnose application failures.\n---\n\nRead references first.\n'
+    await put(source, 'diagnose/SKILL.md', document)
+    await put(source, 'diagnose/references/details.txt', 'diagnostic reference\n')
+    await put(source, 'focused-spec/SKILL.md', 'untrusted replacement')
+    let invoked = false
+    const result = await runEval({ caseId: 'blind-skill-activation', openspecSkillsDir: join(repository, '.omp/skills'), competingSkillsDir: source }, {
+      async run(request) {
+        if (request.tools === '') return { success: true, output: '', exitCode: 0, durationMs: 0 }
+        invoked = true
+        expect(request.skills).toContain('diagnose')
+        expect(request.skills).toContain('focused-spec')
+        expect(request.skills).toContain('openspec-propose')
+        expect(request.prompt).not.toMatch(/focused-spec|evidence/iu)
+        expect(await readFile(join(request.workspace, '.omp/skills/diagnose/references/details.txt'), 'utf8')).toBe('diagnostic reference\n')
+        expect(await readFile(join(request.workspace, '.omp/skills/focused-spec/SKILL.md'), 'utf8')).toBe(await readFile(join(request.workspace, 'node_modules/focused-spec/skills/focused-spec/SKILL.md'), 'utf8'))
+        return { success: true, output: skillReadTranscript({ path: 'skill://openspec-propose' }), exitCode: 0, durationMs: 1 }
+      },
+    })
+    expect(invoked).toBe(true)
+    expect(result.passed).toBe(false)
+    expect(result.gates.find(gate => gate.name === 'focused-skill-loaded')).toMatchObject({ passed: false })
+    expect(result.skillInventory?.find(skill => skill.name === 'diagnose')?.files).toEqual({
+      'SKILL.md': createHash('sha256').update(document).digest('hex'),
+      'references/details.txt': createHash('sha256').update('diagnostic reference\n').digest('hex'),
+    })
+  }, 30_000)
+
+  it('refuses blind activation with an empty competing catalog rather than silently running the baseline', async () => {
+    const source = await mkdtemp(join(tmpdir(), 'focused-eval-no-competing-'))
+    roots.push(source)
+    await expect(provisionWorkspace(evalCase('blind-skill-activation')!, join(repository, '.omp/skills'), source))
+      .rejects.toThrow('at least one additional skill')
   }, 30_000)
   it('rejects a proposal that creates configuration or a planned evidence registry', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-eval-proposal-'))

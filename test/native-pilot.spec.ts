@@ -9,8 +9,10 @@ import {
 } from '../evals/native-pilot.ts'
 import * as nativePilot from '../evals/native-pilot.ts'
 import { OmpAgentDriver } from '../evals/omp-agent.ts'
-import type { AgentRequest } from '../evals/types.ts'
+import type { AgentDriver, AgentRequest, AgentResult } from '../evals/types.ts'
 import { saveEvalResult } from '../evals/result.ts'
+import { runAuthoringDialogue } from '../evals/dialogue.ts'
+import { runProcess } from '../evals/process.ts'
 
 const roots: string[] = []
 
@@ -28,6 +30,241 @@ afterEach(async () => {
 })
 
 describe('native pilot evaluation boundaries', () => {
+  it('leaves unavailable host operations unverified without certification', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-unavailable-'))
+    roots.push(root)
+    const result = await nativePilot.nativeGate(root, 'kiro')
+    expect(result.gate).toBeNull()
+    expect(result.verdict).toMatchObject({ status: 'unverified', provenance: { executed: false, version: null,
+      source: 'https://kiro.dev/docs/specs/feature-specs/requirements-first.md' } })
+    expect(result.verdict.detail).toContain('no Kiro IDE/CLI spec runtime')
+    expect([nativePilot.outcome('passed', 'authoring'), nativePilot.outcome('passed', 'evidence'), result.verdict].every(item => item.status === 'passed')).toBe(false)
+  })
+
+  it('distinguishes an executed host failure from an unavailable capability', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-executed-check-'))
+    roots.push(root)
+    await mkdir(join(root, 'openspec/changes/link-blocked-account/specs/auth'), { recursive: true })
+    await writeFile(join(root, 'openspec/config.yaml'), 'schema: spec-driven\n')
+    const path = join(root, nativePilot.nativeCases.openspec.path)
+    await writeFile(path, nativePilot.nativeCases.openspec.text)
+    const valid = await nativePilot.nativeGate(root, 'openspec')
+    expect(valid.verdict.status, valid.gate?.detail).toBe('passed')
+    await writeFile(path, '## ADDED Requirements\n\n### Requirement: Missing scenario\nThe system SHALL reject blocked accounts.\n')
+    const failed = await nativePilot.nativeGate(root, 'openspec')
+    expect(failed.gate?.passed).toBe(false)
+    expect(failed.verdict).toMatchObject({ status: 'failed', provenance: { executed: true, runtime: 'available',
+      operation: 'openspec validate link-blocked-account --strict --no-interactive' } })
+    expect(failed.verdict.provenance?.version).toMatch(/^\d+\.\d+\.\d+/u)
+  })
+
+  it('blocks OpenSpec publication when working evidence fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-publication-stop-'))
+    roots.push(root)
+    await cp(join(nativePilot.nativePilotRoot, 'evals/fixtures/polyglot'), root, { recursive: true })
+    await symlink(join(nativePilot.nativePilotRoot, 'node_modules'), join(root, 'node_modules'), 'junction')
+    await mkdir(join(root, '.focused-spec'))
+    await mkdir(join(root, 'openspec/changes/link-blocked-account/specs/auth'), { recursive: true })
+    const source = nativePilot.nativeCases.openspec.text.replace('#### Scenario:', '<!-- focused-spec:id=blocked -->\n#### Scenario:')
+    await writeFile(join(root, nativePilot.nativeCases.openspec.path), source)
+    await writeFile(join(root, '.focused-spec/config.yaml'), "version: 5\nspecifications:\n  formats:\n    native:\n      package: '@focused-spec/format-registry'\n      options:\n        parser: { package: '@focused-spec/format-markdown' }\n  documents: [{ match: 'openspec/changes/{scope}/specs/**/*.md', format: native }]\nrunners:\n  go: { package: '@focused-spec/runner-go' }\n")
+    await writeFile(join(root, '.focused-spec/evidence.yaml'), 'scopes:\n  link-blocked-account:\n    blocked:\n      evidence: [go::./auth::TestBlockedAccount]\n')
+    const path = join(root, 'auth/auth.go')
+    const original = await readFile(path, 'utf8')
+    await writeFile(path, original.replace('credentialsValid && !blocked', 'credentialsValid'))
+    const run = vi.fn<AgentDriver['run']>()
+    const result = await nativePilot.evaluateOpenSpecLifecycle(root, 'test-model', { run })
+    expect(result.verdict.status).toBe('unverified')
+    expect(result.gates).toEqual([expect.objectContaining({ name: 'lifecycle-working-checkpoint', passed: false })])
+    expect(result.gates[0]?.detail).toContain('blocked account authenticated')
+    expect(run).not.toHaveBeenCalled()
+    expect(result.turns).toEqual([])
+  }, 120_000)
+
+  it('rejects lost or redirected final evidence after OpenSpec archive', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-publication-survival-'))
+    roots.push(root)
+    await cp(join(nativePilot.nativePilotRoot, 'evals/fixtures/polyglot'), root, { recursive: true })
+    await symlink(join(nativePilot.nativePilotRoot, 'node_modules'), join(root, 'node_modules'), 'junction')
+    await mkdir(join(root, '.focused-spec'))
+    await mkdir(join(root, 'openspec/changes/link-blocked-account/specs/auth'), { recursive: true })
+    await writeFile(join(root, 'openspec/config.yaml'), 'schema: spec-driven\n')
+    const source = '## Purpose\nReject blocked-account authentication regardless of supplied credential validity.\n\n' + nativePilot.nativeCases.openspec.text.replace('#### Scenario:', '<!-- focused-spec:id=blocked -->\n#### Scenario:')
+    await writeFile(join(root, nativePilot.nativeCases.openspec.path), source)
+    const archived = await runProcess('openspec', ['archive', 'link-blocked-account', '--yes'], { cwd: root, timeoutMs: 60_000 })
+    expect(archived.code, archived.stderr || archived.stdout).toBe(0)
+    await writeFile(join(root, '.focused-spec/config.yaml'), "version: 5\nspecifications:\n  formats:\n    native:\n      package: '@focused-spec/format-registry'\n      options:\n        parser: { package: '@focused-spec/format-markdown' }\n  documents: [{ match: 'openspec/specs/**/*.md', scope: current, format: native }]\nrunners:\n  go: { package: '@focused-spec/runner-go' }\n")
+    const registry = join(root, '.focused-spec/evidence.yaml')
+    await writeFile(registry, 'scopes:\n  current:\n    blocked:\n      evidence: [go::./auth::TestBlockedAccount]\n')
+    const checkpoint = { id: 'blocked', scope: 'link-blocked-account', references: ['go::./auth::TestBlockedAccount'] }
+    const survived = await nativePilot.nativePublishedEvidence(root, checkpoint)
+    expect(survived.every(item => item.passed === true), JSON.stringify(survived)).toBe(true)
+    for (const evidence of ['', 'go::./auth::TestValidActiveAccount']) {
+      await writeFile(registry, `scopes:\n  current:\n    blocked:\n      evidence: [${evidence}]\n`)
+      expect((await nativePilot.nativePublishedEvidence(root, checkpoint))[0]?.passed).toBe(false)
+    }
+    await writeFile(registry, 'scopes:\n  current:\n    renamed:\n      evidence: [go::./auth::TestBlockedAccount]\n')
+    const final = join(root, 'openspec/specs/auth/spec.md')
+    await writeFile(final, (await readFile(final, 'utf8')).replace('id=blocked', 'id=renamed'))
+    expect((await nativePilot.nativePublishedEvidence(root, checkpoint))[0]?.passed).toBe(false)
+  }, 120_000)
+
+  it('keeps missing repeat acquisition outside publication success gates', async () => {
+    const evaluate = async (lostFinalEvidence: boolean) => {
+      const root = await mkdtemp(join(tmpdir(), `focused-native-publication-reuse-${lostFinalEvidence ? 'lost' : 'valid'}-`))
+      roots.push(root)
+      await cp(join(nativePilot.nativePilotRoot, 'evals/fixtures/polyglot'), root, { recursive: true })
+      await symlink(join(nativePilot.nativePilotRoot, 'node_modules'), join(root, 'node_modules'), 'junction')
+      await mkdir(join(root, '.focused-spec'))
+      await mkdir(join(root, 'openspec/changes/link-blocked-account/specs/auth'), { recursive: true })
+      await writeFile(join(root, 'openspec/config.yaml'), 'schema: spec-driven\n')
+      const source = '## Purpose\nReject blocked-account authentication regardless of supplied credential validity.\n\n'
+        + nativePilot.nativeCases.openspec.text.replace('#### Scenario:', '<!-- focused-spec:id=blocked -->\n#### Scenario:')
+      await writeFile(join(root, nativePilot.nativeCases.openspec.path), source)
+      await writeFile(join(root, '.focused-spec/config.yaml'), "version: 5\nspecifications:\n  formats:\n    native:\n      package: '@focused-spec/format-registry'\n      options:\n        parser: { package: '@focused-spec/format-markdown' }\n  documents: [{ match: 'openspec/changes/{scope}/specs/**/*.md', format: native }]\nrunners:\n  go: { package: '@focused-spec/runner-go' }\n")
+      await writeFile(join(root, '.focused-spec/evidence.yaml'), 'scopes:\n  link-blocked-account:\n    blocked:\n      evidence: [go::./auth::TestBlockedAccount]\n')
+
+      const metadata = JSON.parse(await readFile(join(root, 'node_modules/focused-spec/package.json'), 'utf8')) as { name: string; version: string }
+      const workflow = await readFile(join(root, 'node_modules/focused-spec/guidance/workflow.md'), 'utf8')
+      const event = (value: object) => JSON.stringify(value)
+      const completedRead = (id: string, path: string) => [
+        event({ type: 'tool_execution_start', toolName: 'read', toolCallId: id, args: { path } }),
+        event({ type: 'tool_execution_end', toolName: 'read', toolCallId: id, result: { content: [{ type: 'text', text: 'loaded' }] } }),
+      ].join('\n')
+      const message = (text: string) => event({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text }],
+        usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2 } } })
+      const guidance = [
+        event({ type: 'tool_execution_start', toolName: 'bash', toolCallId: 'workflow', args: { command: `${JSON.stringify(process.execPath)} ${JSON.stringify(join(root, 'node_modules/focused-spec/dist/cli.js'))} instructions --protocol 1 --topic workflow --json` } }),
+        event({ type: 'tool_execution_end', toolName: 'bash', toolCallId: 'workflow', result: { details: { exitCode: 0 }, content: [{ type: 'text', text: JSON.stringify({ protocolVersion: 1, package: { name: metadata.name, version: metadata.version }, topic: 'workflow', content: workflow }) }] } }),
+      ].join('\n')
+      let userTurns = 0
+      const driver: AgentDriver = { async run(request) {
+        if (request.skills.length === 0) {
+          const reply = userTurns++ === 0 ? 'Proceed with the publication.' : null
+          return { success: true, exitCode: 0, durationMs: 1, output: message(JSON.stringify({ reply, approvedPaths: [] })) }
+        }
+        await mkdir(request.sessionDir!, { recursive: true })
+        const journal = join(request.sessionDir!, 'publication.jsonl')
+        if (request.resume === undefined) {
+          const text = 'I have acquired the workflows. May I publish and archive the completed change?'
+          const transcript = [completedRead('focused', 'skill://focused-spec'), completedRead('sync', 'skill://openspec-sync-specs'),
+            completedRead('archive-skill', 'skill://openspec-archive-change'), guidance, message(text)].join('\n')
+          const parsed = JSON.parse(message(text)) as { message: unknown }
+          await writeFile(journal, `${event({ type: 'message', message: parsed.message })}\n`)
+          return { success: true, exitCode: 0, durationMs: 1, output: transcript }
+        }
+        const archived = await runProcess('openspec', ['archive', 'link-blocked-account', '--yes'], { cwd: root, timeoutMs: 60_000 })
+        expect(archived.code, archived.stderr || archived.stdout).toBe(0)
+        await writeFile(join(root, '.focused-spec/config.yaml'), "version: 5\nspecifications:\n  formats:\n    native:\n      package: '@focused-spec/format-registry'\n      options:\n        parser: { package: '@focused-spec/format-markdown' }\n  documents: [{ match: 'openspec/specs/**/*.md', scope: current, format: native }]\nrunners:\n  go: { package: '@focused-spec/runner-go' }\n")
+        const reference = lostFinalEvidence ? 'go::./auth::TestValidActiveAccount' : 'go::./auth::TestBlockedAccount'
+        await writeFile(join(root, '.focused-spec/evidence.yaml'), `scopes:\n  current:\n    blocked:\n      evidence: [${reference}]\n`)
+        const text = 'Publication and archive complete.'
+        const archiveEvents = [
+          event({ type: 'tool_execution_start', toolName: 'bash', toolCallId: 'archive', args: { command: 'openspec archive link-blocked-account --yes' } }),
+          event({ type: 'tool_execution_end', toolName: 'bash', toolCallId: 'archive', result: { details: { exitCode: archived.code }, content: [{ type: 'text', text: archived.stdout }] } }),
+          message(text),
+        ].join('\n')
+        const parsed = JSON.parse(message(text)) as { message: unknown }
+        await writeFile(journal, `${await readFile(journal, 'utf8')}${event({ type: 'message', message: parsed.message })}\n`)
+        return { success: true, exitCode: 0, durationMs: 1, output: archiveEvents }
+      } }
+      return nativePilot.evaluateOpenSpecLifecycle(root, 'test-model', driver)
+    }
+
+    const published = await evaluate(false)
+    expect(published.verdict.status, JSON.stringify(published.gates)).toBe('passed')
+    expect(published.gates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'lifecycle-focused-workflow-acquired', passed: true }),
+      expect.objectContaining({ name: 'lifecycle-final-binding', passed: true }),
+      expect.objectContaining({ name: 'lifecycle-focused-cli-execution', passed: true }),
+      expect.objectContaining({ name: 'lifecycle-final-sensitivity', passed: true }),
+      expect.objectContaining({ name: 'lifecycle-host-validation', passed: true }),
+      expect.objectContaining({ name: 'lifecycle-completed-scope', passed: true }),
+      expect.objectContaining({ name: 'lifecycle-host-archive', passed: true }),
+    ]))
+    expect(published.observations).toEqual([
+      expect.objectContaining({ name: 'lifecycle-focused-workflow-reacquired', passed: false,
+        detail: expect.stringContaining('retained guidance reuse allowed') }),
+    ])
+
+    const lost = await evaluate(true)
+    expect(lost.verdict.status).toBe('failed')
+    expect(lost.gates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'lifecycle-focused-workflow-acquired', passed: true }),
+      expect.objectContaining({ name: 'lifecycle-final-binding', passed: false }),
+    ]))
+    expect(lost.observations).toEqual([
+      expect.objectContaining({ name: 'lifecycle-focused-workflow-reacquired', passed: false }),
+    ])
+  }, 240_000)
+
+  it('measures scored native phases once without responder or diagnostic usage', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-measurements-'))
+    roots.push(root)
+    await cp(join(nativePilot.nativePilotRoot, 'evals/fixtures/polyglot'), root, { recursive: true })
+    await mkdir(join(root, '.focused-spec'))
+    await writeFile(join(root, '.focused-spec/config.yaml'), "version: 5\nspecifications:\n  formats:\n    native:\n      package: '@focused-spec/format-registry'\n      options:\n        parser: { package: '@focused-spec/format-markdown' }\n  documents: [{ match: _bmad-output/specs/**/*.md, scope: current, format: native }]\nrunners: {}\n")
+    await symlink(join(nativePilot.nativePilotRoot, 'node_modules'), join(root, 'node_modules'), 'junction')
+    await mkdir(join(root, '_bmad-output/specs/spec-blocked-login'), { recursive: true })
+    await writeFile(join(root, nativePilot.nativeCases.bmad.path), nativePilot.nativeCases.bmad.text)
+    await writeFile(join(root, '.focused-spec/evidence.yaml'), `scopes:\n  current:\n    blocked:\n      source: { path: ${nativePilot.nativeCases.bmad.path}, nativeId: CAP-1 }\n      evidence: [go::./auth::TestBlockedAccount]\n`)
+    const message = (text: string, count: number, success = true): AgentResult => ({ success, exitCode: success ? 0 : 1, durationMs: count,
+      output: JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text }],
+        usage: { input: count, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: count + 1 } } }) })
+    let authoring = 0
+    let responders = 0
+    const driver: AgentDriver = { async run(request) {
+      if (request.skills.length === 0) return message(JSON.stringify({ reply: responders++ === 0 ? 'Continue.' : null, approvedPaths: [] }), 1000)
+      if (request.sessionDir?.endsWith('.omp-regeneration-sessions')) {
+        if (request.resume !== undefined) return message('Research after failure is not scored.', 5000)
+        await mkdir(request.sessionDir, { recursive: true })
+        await writeFile(join(request.sessionDir, 'regeneration.jsonl'), 'failed scored execution')
+        return message('Regeneration interrupted.', 30, false)
+      }
+      await mkdir(request.sessionDir!, { recursive: true })
+      const journal = join(request.sessionDir!, 'authoring.jsonl')
+      const previous = await readFile(journal, 'utf8').catch(() => '')
+      const current = message(++authoring === 1 ? 'May I continue?' : 'Authoring finished.', authoring * 10)
+      const event = JSON.parse(current.output) as { message: unknown }
+      await writeFile(journal, `${previous}${JSON.stringify({ type: 'message', message: event.message })}\n`)
+      // A resumed transport can replay old frames; only newly appended journal occurrences are scored.
+      return request.resume === undefined ? current : { ...current, output: `${message('May I continue?', 10).output}\n${current.output}` }
+    } }
+    const request: AgentRequest = { workspace: root, sessionDir: join(root, '.omp-eval-sessions'), skills: ['focused-spec'], prompt: 'Revise native behavior.', timeoutMs: 1000 }
+    const dialogue = await runAuthoringDialogue(request, driver, async () => new Map(), false)
+    const lifecycle = await nativePilot.evaluateBmadLifecycle(root, 'test-model', driver, request)
+    expect(dialogue.completed).toBe(true)
+    expect(lifecycle.verdict.status).toBe('failed')
+    expect(lifecycle.diagnostic?.status).toBe('answered')
+    const measurements = nativePilot.nativeMeasurements(dialogue.turns.map(turn => turn.scoredAgent), lifecycle.turns)
+    expect(measurements.measurements).toEqual({ durationMs: 60,
+      usage: { input: 60, output: 3, cacheRead: 0, cacheWrite: 0, totalTokens: 63 }, usageComplete: true })
+    expect(measurements.phaseMeasurements.authoring?.durationMs).toBe(30)
+    expect(measurements.phaseMeasurements.lifecycle?.usage?.totalTokens).toBe(31)
+  })
+
+  it('retains incomplete native measurements after an interrupted phase', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-native-partial-usage-'))
+    roots.push(root)
+    const request: AgentRequest = { workspace: root, sessionDir: join(root, '.omp-eval-sessions'), skills: ['focused-spec'], prompt: 'Revise native behavior.', timeoutMs: 1000 }
+    const dialogue = await runAuthoringDialogue(request, { async run() {
+      return { success: false, exitCode: null, durationMs: 17, output: JSON.stringify({ type: 'message_end',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Interrupted after a completed message.' }], usage: { input: 7, output: 3 } } }) }
+    } }, async () => new Map(), false)
+    expect(dialogue.completed).toBe(false)
+    const partial = nativePilot.nativeMeasurements(dialogue.turns.map(turn => turn.scoredAgent))
+    expect(partial.measurements).toEqual({ durationMs: 17,
+      usage: { input: 7, output: 3, cacheRead: 0, cacheWrite: 0, totalTokens: 0 }, usageComplete: false })
+    expect(partial.phaseMeasurements).not.toHaveProperty('lifecycle')
+    const unavailable = nativePilot.nativeMeasurements([{ success: false, exitCode: null, durationMs: 23, output: 'transport closed before completed usage' }])
+    const mixed = nativePilot.nativeMeasurements([
+      { success: true, exitCode: 0, durationMs: 1, output: JSON.stringify({ type: 'message_end', message: { role: 'assistant', usage: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 3 } } }) },
+      { success: false, exitCode: null, durationMs: 2, output: 'interrupted without completed usage' },
+    ])
+    expect(mixed.measurements).toMatchObject({ durationMs: 3, usageComplete: false, usage: { totalTokens: 3 } })
+    expect(unavailable.measurements).toEqual({ durationMs: 23, usage: null, usageComplete: false })
+  })
+
   it('preserves distinct immutable native result artifacts when timestamps collide', async () => {
     const root = await mkdtemp(join(tmpdir(), 'focused-native-results-'))
     roots.push(root)

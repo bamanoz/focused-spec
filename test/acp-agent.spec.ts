@@ -3,11 +3,12 @@ import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { grantsPlanApproval, parseElicitationDecision, readSubmittedPlan, runPlanningDialogue } from '../evals/acp-agent.ts'
+import { measureAgentTurns } from '../evals/activation.ts'
 
 const planSchema = { type: 'object', properties: { value: { type: 'string', enum: ['Approve and execute', 'Refine plan'] } } }
 
 describe('genuine planning consent', () => {
-  it.each(['exit', 'malformed', 'throw'] as const)('retains the unanswered host question and responder failure (%s)', async failure => {
+  it.each(['exit', 'malformed', 'throw'] as const)('retains completed journal usage while excluding responder waits on partial failure (%s)', async failure => {
     const root = await mkdtemp(join(tmpdir(), 'focused-plan-failure-'))
     try {
       const bin = join(root, 'node_modules/.bin')
@@ -20,7 +21,12 @@ import { createInterface } from 'node:readline';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 const sessionDir = process.argv[process.argv.indexOf('--session-dir') + 1];
-writeFileSync(join(sessionDir, 'actor.jsonl'), '');
+writeFileSync(join(sessionDir, 'actor.jsonl'), [
+  JSON.stringify({ type: 'message', message: { role: 'assistant', content: [{ type: 'text', text: 'first completed answer' }], usage: { input: 11, output: 3, cacheRead: 2, cacheWrite: 1, totalTokens: 17 } } }),
+  JSON.stringify({ type: 'snapshot', message: { role: 'assistant', usage: { input: 1000, output: 1000, cacheRead: 1000, cacheWrite: 1000, totalTokens: 5000 } } }),
+  JSON.stringify({ type: 'message', message: { role: 'user', content: [{ type: 'text', text: 'test-user response' }], usage: { input: 100, output: 100, cacheRead: 100, cacheWrite: 100, totalTokens: 500 } } }),
+  JSON.stringify({ type: 'message', message: { role: 'assistant', content: [{ type: 'text', text: 'second completed answer' }], usage: { input: 7, output: 5, cacheRead: 0, cacheWrite: 4, totalTokens: 16 } } }),
+].join('\\n'));
 const send = frame => process.stdout.write(JSON.stringify(frame) + '\\n');
 for await (const line of createInterface({ input: process.stdin })) {
   const frame = JSON.parse(line);
@@ -39,10 +45,20 @@ for await (const line of createInterface({ input: process.stdin })) {
       const transcript = 'responder transport or decoding failure'
       const result = await runPlanningDialogue({ workspace: root, sessionDir, prompt: 'Document existing behavior.', skills: [], timeoutMs: 5000 },
         async () => new Map(), { async run() {
+          const { promise, resolve } = Promise.withResolvers<void>()
+          setTimeout(resolve, 30)
+          await promise
           if (failure === 'throw') throw Object.assign(new Error('responder transport failed'), { stdout: transcript, stderr: 'responder stderr' })
           return { success: failure !== 'exit', exitCode: failure === 'exit' ? 1 : 0, durationMs: 1, output: transcript }
         } })
       expect(result.agent.success).toBe(false)
+      expect(result.interactionDurationMs).toBe(result.agent.durationMs + result.responderDurationMs)
+      expect(result.responderDurationMs).toBeGreaterThanOrEqual(20)
+      expect(measureAgentTurns([result.agent])).toEqual({
+        durationMs: result.agent.durationMs,
+        usage: { input: 18, output: 8, cacheRead: 2, cacheWrite: 5, totalTokens: 33 },
+        usageComplete: true,
+      })
       expect(result.planApproved).toBe(false)
       expect(result.unauthorizedPaths).toEqual([])
       expect(result.interactions).toEqual([{

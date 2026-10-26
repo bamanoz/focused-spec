@@ -209,6 +209,8 @@ For example, from a project-pinned installation:
 
 The workflow routes each operation to its focused topic, absent or explicitly reconsidered integration to `integration`, and incompatible setups to `upgrade`. Guidance retrieval does not authorize installation, configuration or migration.
 
+The router owns the common plugin-document acquisition and provenance procedure. `author-revise` owns complete authoring approval and identity/evidence reconciliation; `verify` owns application-observation, sensitivity/restoration and executed lifecycle procedures. Other topics retain their operation-specific checks and request `verify` only when authorized execution is needed; read-only review does not acquire it merely to finish a review. The eight-topic interface and verification policy are unchanged.
+
 The `integration` topic also carries the pinned .NET SDK `0.10.1` GitHub Release installation procedure: public artifact URL, SHA-256, project-local NuGet feed, preserved custom sources/mapping, and repeatable CI restore. The procedure is served offline without a checkout; performing the download and installation requires network access and authorization. It does not claim nuget.org publication or add a .NET CLI runner. See the human-facing [installation guide](../guides/install.md#net-sdk-from-github-releases).
 
 Loader protocol defaults to 1; it is independent of package versions, configuration version 5, Format API version 2, and Runner API version 1. The loader requests it explicitly. Protocol-1 JSON is:

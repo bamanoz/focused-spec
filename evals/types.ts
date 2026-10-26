@@ -1,3 +1,5 @@
+import type { AgentTurnMeasurements } from './activation.ts'
+
 export const OPEN_SPEC_SKILLS = [
   'openspec-propose',
   'openspec-apply-change',
@@ -37,6 +39,7 @@ export interface EvalCase {
   readonly lifecycle?: 'inline-publication'
   readonly expectedRevisionTerms?: readonly string[]
   readonly integration?: IntegrationCase
+  readonly skillDiscovery?: 'competing'
 }
 
 export interface AgentRequest {
@@ -78,11 +81,14 @@ export interface EvalDiagnostic {
 
 export interface EvalResult {
   readonly caseId: string
+  readonly model?: string
   readonly passed: boolean
   readonly workspace: string
   readonly turns: readonly AgentResult[]
   readonly gates: readonly EvalGate[]
   readonly observations: readonly EvalGate[]
+  readonly skillInventory?: readonly { readonly name: string; readonly files: Readonly<Record<string, string>> }[]
+  readonly measurements?: AgentTurnMeasurements
   readonly diagnostic: EvalDiagnostic | null
 }
 
@@ -90,6 +96,7 @@ export interface EvalRunOptions {
   readonly caseId: string
   readonly model?: string
   readonly openspecSkillsDir?: string
+  readonly competingSkillsDir?: string
   readonly keepWorkspace?: boolean
   readonly timeoutMs?: number
 }

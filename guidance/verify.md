@@ -2,15 +2,17 @@
 
 Use this topic to verify executable scenarios or configured evidence after the native behavior, identity, selectors, and application path are known. Validation, discovery, prose review, installation, and a successful framework exit do not substitute for observing the selected assertion against the real application.
 
-Before a write, execution, or completion claim, establish the requested deliverable and native outcome plus the actual phase and permission boundary set by the user and host. Respect genuine read-only and planning-only phases by reporting the exact identity, evidence, execution, and sensitivity work still required without mutating product code. Recommendation-only and installation-only requests stop at their stated deliverable. Existing implementation, passing tests, a wording-only edit, or absent enrollment does not create a narrower completion boundary. If the user expressly excludes required work, preserve that decision and report incomplete synchronization. SDK-only work follows its independent native execution path and needs no focused configuration, CLI plugins, or text companion.
+Apply the workflow's actual permission boundary before execution or mutation. Read-only/planning work reports the exact unperformed verification without running it; recommendation/install-only work stops at its deliverable. A topic read, old green tests or missing enrollment cannot narrow the task or authorize writes. Route binding repairs and any necessary complete approval/deferred-work handoff to `author-revise`; retain explicit exclusions and incomplete obligations.
 
 ## Confirm what is being proved
 
 For every affected native item, identify the canonical claim, real application entry point, actual observation, independently authored expectation, exact selected test or scenario, and reversible product regression that should break it. Compare each selected assertion with the item's current preconditions and outcome. Remove or replace stale references through authorized authoring; an additional correct test does not repair an AND member that proves different behavior.
 
+A thin driver prepares and invokes the real application and exposes its actual result. It must not reimplement the domain decision, return Expect as Actual, or derive both from the same invocation. A deterministic projection is valid only if it preserves every observable distinction protected by the claim. Explanations describe decisions rather than assert them; logs and green diagnostics cannot override a failed comparison.
+
 Passing evidence means the selected tests executed and passed. It does not prove arbitrary prose, unenrolled requirements, another same-ID scope, or complete project coverage. An Actual event is not an equality assertion. Codec roundtrips protect serialization rather than application behavior or historical compatibility. Runner errors, missing targets, skips, unrelated failures, and green diagnostics are not behavioral proof.
 
-Before relying on runner selectors or format-owned references, acquire the selected plugin documents exactly as required by the applicable author/review/upgrade topic. Project formats, runners, configuration, and documents resolve from the explicit consuming-project root, independently of where the selected CLI is installed.
+Before relying on runner selectors or format-owned references, acquire the selected contracts using the workflow's shared plugin-document procedure and explicit consuming-project root. Do not route back through an author/review/upgrade topic solely to learn that common procedure.
 
 ## Verify SDK-only scenarios
 

@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentDriver, AgentRequest, AgentResult } from './types.ts'
 
@@ -39,7 +39,7 @@ Decide whether a reply is needed before deciding what to approve. An explicit di
 Copy complete proposed project-relative paths exactly; do not shorten them to basenames or treat a basename inside a longer path as a root-level file. If a proposed basename does not identify its project-relative destination unambiguously, ask the assistant for the complete path before approving that change. Do not guess missing folders from host conventions.
 Return exactly one JSON object, without Markdown fences: {"reply":string|null,"approvedPaths":string[]}.`
 
-export interface DialogueTurn { agent: AgentResult; user: UserDecision | null; userTranscript: string }
+export interface DialogueTurn { agent: AgentResult; scoredAgent: AgentResult; user: UserDecision | null; userTranscript: string }
 export interface DialogueResult {
   agent: AgentResult
   turns: DialogueTurn[]
@@ -66,11 +66,28 @@ export async function runAuthoringDialogue(
   let detail = 'dialogue turn limit reached before completion'
   for (let turn = 0; turn < maxTurns; turn++) {
     const before = requireApproval ? await snapshot() : null
+    const journalBefore = resume === undefined ? undefined : await readFile(resume, 'utf8').catch(() => undefined)
     const agent = await driver.run({ ...request, prompt: nextPrompt,
       ...(resume === undefined ? {} : { resume }),
       appendSystemPrompt: 'A user can reply after this turn. When you need clarification or approval, present your question or proposed edit and end the turn to wait for the reply. Do not assume silence is approval.',
     })
-    const recorded: DialogueTurn = { agent, user: null, userTranscript: '' }
+    let scoredAgent = agent
+    if (resume !== undefined) {
+      const journalAfter = await readFile(resume, 'utf8').catch(() => undefined)
+      const events: string[] = []
+      if (journalBefore !== undefined && journalAfter?.startsWith(journalBefore)) {
+        for (const line of journalAfter.slice(journalBefore.length).split('\n')) {
+          try {
+            const entry = JSON.parse(line) as { type?: string; message?: { role?: string } }
+            if (entry.type === 'message' && entry.message?.role === 'assistant') {
+              events.push(JSON.stringify({ type: 'message_end', message: entry.message }))
+            }
+          } catch { /* Partial journal rows do not establish completed assistant usage. */ }
+        }
+      }
+      scoredAgent = { ...agent, output: events.join('\n') }
+    }
+    const recorded: DialogueTurn = { agent, scoredAgent, user: null, userTranscript: '' }
     turns.push(recorded)
     if (before !== null) {
       const after = await snapshot()

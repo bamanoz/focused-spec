@@ -10,7 +10,7 @@ This repository prepares thirteen independently published npm packages from one 
 
 The Python and .NET SDKs are framework-independent. Their pytest/xUnit bank consumers are repository verification projects, not runtime dependencies of the SDKs. Publishing each native SDK requires its own authorized registry account and exact package verification.
 
-The CLI, all thirteen npm packages, and the Go, Python, and .NET SDKs share one release version, currently `0.10.1`. SDKs remain runtime-independent; an unchanged package still receives the coordinated release version. Configuration, guidance, format, and runner protocol versions remain separate compatibility contracts. Source versions are not proof of registry publication: source-only or partially published GitHub Releases must identify the exact pending distributions.
+The CLI, all thirteen npm packages, and the Go, Python, and .NET SDKs share one release version, currently `0.10.2`. SDKs remain runtime-independent; an unchanged package still receives the coordinated release version. Configuration, guidance, format, and runner protocol versions remain separate compatibility contracts. Source versions are not proof of registry publication: source-only or partially published GitHub Releases must identify the exact pending distributions.
 
 There is no automated release workflow. An npm suite release is complete only when all thirteen exact npm versions are available from the registry, the remote `v<version>` tag identifies the built source commit, and a published (not draft) GitHub Release exists for that tag. npm publication and Git tags do not create a GitHub Release. Go, Python, and .NET SDKs have their own native publication gates.
 
@@ -48,8 +48,7 @@ Install and build centrally from the private root:
 
 ```sh
 npm ci
-npm test
-npm run smoke
+npm run release:check
 openspec validate --all --strict --no-interactive
 npx focused-spec validate --strict
 npx focused-spec run
@@ -81,6 +80,12 @@ Every official format and runner tarball includes its public `README.md`. Runner
 Build core and SDK first, the scenario format next, then its runner. Each new tarball must include compiled ESM, declarations, public README and LICENSE; the runner additionally owns its worker/transport runtime. Install only the SDK tarball in one clean consumer and prove execution/public types without focused-spec or TypeScript. Install core plus all three extension tarballs together in another consumer and exercise the maintained bank example's ordinary tests/output and local CLI list/show, strict validation and selected/all execution. Check plugin-docs provenance from installed tarballs and actual TypeScript-driver execution on Node.js 22.16.0 without consumer flags.
 
 For install-level certification, create tarballs separately and install core alone in a clean consumer first: it must expose the CLI and APIs but have no native parser, inline dialect, registry loader, or test-framework fallback. In clean consumers, install the required core, selected format and runner tarballs together, configure package names explicitly, and validate/run both no-registry inline and explicit-registry evidence. Verify `plugin-docs` against a configured format and runner and against an explicit `--package` while configuration is invalid. For a composing format, request its configured registration first, read its public nested-package contract, then request that parser with a separate explicit `--package` call; neither response may aggregate the other document or import plugin code. Do not rely on workspace symlinks or source-checkout access for this check.
+### Mandatory executable specification gate
+
+Before any publication or release tag, `npm run release:check` MUST succeed on the exact release source revision. It builds and tests the packages, runs the real CLI smoke example, then invokes `npm run release:specs`. The final gate executes all discovered repository scopes without filters or skip allowances, the TypeScript and Go bank suites both natively and through the CLI, and the Python and .NET bank suites through their native wrappers. These execute the existing canonical scenarios, not duplicate specifications.
+
+A failed command, missing runtime, runner error, skip that prevents CLI success, or interrupted check blocks publication. Strict validation, old results, a partial selection, and `npm test` alone do not satisfy this gate. Install Node.js, Go, Python/uv, and .NET prerequisites; do not omit an unavailable SDK. Any subsequent source change invalidates the result and requires a new complete run. `release:specs` alone assumes packages are already built; the release entrypoint is `release:check`.
+
 
 ## Publish in dependency order
 
@@ -147,6 +152,7 @@ gh release view vX.Y.Z --json url,tagName,isDraft,isPrerelease,publishedAt,body
 ## Release completion checklist
 
 - [ ] The release commit is on `origin/main`; the working tree used to build and pack was clean and all required checks passed.
+- [ ] `npm run release:check` passed on the release revision, including all discovered evidence and executable bank specifications for TypeScript, Go, Python, and .NET; no missing runtime or failed required check was skipped.
 - [ ] All thirteen npm `X.Y.Z` versions are visible in the registry; a clean consumer can install the published packages.
 - [ ] Remote tag `vX.Y.Z` resolves to that exact release commit; it was not moved to repair a partial publish.
 - [ ] GitHub Release `vX.Y.Z` exists for that tag, has reviewed notes, is published (not draft), and is not marked prerelease for a stable version.

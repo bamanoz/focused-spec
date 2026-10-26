@@ -47,9 +47,7 @@ Use this project's package manager, initialize only the agent integration I use,
 and report what you verified and what still needs configuration.
 ```
 
-After setup, continue your BDD or SDD work. **You do not need to invoke focused-spec or its skill yourself.** The agent loads the installed skill and selects an installed CLI—an explicit path when supplied, otherwise a compatible project/workspace installation when present, otherwise a compatible PATH/global installation. It requests the compact workflow router, then the operation topic for review, author/revise, upgrade, or verify. The same executable serves all guidance for that step, while project configuration and plugins still resolve from the explicit project root. The agent preserves host read-only, planning, approval, and lifecycle boundaries.
-
-The guidance-delivery and [portable completion correction](docs/development/candidate-improvements.md#block-1--guidance-delivery-hardening) are source-checkout work, not a new npm release or a refresh of existing consumer installations. Evaluation separates integration-topic reading observations from task-success gates; composition, authorization and real behavioral evidence remain required. The fresh complete matrix passes all 40 cases on `externcash/gpt-6.1-sol`, alongside 408 repository tests and 349 focused occurrences. Model-specific results and unsupported native checks are recorded with the correction; this is not universal native-host certification.
+After setup, continue your BDD or SDD work. **You do not need to invoke focused-spec or its skill yourself.** The agent loads the installed guidance, preserves your specification workflow and approvals, and connects the affected behavior to executable evidence.
 
 ### For AI agents
 

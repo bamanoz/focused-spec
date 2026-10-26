@@ -24,7 +24,7 @@ For native Markdown with external YAML evidence, choose `@focused-spec/format-re
 
 For executable JS/TS scenarios without focused-spec, install only `@focused-spec/scenarios-typescript`; it has no runtime dependencies or focused-spec peer. For optional native discovery and direct execution, add `focused-spec`, `@focused-spec/format-scenarios-typescript` and `@focused-spec/runner-scenarios-typescript`. The format owns the TypeScript AST parser dependency; neither SDK nor core gains it. The [SDK contract](../../packages/sdk/typescript/README.md), [format contract](../../packages/formats/scenarios-typescript/README.md) and [bank example](configuration.md#standalone-executable-bank-specifications) document both paths.
 
-For independent Go scenarios, use the standard-library-only [Go SDK module](../../packages/sdk/go/README.md) with Go 1.23+; no Node.js or npm installation is needed. Install the coordinated release with `go get github.com/bamanoz/focused-spec/packages/sdk/go@v0.10.1` inside a Go module. Checkout examples retain an explicit local module replacement to exercise repository source. Optional focused-spec integration additionally installs `focused-spec`, `@focused-spec/format-scenarios-go` and `@focused-spec/runner-scenarios-go` as npm development dependencies. Their consumer needs both Node.js 22.16.0+ and Go 1.23+ on PATH. The Go parser helper ships inside the format package; core gains no Go dependency. Read its [format contract](../../packages/formats/scenarios-go/README.md) and [runner contract](runners.md#direct-go-scenarios) before configuration.
+For independent Go scenarios, use the standard-library-only [Go SDK module](../../packages/sdk/go/README.md) with Go 1.23+; no Node.js or npm installation is needed. Install the coordinated release with `go get github.com/bamanoz/focused-spec/packages/sdk/go@v0.10.2` inside a Go module. Checkout examples retain an explicit local module replacement to exercise repository source. Optional focused-spec integration additionally installs `focused-spec`, `@focused-spec/format-scenarios-go` and `@focused-spec/runner-scenarios-go` as npm development dependencies. Their consumer needs both Node.js 22.16.0+ and Go 1.23+ on PATH. The Go parser helper ships inside the format package; core gains no Go dependency. Read its [format contract](../../packages/formats/scenarios-go/README.md) and [runner contract](runners.md#direct-go-scenarios) before configuring.
 
 This installation places an executable with the package. During agent-led specification work, the loader may select this project-pinned executable, a user-supplied path, or a compatible PATH/global installation; users do not need to run CLI commands themselves. For optional manual or CI use after configuring native documents and format-owned evidence, invoke `npx focused-spec validate` from the project root or use `focused-spec` in npm scripts. Run the npx examples here only after installing the project dependency so they select it. Public types are exported from `focused-spec/format` and `focused-spec/runner`. Package installation does not install an agent skill, configure formats, or create evidence integration.
 
@@ -55,24 +55,24 @@ Repository verification additionally uses Python 3.11+ (`tomllib`) to parse inst
 
 ## .NET SDK from GitHub Releases
 
-The independent `FocusedSpec.Scenarios` SDK requires .NET 9+. Version `0.10.1` is distributed as a public [GitHub Release asset](https://github.com/bamanoz/focused-spec/releases/download/v0.10.1/FocusedSpec.Scenarios.0.10.1.nupkg), **not on nuget.org**. No Microsoft account, GitHub login, Node.js, or focused-spec CLI is required to install it.
+The independent `FocusedSpec.Scenarios` SDK requires .NET 9+. The coordinated `0.10.2` distribution uses a public [GitHub Release asset](https://github.com/bamanoz/focused-spec/releases/download/v0.10.2/FocusedSpec.Scenarios.0.10.2.nupkg), **not nuget.org**. No Microsoft account, GitHub login, Node.js, or focused-spec CLI is required to install it. The asset must be present and match the checksum below before installation; a source version alone does not establish publication.
 
 From your consuming project or solution root, download the exact package into a local feed (macOS/Linux):
 
 ```sh
 mkdir -p .nuget/local-feed
-curl --fail --location --output .nuget/local-feed/FocusedSpec.Scenarios.0.10.1.nupkg \
-  https://github.com/bamanoz/focused-spec/releases/download/v0.10.1/FocusedSpec.Scenarios.0.10.1.nupkg
+curl --fail --location --output .nuget/local-feed/FocusedSpec.Scenarios.0.10.2.nupkg \
+  https://github.com/bamanoz/focused-spec/releases/download/v0.10.2/FocusedSpec.Scenarios.0.10.2.nupkg
 ```
 
 On Windows PowerShell, use:
 
 ```powershell
 New-Item -ItemType Directory -Force .nuget/local-feed | Out-Null
-Invoke-WebRequest -Uri 'https://github.com/bamanoz/focused-spec/releases/download/v0.10.1/FocusedSpec.Scenarios.0.10.1.nupkg' -OutFile '.nuget/local-feed/FocusedSpec.Scenarios.0.10.1.nupkg'
+Invoke-WebRequest -Uri 'https://github.com/bamanoz/focused-spec/releases/download/v0.10.2/FocusedSpec.Scenarios.0.10.2.nupkg' -OutFile '.nuget/local-feed/FocusedSpec.Scenarios.0.10.2.nupkg'
 ```
 
-The package's SHA-256 is `4c0689d653dd2f2d28ea1ebe37f30ce31578dbc318efe9b6ecbcd60f4c5392a9`. Check it with `shasum -a 256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.1.nupkg` on macOS, `sha256sum` on Linux, or `Get-FileHash -Algorithm SHA256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.1.nupkg` in PowerShell. Stop if it differs.
+The package's SHA-256 is `03e6e38203a27597c3056b55c85d15068c52597fd479d666a2042ff599f4d34b`. Check it with `shasum -a 256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.2.nupkg` on macOS, `sha256sum` on Linux, or `Get-FileHash -Algorithm SHA256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.2.nupkg` in PowerShell. Stop if it differs.
 
 Create `NuGet.Config` beside `.nuget/` for a new project:
 
@@ -92,7 +92,7 @@ For an existing configuration, merge the local source into its `packageSources`;
 Add the pinned dependency from the directory containing your `.csproj` (or pass the project path explicitly):
 
 ```sh
-dotnet add package FocusedSpec.Scenarios --version 0.10.1
+dotnet add package FocusedSpec.Scenarios --version 0.10.2
 dotnet restore
 ```
 

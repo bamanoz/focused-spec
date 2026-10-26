@@ -131,6 +131,8 @@ Return exactly one JSON object: {"value":string|boolean|null,"approvedPaths":str
 
 export interface PlanningResult {
   agent: AgentResult
+  interactionDurationMs: number
+  responderDurationMs: number
   planModeEntered: boolean
   planApproved: boolean
   unauthorizedPaths: string[]
@@ -175,6 +177,7 @@ export async function runPlanningDialogue(
   let sessionId: string | undefined
   let exitCode: number | null = null
   let exited = false
+  let responderDurationMs = 0
   const fail = (error: unknown) => {
     failed ??= error instanceof Error ? error : new Error(String(error))
     for (const waiter of pending.values()) waiter.reject(failed)
@@ -216,10 +219,12 @@ export async function runPlanningDialogue(
     assistantText = ''
     const interaction: PlanningResult['interactions'][number] = { question, decision: null, transcript: '' }
     interactions.push(interaction)
+    const responderStarted = Date.now()
     const user = await runAgentTurn(responder, { workspace: request.workspace, skills: [], tools: '',
       ...(request.model === undefined ? {} : { model: request.model }), timeoutMs: 60_000,
       systemPrompt: responderSystem, prompt: JSON.stringify({ task: request.prompt, conversation, question,
         ...(submittedPlan === '' ? {} : { submittedPlan }) }) })
+    responderDurationMs += Date.now() - responderStarted
     interaction.transcript = user.output
     if (!user.success) throw new Error(`test-user failed: exit=${user.exitCode}`)
     const proposed = [request.prompt, ...conversation.filter(item => item.role === 'assistant').map(item => item.text)].join('\n')
@@ -299,8 +304,10 @@ export async function runPlanningDialogue(
     if (files.length !== 1) throw new Error(`expected one persisted ACP journal, found ${files.length}`)
     transcript = journalTranscript(await readFile(join(request.sessionDir, files[0]!), 'utf8'))
   } catch (error) { fail(error) }
+  const interactionDurationMs = Date.now() - started
   const success = promptCompleted && exited && exitCode === 0 && failed === undefined
-  return { agent: { success, output: transcript, exitCode, durationMs: Date.now() - started },
+  return { agent: { success, output: transcript, exitCode, durationMs: interactionDurationMs - responderDurationMs },
+    interactionDurationMs, responderDurationMs,
     planModeEntered: entered, planApproved: planApproved && mode === 'default', unauthorizedPaths: [...unauthorized],
     interactions, protocol: frames.join('\n'), detail: failed?.message ?? `ACP completed; explicit plan approval=${planApproved}; final mode=${mode}` }
 }

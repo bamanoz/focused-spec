@@ -5,6 +5,28 @@ const FOCUSED = ['focused-spec'] as const
 const ALL_SKILLS = [...FOCUSED, ...OPEN_SPEC_SKILLS]
 const EXPECTED_SELECTORS = ['TestBlockedAccount', 'test_blocked_account'] as const
 
+const FULL_SKILL_ROUTING: EvalCase = {
+    id: 'full-skill-routing',
+    description: 'Selects the correct proposal and apply workflows while every OpenSpec skill is available for native authoring.',
+    source: 'openspec',
+    changeName: 'reject-blocked-login',
+    turns: [
+      {
+        promptPath: 'cases/full-skill-routing/propose.md',
+        skills: ALL_SKILLS,
+        checkpoint: 'proposal',
+      },
+      {
+        promptPath: 'cases/full-skill-routing/apply.md',
+        skills: ALL_SKILLS,
+      },
+    ],
+    expectedEvidenceCount: 1,
+    maximumEvidenceCount: 2,
+    expectedSelectorFragments: [],
+    expectedSelectorAlternatives: ['::TestBlockedAccount', '/TestBlockedAccount', '::tests/functional/test_auth.py::test_blocked_account'],
+}
+
 export const EVAL_CASES: readonly EvalCase[] = [
   ...([
     ['integration-native-openspec', 'openspec', 'integrate', true, 'integration-native/openspec.md'],
@@ -186,26 +208,12 @@ export const EVAL_CASES: readonly EvalCase[] = [
     expectedSelectorFragments: EXPECTED_SELECTORS,
     evidenceStorage: 'inline',
   },
+  FULL_SKILL_ROUTING,
   {
-    id: 'full-skill-routing',
-    description: 'Selects the correct proposal and apply workflows while every OpenSpec skill is available for native authoring.',
-    source: 'openspec',
-    changeName: 'reject-blocked-login',
-    turns: [
-      {
-        promptPath: 'cases/full-skill-routing/propose.md',
-        skills: ALL_SKILLS,
-        checkpoint: 'proposal',
-      },
-      {
-        promptPath: 'cases/full-skill-routing/apply.md',
-        skills: ALL_SKILLS,
-      },
-    ],
-    expectedEvidenceCount: 1,
-    maximumEvidenceCount: 2,
-    expectedSelectorFragments: [],
-    expectedSelectorAlternatives: ['::TestBlockedAccount', '/TestBlockedAccount', '::tests/functional/test_auth.py::test_blocked_account'],
+    ...FULL_SKILL_ROUTING,
+    id: 'blind-skill-activation',
+    description: 'Discovers focused-spec for ordinary OpenSpec work among a complete external competing skill catalog.',
+    skillDiscovery: 'competing',
   },
 ]
 

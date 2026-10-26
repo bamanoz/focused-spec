@@ -2,7 +2,10 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { EvalCase } from './types.ts'
+import { createHash } from 'node:crypto'
+import { glob } from 'glob'
+import { parse } from 'yaml'
+import type { EvalCase, EvalResult } from './types.ts'
 import { runProcess } from './process.ts'
 import { captureUpgradeBaseline, LEGACY_VERSION, serveUpgradeCandidate } from './upgrade.ts'
 import type { UpgradeBaseline } from './upgrade.ts'
@@ -64,6 +67,33 @@ async function installSkills(workspace: string, skills: readonly string[], opens
       : join(openspecSkillsDir, skill)
     await cp(source, join(destination, skill), { recursive: true })
   }
+}
+
+async function installCompetingSkills(workspace: string, source: string, selected: readonly string[]): Promise<NonNullable<EvalResult['skillInventory']>> {
+  const paths = (await glob('*/SKILL.md', { cwd: source, nodir: true, follow: true })).sort()
+  const destination = join(workspace, '.omp', 'skills')
+  const names = new Set(selected)
+  for (const path of paths) {
+    const name = path.split('/')[0]!
+    if (names.has(name)) continue // Candidate and selected host skills retain their independently installed bytes.
+    const document = await readFile(join(source, path), 'utf8')
+    const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(document)
+    const metadata = frontmatter === null ? undefined : parse(frontmatter[1]!) as { name?: unknown; description?: unknown } | null
+    if (metadata?.name !== name || typeof metadata.description !== 'string' || metadata.description.trim() === '') {
+      throw new Error(`invalid competing skill metadata: ${path}`)
+    }
+    await cp(join(source, name), join(destination, name), { recursive: true })
+    names.add(name)
+  }
+  if (names.size === new Set(selected).size) throw new Error('competing skills directory must contain at least one additional skill')
+  return Promise.all([...names].sort().map(async name => {
+    const directory = join(destination, name)
+    const files: Record<string, string> = {}
+    for (const path of (await glob('**/*', { cwd: directory, nodir: true, dot: true, follow: true })).sort()) {
+      files[path] = createHash('sha256').update(await readFile(join(directory, path))).digest('hex')
+    }
+    return { name, files }
+  }))
 }
 
 async function installPackages(workspace: string, includeOpenSpec: boolean, cache: string): Promise<void> {
@@ -129,6 +159,7 @@ export interface ProvisionedWorkspace {
   readonly path: string
   readonly upgrade?: UpgradeBaseline
   readonly integration?: IntegrationBaseline
+  readonly skillInventory?: NonNullable<EvalResult['skillInventory']>
   finish(): Promise<void>
   cleanup(): Promise<void>
 }
@@ -136,9 +167,13 @@ export interface ProvisionedWorkspace {
 export async function provisionWorkspace(
   evalCase: EvalCase,
   openspecSkillsDir = process.env.OPEN_SPEC_SKILLS_DIR,
+  competingSkillsDir = process.env.COMPETING_SKILLS_DIR,
 ): Promise<ProvisionedWorkspace> {
   if (evalCase.source === 'openspec' && (openspecSkillsDir === undefined || openspecSkillsDir.trim() === '')) {
     throw new Error('OpenSpec evals require --openspec-skills <path> or OPEN_SPEC_SKILLS_DIR')
+  }
+  if (evalCase.skillDiscovery === 'competing' && (competingSkillsDir === undefined || competingSkillsDir.trim() === '')) {
+    throw new Error('blind activation eval requires --competing-skills <path> or COMPETING_SKILLS_DIR')
   }
   const directory = await mkdtemp(join(tmpdir(), `focused-spec-eval-${evalCase.id}-`))
   const workspace = join(directory, 'workspace')
@@ -157,7 +192,9 @@ export async function provisionWorkspace(
     else if (evalCase.integration !== undefined) integration = await prepareIntegration(workspace, cache, evalCase.integration, packLocalPackage)
     else await installPackages(workspace, evalCase.source === 'openspec', cache)
     await installSkills(workspace, skills, openspecSkillsDir ?? '')
-    return { path: workspace, cleanup, finish, ...(upgrade === undefined ? {} : { upgrade: upgrade.baseline }), ...(integration === undefined ? {} : { integration: integration.baseline }) }
+    const skillInventory = evalCase.skillDiscovery === 'competing'
+      ? await installCompetingSkills(workspace, competingSkillsDir!, skills) : undefined
+    return { path: workspace, cleanup, finish, ...(skillInventory === undefined ? {} : { skillInventory }), ...(upgrade === undefined ? {} : { upgrade: upgrade.baseline }), ...(integration === undefined ? {} : { integration: integration.baseline }) }
   } catch (error) {
     await cleanup()
     throw error

@@ -11,6 +11,7 @@ import { interviewFailedAgent } from './diagnostic.ts'
 import { isUpgradeArtifact, upgradeArtifactsGate, upgradePreservationGate } from './upgrade.ts'
 import { runAgentTurn, saveEvalResult } from './result.ts'
 import { integrationRoutingGate, judgeIntegrationWorkspace } from './integration.ts'
+import { measureAgentTurns } from './activation.ts'
 
 export async function runEval(
   options: EvalRunOptions,
@@ -18,7 +19,7 @@ export async function runEval(
 ): Promise<EvalResult> {
   const selected = evalCase(options.caseId)
   if (selected === undefined) throw new Error(`unknown eval case ${options.caseId}`)
-  const workspace = await provisionWorkspace(selected, options.openspecSkillsDir)
+  const workspace = await provisionWorkspace(selected, options.openspecSkillsDir, options.competingSkillsDir)
   const turns = []
   const gates: EvalGate[] = []
   const observations: EvalGate[] = []
@@ -32,6 +33,14 @@ export async function runEval(
     try {
     const snapshots = workspace.integration === undefined ? new Map(await snapshotProtectedFiles(workspace.path, selected.editablePaths)) : new Map<string, string>()
     const proposalBefore = await snapshotProposalFiles(workspace.path)
+    if (workspace.skillInventory !== undefined) {
+      for (const skill of workspace.skillInventory) {
+        for (const path of Object.keys(skill.files)) {
+          const relative = `.omp/skills/${skill.name}/${path}`
+          snapshots.set(relative, await readFile(join(workspace.path, relative), 'utf8'))
+        }
+      }
+    }
     if (workspace.upgrade !== undefined) {
       for (const path of snapshots.keys()) if (isUpgradeArtifact(path)) snapshots.delete(path)
       const unrelated = await glob('node_modules/yaml/**/*', { cwd: workspace.path, nodir: true, dot: true, follow: true, nocase: false })
@@ -45,7 +54,7 @@ export async function runEval(
         workspace: workspace.path,
         sessionDir: join(workspace.path, '..', 'sessions', String(turns.length + 1)),
         prompt,
-        skills: turn.skills,
+        skills: workspace.skillInventory === undefined ? turn.skills : workspace.skillInventory.map(skill => skill.name),
         ...(options.model === undefined ? {} : { model: options.model }),
         timeoutMs,
       }
@@ -99,11 +108,14 @@ export async function runEval(
       ? await interviewFailedAgent(lastRequest, gates, selected.description, driver) : null
     const result: EvalResult = {
       caseId: selected.id,
+      ...(options.model === undefined ? {} : { model: options.model }),
       passed,
       workspace: workspace.path,
       turns,
       gates,
       observations,
+      ...(workspace.skillInventory === undefined ? {} : { skillInventory: workspace.skillInventory }),
+      measurements: measureAgentTurns(turns),
       diagnostic,
     }
     const resultsDirectory = join(evalRepositoryRoot(), 'evals', 'results')
