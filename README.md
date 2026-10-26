@@ -1,4 +1,6 @@
-# focused-spec
+<p align="center">
+  <img src="./assets/focused-spec.svg" alt="focused-spec" width="1092">
+</p>
 
 [![npm](https://img.shields.io/npm/v/focused-spec?label=npm)](https://www.npmjs.com/package/focused-spec) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 

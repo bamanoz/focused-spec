@@ -8,7 +8,9 @@ for (const asset of ['skills', 'guidance']) {
   await rm(join(core, asset), { recursive: true, force: true })
   await cp(join(root, asset), join(core, asset), { recursive: true })
 }
-await copyFile(join(root, 'README.md'), join(core, 'README.md'))
+const readme = (await readFile(join(root, 'README.md'), 'utf8'))
+  .replace('src="./assets/focused-spec.svg"', 'src="https://raw.githubusercontent.com/bamanoz/focused-spec/main/assets/focused-spec.svg"')
+await writeFile(join(core, 'README.md'), readme)
 for (const name of ['core', 'sdk/typescript', 'sdk/go', 'formats/markdown', 'formats/gherkin', 'formats/inline', 'formats/registry', 'formats/scenarios-typescript', 'formats/scenarios-go', 'runners/vitest', 'runners/pytest', 'runners/go', 'runners/scenarios-typescript', 'runners/scenarios-go']) {
   await copyFile(join(root, 'LICENSE'), join(root, 'packages', name, 'LICENSE'))
 }
