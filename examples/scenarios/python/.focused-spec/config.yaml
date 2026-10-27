@@ -1,0 +1,13 @@
+version: 5
+specifications:
+  formats:
+    scenarios-python:
+      package: '@focused-spec/format-scenarios-python'
+      options: { runner: scenarios-python, command: python3 }
+  documents:
+    - { match: 'specifications/*_scenarios.py', scope: current, format: scenarios-python }
+runners:
+  scenarios-python:
+    package: '@focused-spec/runner-scenarios-python'
+    timeoutMs: 120000
+    options: { command: python3 }

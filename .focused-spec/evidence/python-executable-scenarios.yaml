@@ -21,3 +21,46 @@ scopes:
     python-example.bank:
       evidence:
         - vitest::test/python-scenarios.spec.ts::python executable scenarios > runs the maintained pytest bank consumer and demo
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > runs canonical bank through CLI and detects restored regression
+    python-sdk.driver-binding:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > preserves standalone suites and optional driver bindings
+    python-format.binding-required:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > rejects unsupported or unbound declarations
+    python-format.dynamic-rejected:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > rejects unsupported or unbound declarations
+    python-format.static-discovery:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > inspects suites without executing consumer code
+    python-format.direct-enrollment:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > runs distributed plugins without checkout access
+    python-distribution.plugins:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > runs distributed plugins without checkout access
+    python-runner.exact-selection:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > executes only the exact selected native scenario
+    python-runner.native-comparison:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > preserves native comparison across transport
+    python-runner.stale-target:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > rejects a selected identity changed after resolution
+    python-runner.containment:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > rejects source and binding escapes
+    python-runner.transport:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > rejects missing malformed and forged reports
+    python-runner.cancellation:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > bounds cancellation and terminates owned workers
+    python-runner.events:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > retains application explanations and mismatch observations
+    python-example.cli-bank:
+      evidence:
+        - vitest::test/python-native-plugins.spec.ts::python native plugins > runs canonical bank through CLI and detects restored regression

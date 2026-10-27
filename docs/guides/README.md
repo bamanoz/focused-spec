@@ -11,8 +11,8 @@
 - [Run the independent SDK bank demo standalone or through optional focused-spec plugins](configuration.md#standalone-executable-bank-specifications)
 - [Read the standalone JS/TS SDK contract](../../packages/sdk/typescript/README.md) and [native code-scenario format](../../packages/formats/scenarios-typescript/README.md)
 - [Read the standalone Go SDK contract](../../packages/sdk/go/README.md), [native Go scenario format](../../packages/formats/scenarios-go/README.md), and [direct Go runner](runners.md#direct-go-scenarios)
-- [Use the standalone Python SDK with pytest](../../packages/sdk/python/README.md)
-- [Use the standalone .NET SDK with xUnit](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md)
+- [Use the independent Python SDK](../../packages/sdk/python/README.md), [static native format](../../packages/formats/scenarios-python/README.md), and [direct Python runner](runners.md#direct-python-scenarios)
+- [Use the independent .NET SDK](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md), [static native format](../../packages/formats/scenarios-dotnet/README.md), and [direct .NET runner](runners.md#direct-net-scenarios)
 - [Install the .NET SDK from a GitHub Release without a Microsoft account](install.md#net-sdk-from-github-releases)
 
 For exact flags and response shapes, use the [CLI reference](../reference/cli.md) and [Plugin API reference](../reference/runner-api.md).

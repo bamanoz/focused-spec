@@ -22,14 +22,18 @@ public sealed class Scenario<TGiven, TWhen, TExpect>
     public TExpect Expect { get; }
 }
 
+public sealed record ScenarioDriverBinding(string Path, string Export);
+
 public sealed class ScenarioSuite<TGiven, TWhen, TExpect>
 {
-    public ScenarioSuite(IEnumerable<Scenario<TGiven, TWhen, TExpect>> scenarios)
+    public ScenarioSuite(IEnumerable<Scenario<TGiven, TWhen, TExpect>> scenarios, ScenarioDriverBinding? driver = null)
     {
         Scenarios = scenarios?.ToArray() ?? throw new ArgumentNullException(nameof(scenarios));
+        Driver = driver;
     }
 
     public IReadOnlyList<Scenario<TGiven, TWhen, TExpect>> Scenarios { get; }
+    public ScenarioDriverBinding? Driver { get; }
 }
 
 public sealed class DriverContext

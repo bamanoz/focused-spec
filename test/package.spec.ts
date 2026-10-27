@@ -214,7 +214,7 @@ describe('package distribution', () => {
     for (const name of ['tsconfig.json', 'package.json', 'README.md', 'LICENSE']) await cp(join(repository, name), join(checkout, name))
     await put(join(checkout, 'docs/guides/runners.md'), await readFile(join(repository, 'docs/guides/runners.md'), 'utf8'))
     await symlink(join(repository, 'node_modules'), join(checkout, 'node_modules'), 'dir')
-    for (const name of ['core', 'sdk/typescript', 'sdk/go', 'formats/markdown', 'formats/gherkin', 'formats/inline', 'formats/registry', 'formats/scenarios-typescript', 'formats/scenarios-go', 'runners/vitest', 'runners/pytest', 'runners/go', 'runners/scenarios-typescript', 'runners/scenarios-go']) await mkdir(join(checkout, 'packages', name), { recursive: true })
+    for (const name of ['core', 'sdk/typescript', 'sdk/go', 'formats/markdown', 'formats/gherkin', 'formats/inline', 'formats/registry', 'formats/scenarios-typescript', 'formats/scenarios-go', 'formats/scenarios-python', 'formats/scenarios-dotnet', 'runners/vitest', 'runners/pytest', 'runners/go', 'runners/scenarios-typescript', 'runners/scenarios-go', 'runners/scenarios-python', 'runners/scenarios-dotnet']) await mkdir(join(checkout, 'packages', name), { recursive: true })
     const packageRoot = join(checkout, 'packages/core')
     await cp(join(repository, 'packages/core'), packageRoot, { recursive: true })
     const prepared = join(packageRoot, 'dist/prepared-only.js')
@@ -231,7 +231,7 @@ describe('package distribution', () => {
     for (const name of ['scripts', 'skills', 'guidance']) await cp(join(repository, name), join(checkout, name), { recursive: true })
     await put(join(checkout, 'docs/guides/runners.md'), await readFile(join(repository, 'docs/guides/runners.md'), 'utf8'))
     for (const name of ['README.md', 'LICENSE']) await cp(join(repository, name), join(checkout, name))
-    for (const name of ['core', 'sdk/typescript', 'sdk/go', 'formats/markdown', 'formats/gherkin', 'formats/inline', 'formats/registry', 'formats/scenarios-typescript', 'formats/scenarios-go', 'runners/vitest', 'runners/pytest', 'runners/go', 'runners/scenarios-typescript', 'runners/scenarios-go']) await mkdir(join(checkout, 'packages', name), { recursive: true })
+    for (const name of ['core', 'sdk/typescript', 'sdk/go', 'formats/markdown', 'formats/gherkin', 'formats/inline', 'formats/registry', 'formats/scenarios-typescript', 'formats/scenarios-go', 'formats/scenarios-python', 'formats/scenarios-dotnet', 'runners/vitest', 'runners/pytest', 'runners/go', 'runners/scenarios-typescript', 'runners/scenarios-go', 'runners/scenarios-python', 'runners/scenarios-dotnet']) await mkdir(join(checkout, 'packages', name), { recursive: true })
     const stage = () => spawnSync(process.execPath, ['scripts/stage-assets.mjs'], { cwd: checkout, encoding: 'utf8' })
     await put(join(checkout, 'skills/retired/SKILL.md'), 'retired loader')
     await put(join(checkout, 'guidance/retired.md'), 'retired guidance')
@@ -253,12 +253,16 @@ describe('package distribution', () => {
     await cp(join(repository, 'package.json'), join(checkout, 'package.json'))
     await cp(join(repository, 'scripts'), join(checkout, 'scripts'), { recursive: true })
     await symlink(join(repository, 'node_modules'), join(checkout, 'node_modules'), 'dir')
-    for (const name of ['core', 'sdk/typescript', 'formats/markdown', 'formats/gherkin', 'formats/inline', 'formats/registry', 'formats/scenarios-typescript', 'formats/scenarios-go', 'runners/vitest', 'runners/pytest', 'runners/go', 'runners/scenarios-typescript', 'runners/scenarios-go']) {
+    for (const name of ['core', 'sdk/typescript', 'formats/markdown', 'formats/gherkin', 'formats/inline', 'formats/registry', 'formats/scenarios-typescript', 'formats/scenarios-go', 'formats/scenarios-python', 'formats/scenarios-dotnet', 'runners/vitest', 'runners/pytest', 'runners/go', 'runners/scenarios-typescript', 'runners/scenarios-go', 'runners/scenarios-python', 'runners/scenarios-dotnet']) {
       const packageRoot = join(checkout, 'packages', name)
       await mkdir(packageRoot, { recursive: true })
       for (const asset of ['src', 'package.json', 'tsconfig.json']) await cp(join(repository, 'packages', name, asset), join(packageRoot, asset), { recursive: true })
       if (name === 'formats/scenarios-go') {
         for (const asset of ['go', 'build.mjs']) await cp(join(repository, 'packages', name, asset), join(packageRoot, asset), { recursive: true })
+      }
+      if (name.endsWith('scenarios-python') || name.endsWith('scenarios-dotnet')) {
+        const language = name.endsWith('scenarios-python') ? 'python' : 'dotnet'
+        for (const asset of [language, 'build.mjs']) await cp(join(repository, 'packages', name, asset), join(packageRoot, asset), { recursive: true })
       }
       const retiredSource = join(packageRoot, 'src/audit-retired-runtime.ts')
       await put(retiredSource, 'export const retired = true\n')

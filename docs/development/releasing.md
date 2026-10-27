@@ -1,18 +1,19 @@
 # Releasing npm packages and the Go, Python, and .NET SDKs
 
-This repository prepares thirteen independently published npm packages from one private npm workspace, plus independent Go, Python, and .NET SDK distributions:
+This repository prepares seventeen independently published npm packages from one private npm workspace, plus independent Go, Python, and .NET SDK distributions:
 
 - `focused-spec` from `packages/core`;
 - the existing official formats/runners and `@focused-spec/scenarios-typescript` suite;
+- `@focused-spec/format-scenarios-python`, `@focused-spec/runner-scenarios-python`, `@focused-spec/format-scenarios-dotnet`, and `@focused-spec/runner-scenarios-dotnet` as optional direct native integrations;
 - the separate Go module at `packages/sdk/go`;
 - the Python distribution at `packages/sdk/python`;
 - the NuGet project at `packages/sdk/dotnet/FocusedSpec.Scenarios`.
 
 The Python and .NET SDKs are framework-independent. Their pytest/xUnit bank consumers are repository verification projects, not runtime dependencies of the SDKs. Publishing each native SDK requires its own authorized registry account and exact package verification.
 
-The CLI, all thirteen npm packages, and the Go, Python, and .NET SDKs share one release version, currently `0.10.2`. SDKs remain runtime-independent; an unchanged package still receives the coordinated release version. Configuration, guidance, format, and runner protocol versions remain separate compatibility contracts. Source versions are not proof of registry publication: source-only or partially published GitHub Releases must identify the exact pending distributions.
+The CLI, all seventeen npm packages, and the Go, Python, and .NET SDKs share one release version, currently `0.10.2`. SDKs remain runtime-independent; an unchanged package still receives the coordinated release version. Configuration, guidance, format, and runner protocol versions remain separate compatibility contracts. Source versions are not proof of registry publication: source-only or partially published GitHub Releases must identify the exact pending distributions. The four Python/.NET integration packages are prepared locally by this change, not certified as remotely published.
 
-There is no automated release workflow. An npm suite release is complete only when all thirteen exact npm versions are available from the registry, the remote `v<version>` tag identifies the built source commit, and a published (not draft) GitHub Release exists for that tag. npm publication and Git tags do not create a GitHub Release. Go, Python, and .NET SDKs have their own native publication gates.
+There is no automated release workflow. An npm suite release is complete only when all seventeen exact npm versions are available from the registry, the remote `v<version>` tag identifies the built source commit, and a published (not draft) GitHub Release exists for that tag. npm publication and Git tags do not create a GitHub Release. Go, Python, and .NET SDKs have their own native publication gates.
 
 ## Prepare one coordinated version
 
@@ -36,11 +37,15 @@ npm view @focused-spec/format-scenarios-typescript version
 npm view @focused-spec/runner-scenarios-typescript version
 npm view @focused-spec/format-scenarios-go version
 npm view @focused-spec/runner-scenarios-go version
+npm view @focused-spec/format-scenarios-python version
+npm view @focused-spec/runner-scenarios-python version
+npm view @focused-spec/format-scenarios-dotnet version
+npm view @focused-spec/runner-scenarios-dotnet version
 ```
 
 Choose one `X.Y.Z` for the CLI, all npm packages, Python's `project.version`, .NET's project `Version`, and the Go SDK's `packages/sdk/go/vX.Y.Z` tag. Core-facing changes include the CLI/API under `packages/core/src`, packaged root `skills/` or `guidance/`, the staged root `README.md`/`LICENSE`, and core package metadata. Keep every adapter's `focused-spec` peer range compatible with the coordinated version; framework packages remain peer/consumer dependencies rather than core runtime dependencies. The JS/TS SDK has no focused-spec peer or runtime dependency; only its optional format owns the TypeScript parser dependency. The Go format ships a standard-library helper; the Go SDK is a separate standard-library-only module, not an npm package.
 
-Update all thirteen workspace manifests, the root lockfile, Python and .NET SDK manifests, and version-pinned distribution consumers before tagging. Confirm every exact version is unused in its registry; published versions and tags are immutable. Versioned manifests are preparation only—do not publish them as part of implementation or validation without release authorization. If alignment is approved after a source tag exists, commit and push native SDK metadata separately, keep the existing source tag fixed, and identify both source revisions in the release notes; never rebuild or overwrite already published npm artifacts.
+Update all seventeen workspace manifests, the root lockfile, Python and .NET SDK manifests, and version-pinned distribution consumers before tagging. Confirm every exact version is unused in its registry; published versions and tags are immutable. Versioned manifests are preparation only—do not publish them as part of implementation or validation without release authorization. If alignment is approved after a source tag exists, commit and push native SDK metadata separately, keep the existing source tag fixed, and identify both source revisions in the release notes; never rebuild or overwrite already published npm artifacts.
 
 ## Build and inspect separate tarballs
 
@@ -65,6 +70,10 @@ npm pack --dry-run --workspace @focused-spec/format-scenarios-typescript
 npm pack --dry-run --workspace @focused-spec/runner-scenarios-typescript
 npm pack --dry-run --workspace @focused-spec/format-scenarios-go
 npm pack --dry-run --workspace @focused-spec/runner-scenarios-go
+npm pack --dry-run --workspace @focused-spec/format-scenarios-python
+npm pack --dry-run --workspace @focused-spec/runner-scenarios-python
+npm pack --dry-run --workspace @focused-spec/format-scenarios-dotnet
+npm pack --dry-run --workspace @focused-spec/runner-scenarios-dotnet
 ```
 
 Inspect each dry-run independently. Core must contain `dist/cli.js`, `dist/index.js`, `dist/format-api.js`, `dist/runner-api.js`, declarations, staged `skills/`, all eight guidance assets (`workflow`, `review`, `author-revise`, `upgrade`, `verify`, `integration`, `formats`, and `runners`), root `README.md`, and `LICENSE`; it must not contain tests, `.focused-spec/`, a native parser, or registry loader. Each adapter must contain its own compiled ESM and declarations, package metadata, public README and any runtime helper assets it owns, without repository tests or another package's source. Root `src`/`dist` are obsolete; core output is `packages/core/dist`. Build stages root-owned assets into core so they are authored only once.
@@ -79,10 +88,12 @@ Every official format and runner tarball includes its public `README.md`. Runner
 
 Build core and SDK first, the scenario format next, then its runner. Each new tarball must include compiled ESM, declarations, public README and LICENSE; the runner additionally owns its worker/transport runtime. Install only the SDK tarball in one clean consumer and prove execution/public types without focused-spec or TypeScript. Install core plus all three extension tarballs together in another consumer and exercise the maintained bank example's ordinary tests/output and local CLI list/show, strict validation and selected/all execution. Check plugin-docs provenance from installed tarballs and actual TypeScript-driver execution on Node.js 22.16.0 without consumer flags.
 
+The Python format/runner tarballs additionally ship their standard-library AST helper and execution worker. The .NET format ships its prebuilt Roslyn parser, pinned runtime dependencies and third-party notices; building requires .NET SDK 9+ and dependency restore, while installed inspection must work offline without restore, MSBuild or application loading. The .NET runner ships its typed bridge source and builds only during trusted execution against the explicitly selected consumer project/framework. Certify each pair in an isolated consumer with its separately installed native wheel/nupkg, public plugin-docs, inert inspection, exact native equality, bounded failures/cancellation and bank regression/restoration. Core-only and native-SDK-only consumers remain independent of these extensions.
+
 For install-level certification, create tarballs separately and install core alone in a clean consumer first: it must expose the CLI and APIs but have no native parser, inline dialect, registry loader, or test-framework fallback. In clean consumers, install the required core, selected format and runner tarballs together, configure package names explicitly, and validate/run both no-registry inline and explicit-registry evidence. Verify `plugin-docs` against a configured format and runner and against an explicit `--package` while configuration is invalid. For a composing format, request its configured registration first, read its public nested-package contract, then request that parser with a separate explicit `--package` call; neither response may aggregate the other document or import plugin code. Do not rely on workspace symlinks or source-checkout access for this check.
 ### Mandatory executable specification gate
 
-Before any publication or release tag, `npm run release:check` MUST succeed on the exact release source revision. It builds and tests the packages, runs the real CLI smoke example, then invokes `npm run release:specs`. The final gate executes all discovered repository scopes without filters or skip allowances, the TypeScript and Go bank suites both natively and through the CLI, and the Python and .NET bank suites through their native wrappers. These execute the existing canonical scenarios, not duplicate specifications.
+Before any publication or release tag, `npm run release:check` MUST succeed on the exact release source revision. It builds and tests the packages, runs the real CLI smoke example, then invokes `npm run release:specs`. The final gate executes all discovered repository scopes without filters or skip allowances and all four bank suites both natively and through the CLI. It prepares a disposable Python environment with the local SDK and pytest and removes it in `finally`, rather than relying on a global SDK installation. These execute the existing canonical scenarios, not duplicate specifications.
 
 A failed command, missing runtime, runner error, skip that prevents CLI success, or interrupted check blocks publication. Strict validation, old results, a partial selection, and `npm test` alone do not satisfy this gate. Install Node.js, Go, Python/uv, and .NET prerequisites; do not omit an unavailable SDK. Any subsequent source change invalidates the result and requires a new complete run. `release:specs` alone assumes packages are already built; the release entrypoint is `release:check`.
 
@@ -116,6 +127,10 @@ npm publish --workspace @focused-spec/format-scenarios-typescript
 npm publish --workspace @focused-spec/runner-scenarios-typescript
 npm publish --workspace @focused-spec/format-scenarios-go
 npm publish --workspace @focused-spec/runner-scenarios-go
+npm publish --workspace @focused-spec/format-scenarios-python
+npm publish --workspace @focused-spec/runner-scenarios-python
+npm publish --workspace @focused-spec/format-scenarios-dotnet
+npm publish --workspace @focused-spec/runner-scenarios-dotnet
 
 npm view @focused-spec/format-markdown@X.Y.Z version
 npm view @focused-spec/format-gherkin@X.Y.Z version
@@ -128,11 +143,15 @@ npm view @focused-spec/format-scenarios-typescript@X.Y.Z version
 npm view @focused-spec/runner-scenarios-typescript@X.Y.Z version
 npm view @focused-spec/format-scenarios-go@X.Y.Z version
 npm view @focused-spec/runner-scenarios-go@X.Y.Z version
+npm view @focused-spec/format-scenarios-python@X.Y.Z version
+npm view @focused-spec/runner-scenarios-python@X.Y.Z version
+npm view @focused-spec/format-scenarios-dotnet@X.Y.Z version
+npm view @focused-spec/runner-scenarios-dotnet@X.Y.Z version
 ```
 
 If one publication fails, do not claim a suite release or create the tag. Already published versions cannot be rolled back or overwritten; diagnose the failure, publish only the still-missing packages from the same committed revision, and recheck the complete version set. Never bump or move successful packages merely to hide a partial publication.
 
-After all thirteen registry checks succeed, tag the npm release commit and push that tag explicitly:
+After all seventeen registry checks succeed, tag the npm release commit and push that tag explicitly:
 
 ```sh
 git tag vX.Y.Z
@@ -153,7 +172,7 @@ gh release view vX.Y.Z --json url,tagName,isDraft,isPrerelease,publishedAt,body
 
 - [ ] The release commit is on `origin/main`; the working tree used to build and pack was clean and all required checks passed.
 - [ ] `npm run release:check` passed on the release revision, including all discovered evidence and executable bank specifications for TypeScript, Go, Python, and .NET; no missing runtime or failed required check was skipped.
-- [ ] All thirteen npm `X.Y.Z` versions are visible in the registry; a clean consumer can install the published packages.
+- [ ] All seventeen npm `X.Y.Z` versions are visible in the registry; a clean consumer can install the published packages.
 - [ ] Remote tag `vX.Y.Z` resolves to that exact release commit; it was not moved to repair a partial publish.
 - [ ] GitHub Release `vX.Y.Z` exists for that tag, has reviewed notes, is published (not draft), and is not marked prerelease for a stable version.
 - [ ] Go, Python, and .NET SDKs use the same `X.Y.Z` and each passes its native publication and clean-registry-consumer gate. Missing credentials leave that distribution explicitly pending, not released.

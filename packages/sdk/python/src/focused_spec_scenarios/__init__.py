@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import keyword
 import math
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -23,10 +24,18 @@ class Scenario(Generic[Given, When, Expect]):
     when: When
     expect: Expect
 
+@dataclass(frozen=True, slots=True)
+class DriverBinding:
+    """Inert source metadata for optional focused-spec integration."""
+
+    path: str
+    export: str
+
 
 @dataclass(frozen=True, slots=True)
 class Suite(Generic[Given, When, Expect]):
     scenarios: tuple[Scenario[Given, When, Expect], ...]
+    driver: DriverBinding | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,16 +116,28 @@ def validate_scenario(scenario: Scenario[Any, Any, Any]) -> None:
     _validate_data(scenario.expect, f"{scenario.id} Expect")
 
 
-def define_suite(*scenarios: Scenario[Given, When, Expect]) -> Suite[Given, When, Expect]:
+def define_suite(
+    *scenarios: Scenario[Given, When, Expect],
+    driver: DriverBinding | None = None,
+) -> Suite[Given, When, Expect]:
     if not scenarios:
         raise ValueError("suite must contain at least one scenario")
+    if driver is not None:
+        if not isinstance(driver, DriverBinding):
+            raise TypeError("suite driver must be a DriverBinding")
+        if not isinstance(driver.path, str) or not driver.path.strip() or any(
+            ord(char) < 32 or 127 <= ord(char) < 160 for char in driver.path
+        ):
+            raise ValueError("suite driver path must be nonblank and contain no control characters")
+        if not isinstance(driver.export, str) or not driver.export.isidentifier() or keyword.iskeyword(driver.export):
+            raise ValueError("suite driver export must be a Python identifier")
     identities: set[str] = set()
     for scenario in scenarios:
         validate_scenario(scenario)
         if scenario.id in identities:
             raise ValueError(f"duplicate scenario ID: {scenario.id}")
         identities.add(scenario.id)
-    return Suite(tuple(scenarios))
+    return Suite(tuple(scenarios), driver)
 
 
 def _equal(left: Any, right: Any) -> bool:
@@ -222,6 +243,7 @@ async def _resolve(value: Any) -> Any:
 
 __all__ = [
     "Driver",
+    "DriverBinding",
     "DriverContext",
     "ExecutionEvent",
     "Scenario",

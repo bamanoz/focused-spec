@@ -7,7 +7,7 @@ A focused specification protects the smallest product-boundary outcome that can 
 - **Executable BDD scenarios:** keep Given/When/Expect in code; a thin driver invokes the real application and the language SDK compares its actual observation with independently authored expectations. JavaScript/TypeScript, Go, Python, and .NET SDKs execute natively without an SDD framework, Markdown companion, registry, or focused-spec CLI.
 - **Native requirement binding:** keep an existing requirement or acceptance item in its owning format and bind it to exact executable tests. The framework retains approval and lifecycle ownership when present.
 
-Optional CLI integration discovers and executes code scenarios through the JS/TS or Go plugins, or binds native text through compatible formats and runners. For CLI-integrated items, `focused-spec` adds only:
+Optional CLI integration discovers and executes code scenarios through language-specific JS/TS, Go, Python or .NET plugins, or binds native text through compatible formats and runners. For CLI-integrated items, `focused-spec` adds only:
 
 - one opaque stable ID bound to that item;
 - one or more exact evidence references supplied by the selected format;
@@ -31,7 +31,7 @@ For editable Markdown, the native parser binds an ID with `<!-- focused-spec:id=
 
 An enrollment is invalid when it is missing evidence, claims a nonexistent item, binds more than one item, conflicts with a marked identity, duplicates a selected `(scope, ID)`, or competes with another adapter for the same item. Unmarked native content remains outside focused execution: it is neither an error nor an arbitrary count reported as verified.
 
-The independent [JS/TS](../../packages/sdk/typescript/README.md), [Go](../../packages/sdk/go/README.md), [Python](../../packages/sdk/python/README.md), and [.NET](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md) SDKs prepare the application from Given, perform When, and compare actual observations with Expect, with execution-local cleanup. A test wrapper executes that same suite without becoming another behavioral source. Optional native discovery/direct CLI execution exists for JS/TS and Go; Python and .NET retain native SDK/test execution. Static CLI discovery accepts the selected format's documented grammar rather than every dynamically constructed suite.
+The independent [JS/TS](../../packages/sdk/typescript/README.md), [Go](../../packages/sdk/go/README.md), [Python](../../packages/sdk/python/README.md), and [.NET](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md) SDKs prepare the application from Given, perform When, and compare actual observations with Expect, with execution-local cleanup. A test wrapper executes that same suite without becoming another behavioral source. Optional language-specific formats and direct runners discover and execute the same native suites for all four languages; SDK-only execution remains independent. Static CLI discovery accepts the selected format's documented grammar rather than every dynamically constructed suite.
 
 ## Agent-owned loading
 

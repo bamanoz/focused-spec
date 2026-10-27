@@ -19,7 +19,7 @@ Executable specifications keep the Given/When/Expect scenario in code and verify
 | Python 3.11+ | [`focused-spec-scenarios`](packages/sdk/python/README.md) on PyPI | [Python bank](examples/scenarios/python/) |
 | .NET 9+ | [`FocusedSpec.Scenarios`](packages/sdk/dotnet/FocusedSpec.Scenarios/README.md) via [GitHub Release and local NuGet feed](docs/guides/install.md#net-sdk-from-github-releases) | [.NET bank](examples/scenarios/dotnet/) |
 
-The .NET package is **not published on nuget.org**. Its installation guide covers the public download, checksum, pinned dependency, and repeatable CI restore; no Microsoft account is needed. Optional CLI discovery/direct execution plugins are available for JavaScript/TypeScript and Go only. Python and .NET execute natively through their SDKs and consumer-owned tests.
+The .NET package is **not published on nuget.org**. Its installation guide covers the public download, checksum, pinned dependency, and repeatable CI restore; no Microsoft account is needed. Optional CLI plugins support all four languages; Python and .NET plugins currently require a [source-checkout installation](docs/guides/install.md). See the [format contracts](docs/guides/configuration.md#public-format-contracts) and [direct runners](docs/guides/runners.md). SDKs and consumer-owned tests remain independent.
 
 ## Bind native requirements to tests
 
@@ -102,7 +102,7 @@ SDK-only execution does not need CLI installation or configuration; use the lang
 | Executable Python | [Python SDK bank demo](examples/scenarios/python/) | Native Given/When/Expect suite |
 | Executable .NET | [.NET SDK bank demo](examples/scenarios/dotnet/) | Native typed suite |
 
-The framework examples use explicitly installed format and runner packages to bind native items to real tests. All four bank demos use independent language SDKs and keep six event-sourced account outcomes in native code, without Markdown copies or registries. Ordinary test wrappers and readable demos exercise those same suites; optional focused-spec plugins do so for JavaScript/TypeScript and Go. [Run the examples](docs/guides/configuration.md#standalone-executable-bank-specifications) from this repository's checkout.
+The framework examples use explicitly installed format and runner packages to bind native items to real tests. All four bank demos use independent language SDKs and keep six event-sourced account outcomes in native code, without Markdown copies or registries. Ordinary test wrappers, readable demos and optional language-specific CLI plugins exercise those same suites. [Run the examples](docs/guides/configuration.md#standalone-executable-bank-specifications) from this repository's checkout.
 
 ## Learn more
 

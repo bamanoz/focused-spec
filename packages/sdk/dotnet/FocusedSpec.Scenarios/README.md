@@ -27,10 +27,20 @@ var actual = await ScenarioExecutor.VerifyAsync(driver, scenario);
 
 A driver exercises the real application boundary. Given, When, and Expect are explicit; the SDK does not derive Expect from execution.
 
+Suites may carry an inert binding for optional focused-spec discovery without resolving or invoking the driver:
+
+```csharp
+var suite = new ScenarioSuite<int, int, int>(
+    [scenario],
+    new ScenarioDriverBinding("AccountScenarios.cs", "Example.AccountScenarios.Driver"));
+```
+
+`Path` is relative to the suite source. `Export` names a fully qualified public static field or parameterless property returning the suite's typed driver. The binding is optional; SDK-only callers continue to pass drivers directly to `ScenarioExecutor.VerifyAsync`.
+
 ## Public API
 
 - `Scenario<TGiven,TWhen,TExpect>` stores exact `Id`, `Name`, `Given`, `When`, and `Expect` values.
-- `ScenarioSuite<TGiven,TWhen,TExpect>` groups scenarios. `ScenarioValidation.Validate` rejects empty suites, invalid identities/data, and duplicate IDs.
+- `ScenarioSuite<TGiven,TWhen,TExpect>` groups scenarios and optionally exposes inert `ScenarioDriverBinding` metadata. `ScenarioValidation.Validate` rejects empty suites, invalid identities/data, and duplicate IDs.
 - `ScenarioDriver<TSubject,TGiven,TWhen,TExpect>` supplies asynchronous `Given` and `When` operations and optional asynchronous `Cleanup`.
 - `ScenarioExecutor.VerifyAsync` validates before preparation, clones Given/When inputs, executes the driver, compares the actual result, and returns a snapshot. `ScenarioMismatchException` exposes scenario ID/name and stable Expected/Actual values.
 - `DriverContext` provides scenario identity, the execution cancellation token, and `Explain(message, data?)`.

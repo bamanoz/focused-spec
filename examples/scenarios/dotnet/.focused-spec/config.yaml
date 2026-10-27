@@ -1,0 +1,13 @@
+version: 5
+specifications:
+  formats:
+    scenarios-dotnet:
+      package: '@focused-spec/format-scenarios-dotnet'
+      options: { runner: scenarios-dotnet }
+  documents:
+    - { match: 'Bank/AccountScenarios.cs', scope: current, format: scenarios-dotnet }
+runners:
+  scenarios-dotnet:
+    package: '@focused-spec/runner-scenarios-dotnet'
+    timeoutMs: 300000
+    options: { project: 'Bank/ScenarioBank.Bank.csproj', framework: net9.0 }

@@ -1,0 +1,14 @@
+{
+  "name": "@focused-spec/runner-scenarios-dotnet",
+  "version": "0.10.2",
+  "description": "Exact native .NET scenario execution through the independent .NET SDK",
+  "repository": {"type": "git", "url": "git+https://github.com/bamanoz/focused-spec.git", "directory": "packages/runners/scenarios-dotnet"},
+  "type": "module",
+  "exports": {".": {"types": "./dist/index.d.ts", "import": "./dist/index.js"}},
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {"build": "node ../../../scripts/build-package.mjs && node build.mjs"},
+  "engines": {"node": ">=22.16.0"},
+  "dependencies": {"@focused-spec/format-scenarios-dotnet": "0.10.2"},
+  "peerDependencies": {"focused-spec": "^0.10.2"},
+  "license": "MIT"
+}

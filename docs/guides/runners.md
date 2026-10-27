@@ -103,6 +103,48 @@ The bridge owns SDK-to-core translation: observation names become `message`, por
 
 After installing the selected packages and configuring the format/runner, use the same list/show/validate/run commands above. See [both standalone bank consumers](configuration.md#standalone-executable-bank-specifications) for exact checkout commands.
 
+## Direct Python scenarios
+
+`@focused-spec/runner-scenarios-python` executes the independent Python SDK's native scenarios, not pytest wrappers. Install Node.js 22.16.0+, Python 3.11+ and `focused-spec-scenarios` in the selected interpreter environment. Its shared [Python format catalog](../../packages/formats/scenarios-python/README.md) owns literal syntax, inert `DriverBinding` metadata and static discovery; the [Python SDK](../../packages/sdk/python/README.md) owns native comparison and cleanup.
+
+```yaml
+runners:
+  scenarios-python:
+    package: '@focused-spec/runner-scenarios-python'
+    timeoutMs: 120000
+    options: { command: python3 }
+```
+
+Options are omitted/null or the closed object `{ command?: string }`; the default is `python3`. `command` is one Python executable or absolute executable path, never a shell string or environment-manager prefix. Prepare its SDK environment explicitly before execution. The exact selector is JSON `[project-relative-suite-path, exact-scenario-id]`, for example `scenarios-python::["specifications/account_scenarios.py","account.withdraw.entire-balance"]`. IDs preserve Unicode, punctuation, quotes and separators. Canonical source and driver paths must remain inside the consumer project.
+
+Resolution uses the format's distributed standard-library AST helper without SDK/application imports. Run rereads identities and bindings, imports the real suite and driver in an owned process, checks the runtime inventory and verifies only selected native values through `verify_specification_async`. Python tuple/list and bool/int distinctions remain authoritative; display JSON never decides equality. Imports and initializers are trusted application execution, not a sandbox; no unselected driver action is invoked.
+
+Private result transport, input and each stdout/stderr stream are bounded to 4,000,000 bytes. Missing, duplicate, malformed or unexpected target reports, crashes and zero exits without results cannot pass; stdout that resembles a result is still ordinary output. SDK observations and explanations survive ordinary mismatch/application failures, bounded to 256 records and 65,536 UTF-8 bytes per target with a visible truncation marker; surfaced diagnostics are limited to 8,000 characters. Type-aware event projections preserve distinctions that portable JSON cannot represent without altering native comparison.
+
+Cancellation requests cooperative shutdown and SDK cleanup after successful preparation. After a 500 ms grace, the runner terminates its owned process tree; forced termination cannot guarantee application cleanup. Temporary reports are removed on success and failure. Use `run --details`, `--json`, or both for retained context. See the [bank commands](configuration.md#standalone-executable-bank-specifications) for one explicitly prepared interpreter shared by native and CLI execution.
+
+## Direct .NET scenarios
+
+`@focused-spec/runner-scenarios-dotnet` invokes the independent typed SDK, not xUnit/NUnit/MSTest. It needs Node.js 22.16.0+, .NET SDK 9+ and the consumer's separately installed `FocusedSpec.Scenarios` dependency. The [.NET format](../../packages/formats/scenarios-dotnet/README.md) ships its prebuilt Roslyn syntax parser and owns the static declaration grammar; the [.NET SDK](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md) owns typed equality and execution lifecycle.
+
+```yaml
+runners:
+  scenarios-dotnet:
+    package: '@focused-spec/runner-scenarios-dotnet'
+    timeoutMs: 300000
+    options:
+      project: Bank/ScenarioBank.Bank.csproj
+      framework: net9.0
+```
+
+Options are a closed object with required `project` and `framework`, plus optional `command` defaulting to `dotnet`. Select one contained consumer project and explicit supported .NET 9+ target framework; the plugin does not guess between projects/frameworks. Commands name a real host executable, not a shell command. The exact selector is JSON `[project-relative-suite-path, exact-scenario-id]`, for example `scenarios-dotnet::["Bank/AccountScenarios.cs","account.withdraw.entire-balance"]`. Suite, driver and project containment is checked canonically, including symlinks.
+
+Static resolution uses only the shared shipped syntax parser: no consumer build, MSBuild evaluation, assembly load, initializer, source generator, parser restore or network access. Strict validation establishes static identity/binding, not project inclusion or type compatibility. Run rereads the catalog, builds a temporary bridge referencing the selected project/framework, rechecks the actual suite inventory and invokes `ScenarioExecutor.VerifyAsync` over the native generic types. CLR type and null-versus-empty distinctions remain native; JSON is only an event/result projection. Restore consumer dependencies explicitly first. Consumer builds, getters and initializers execute trusted code during run, not during inspection.
+
+Build success or exit zero cannot replace a unique selected result in the dedicated private report. Missing, duplicate, malformed or unexpected reports, build failures, crashes and cancellation remain nonpassing; application stdout is never parsed as evidence. Input, report and each stdout/stderr stream are bounded to 4,000,000 bytes, diagnostics to 8,000 characters. Ordered observations and explanations retain ordinary mismatch context within 256 records and 65,536 UTF-8 bytes per target; truncation is explicit and projection never changes native status.
+
+Abort propagates cancellation to SDK execution, allows 500 ms for cooperative cleanup, then terminates the owned process tree if needed. Forced termination cannot promise cleanup. Bridge/report directories are removed in finalization; ordinary consumer build caches and outputs may remain. The plugin provides no retries, matcher fallback or parallel partitioning. Use detailed/JSON output and the [canonical bank commands](configuration.md#standalone-executable-bank-specifications) to inspect the same typed scenarios exercised by ordinary xUnit and demo consumers.
+
 ## Custom runners
 
 Before writing one, inspect the project's existing runner registrations and acquire public contracts for compatible installed packages, official or third-party; reuse a compatible selector contract rather than creating a second plugin. Register a custom project module only when no existing compatible runner fits; add `documentation: <project-relative Markdown file>` beside `module` when it should be discoverable through `plugin-docs`. For an agent selecting, configuring, implementing, or repairing a runner, the package-owned [runner guidance](../../guidance/runners.md) provides shared collection, report interpretation, and verification rules. The selected installed CLI serves that topic through a standalone `instructions --protocol 1 --topic runners --json` call, followed by a separate `plugin-docs --runner <id> --root <project-root> --json` request for the project-owned contract. That CLI may be project-local, global, or explicitly located; plugin resolution remains project-rooted. No skill-local reference, downloaded CLI, source checkout, or another plugin document is a fallback. Start with serial execution.

@@ -14,6 +14,8 @@ For a first integration or an explicitly requested composition change, the insta
 | `@focused-spec/format-gherkin` | [Gherkin scenarios, focused tags, and native tag IDs](../../packages/formats/gherkin/README.md) |
 | `@focused-spec/format-scenarios-typescript` | [Literal JS/TS suites, static discovery, and directly derived execution references](../../packages/formats/scenarios-typescript/README.md) |
 | `@focused-spec/format-scenarios-go` | [Literal Go suites, static discovery, and directly derived execution references](../../packages/formats/scenarios-go/README.md) |
+| `@focused-spec/format-scenarios-python` | [Literal Python suites, inert AST inspection and direct execution references](../../packages/formats/scenarios-python/README.md) |
+| `@focused-spec/format-scenarios-dotnet` | [Literal C# suites, inert Roslyn inspection and direct execution references](../../packages/formats/scenarios-dotnet/README.md) |
 
 Each package ships its own README, which is also the default document returned by `plugin-docs`; a package may select another Markdown file with manifest `focusedSpec.documentation`. The examples below illustrate those specific contracts; they are not core authoring or storage requirements. Core configuration and evidence semantics remain shared.
 
@@ -201,6 +203,8 @@ The bank examples keep the same six executable Given/When/Expect outcomes in sep
 
 - [TypeScript](../../examples/scenarios/typescript/) uses the independent [`@focused-spec/scenarios-typescript` SDK](../../packages/sdk/typescript/README.md). Its suite is [`specifications/account.scenarios.mjs`](../../examples/scenarios/typescript/specifications/account.scenarios.mjs).
 - [Go](../../examples/scenarios/go/) uses the standard-library-only [`scenarios` Go SDK](../../packages/sdk/go/README.md). Its suite is [`specifications/account.scenarios.go`](../../examples/scenarios/go/specifications/account.scenarios.go), with integer-cent commands and events and complete event-history replay.
+- [Python](../../examples/scenarios/python/) uses the independent [Python SDK](../../packages/sdk/python/README.md). Its canonical suite is [`specifications/account_scenarios.py`](../../examples/scenarios/python/specifications/account_scenarios.py).
+- [.NET](../../examples/scenarios/dotnet/) uses the independent [.NET SDK](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md). Its canonical suite is [`Bank/AccountScenarios.cs`](../../examples/scenarios/dotnet/Bank/AccountScenarios.cs).
 
 Each suite restores the real account, executes one command and compares exactly the newly emitted events. Ordinary tests and readable demonstrations need no focused-spec configuration or Markdown companion. TypeScript needs only its SDK package; Go needs only Go and the SDK module, with no Node.js or npm. The optional language-specific formats and direct runners discover and execute the same native objects. Go inspection requires Go 1.23+ because the format invokes its distributed standard-library parser helper; execution imports trusted consumer packages and can run their initializers.
 
@@ -245,7 +249,7 @@ Demos display a separate roundtrip result and exit nonzero on either business or
 
 List, show and syntax-only validation parse native declarations without loading drivers. Strict validation also checks exact selectors and canonical driver containment without importing application code. Only `run` executes the selected driver. A TypeScript consumer can install its SDK alone; the Go example's `go.mod` uses the repository-local `replace github.com/bamanoz/focused-spec/packages/sdk/go => ../../../packages/sdk/go` because the module has not been published. Optional focused-spec integration additionally installs core and the selected format/runner packages.
 
-Python and .NET consumers use their native test frameworks directly; these SDKs add no focused-spec formats or runners. From the repository root, use the local SDK packages during development:
+Python and .NET native wrappers, demos and optional CLI plugins execute the same declarations. Native SDK execution remains independent of npm. From the repository root, use the local SDK packages during development:
 
 ```sh
 uv run --no-project --with pytest --with-editable ./packages/sdk/python python -m pytest packages/sdk/python/tests -q
@@ -256,7 +260,41 @@ dotnet test examples/scenarios/dotnet/ScenarioBank.Tests/ScenarioBank.Tests.cspr
 dotnet run --project examples/scenarios/dotnet/ScenarioBank.Demo/ScenarioBank.Demo.csproj
 ```
 
-The package README files define independent installation and SDK APIs. The example projects intentionally use the checkout SDKs; a released consumer installs the Python distribution from PyPI or the .NET SDK from its [GitHub Release through a local NuGet feed](install.md#net-sdk-from-github-releases), then installs pytest/xUnit separately as its test dependency. The .NET `0.10.1` package is not published on nuget.org.
+For Python CLI execution, prepare one explicit environment and use its interpreter for both inspection and execution. The example selects `python3` from `PATH`; no global SDK installation is assumed:
+
+```sh
+uv venv --python 3.11 .eval-cache/python-bank-env
+uv pip install --python .eval-cache/python-bank-env/bin/python3 pytest ./packages/sdk/python
+export PATH="$PWD/.eval-cache/python-bank-env/bin:$PATH"
+python3 -m pytest examples/scenarios/python/tests -q
+python3 examples/scenarios/python/demo.py
+./node_modules/.bin/focused-spec list --root examples/scenarios/python
+./node_modules/.bin/focused-spec show account.withdraw.entire-balance --root examples/scenarios/python
+./node_modules/.bin/focused-spec validate --root examples/scenarios/python --syntax-only
+./node_modules/.bin/focused-spec validate --root examples/scenarios/python --strict
+./node_modules/.bin/focused-spec run --root examples/scenarios/python --scenario account.withdraw.entire-balance
+./node_modules/.bin/focused-spec run --root examples/scenarios/python
+./node_modules/.bin/focused-spec run --root examples/scenarios/python --scenario account.withdraw.insufficient-funds --details --json
+```
+
+These environment commands use POSIX paths; on Windows select the environment's `Scripts/python.exe` through the format's documented interpreter options. The Python format contract owns supported literal declarations and the driver binding; the runner imports trusted application code only during execution.
+
+The .NET example explicitly selects `Bank/ScenarioBank.Bank.csproj` and `net9.0`; install .NET SDK 9+ and restore the ordinary consumer project before execution. Static inspection uses the plugin's distributed parser without consumer MSBuild, application loading or parser restore:
+
+```sh
+dotnet restore examples/scenarios/dotnet/Bank/ScenarioBank.Bank.csproj
+./node_modules/.bin/focused-spec list --root examples/scenarios/dotnet
+./node_modules/.bin/focused-spec show account.withdraw.entire-balance --root examples/scenarios/dotnet
+./node_modules/.bin/focused-spec validate --root examples/scenarios/dotnet --syntax-only
+./node_modules/.bin/focused-spec validate --root examples/scenarios/dotnet --strict
+./node_modules/.bin/focused-spec run --root examples/scenarios/dotnet --scenario account.withdraw.entire-balance
+./node_modules/.bin/focused-spec run --root examples/scenarios/dotnet
+./node_modules/.bin/focused-spec run --root examples/scenarios/dotnet --scenario account.withdraw.insufficient-funds --details --json
+```
+
+The direct runners retain bounded application observations and explanations; `--details`, `--json`, or both inspect them. Neither runner executes pytest/xUnit wrappers or creates a second behavioral source.
+
+The package README files define independent installation and SDK APIs. The example projects intentionally use the checkout SDKs; a released consumer installs the Python distribution from PyPI or the .NET SDK from its [GitHub Release through a local NuGet feed](install.md#net-sdk-from-github-releases), then installs pytest/xUnit separately as its test dependency. The .NET package is not published on nuget.org.
 
 ## Migrate older configurations
 

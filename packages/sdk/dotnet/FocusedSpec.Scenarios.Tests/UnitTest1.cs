@@ -17,6 +17,25 @@ public sealed class ScenarioTests
     }
 
     [Fact]
+    public async Task OptionalDriverBindingIsInertAndTypedCallersStillExecute()
+    {
+        var scenario = new Scenario<int, int, int>("subtract", "Subtract", 5, 3, 2);
+        var unbound = new ScenarioSuite<int, int, int>([scenario]);
+        var binding = new ScenarioDriverBinding("ScenarioTests.cs", "FocusedSpec.Scenarios.Tests.ScenarioTests.Driver");
+        var bound = new ScenarioSuite<int, int, int>([scenario], binding);
+        var driver = new ScenarioDriver<int, int, int, int>
+        {
+            Given = (value, _) => ValueTask.FromResult(value),
+            When = (subject, command, _) => ValueTask.FromResult(subject - command),
+        };
+
+        Assert.Null(unbound.Driver);
+        Assert.Same(binding, bound.Driver);
+        Assert.Equal(2, await ScenarioExecutor.VerifyAsync(driver, unbound.Scenarios[0]));
+        Assert.Equal(2, await ScenarioExecutor.VerifyAsync(driver, bound.Scenarios[0]));
+    }
+
+    [Fact]
     public async Task MismatchRetainsIdentityAndExpectedActualSnapshots()
     {
         var scenario = new Scenario<int, int, int>("withdraw", "Exact amount", 5000, 4000, 1000);
