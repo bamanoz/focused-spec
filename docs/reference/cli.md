@@ -211,7 +211,7 @@ The workflow routes each operation to its focused topic, absent or explicitly re
 
 The router owns the common plugin-document acquisition and provenance procedure. `author-revise` owns complete authoring approval and identity/evidence reconciliation; `verify` owns application-observation, sensitivity/restoration and executed lifecycle procedures. Other topics retain their operation-specific checks and request `verify` only when authorized execution is needed; read-only review does not acquire it merely to finish a review. The eight-topic interface and verification policy are unchanged.
 
-For .NET SDK distribution, including the GitHub Release asset, SHA-256 verification, project-local NuGet feed, custom-source/source-mapping safeguards, and repeatable restore procedure, see the [installation guide](../guides/install.md#net-sdk-from-github-releases). The SDK is not published on NuGet.org. Core bundles no .NET runner; the optional .NET scenario plugins have separate source-checkout installation instructions in that guide.
+For .NET SDK distribution, including the GitHub Release asset, SHA-256 verification, project-local NuGet feed, custom-source/source-mapping safeguards, and repeatable restore procedure, see the [installation guide](../guides/install.md#net-sdk-from-github-releases). The SDK is not published on NuGet.org. Core bundles no .NET runner; the optional .NET scenario plugins are separate npm packages with installation instructions in that guide.
 
 Loader protocol defaults to 1; it is independent of package versions, configuration version 5, Format API version 2, and Runner API version 1. The loader requests it explicitly. Protocol-1 JSON is:
 

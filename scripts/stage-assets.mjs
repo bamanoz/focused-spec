@@ -108,16 +108,12 @@ See the [native format](${publicBase}packages/formats/scenarios-go/README.md), [
 `,
   'runners/scenarios-python': `# @focused-spec/runner-scenarios-python
 
-Execute native Python suites through \`focused-spec-scenarios\`. Install Node.js 22.16.0+, Python 3.11+, this runner, its format package, and the SDK in the interpreter environment. These plugins are prepared in this checkout and are not a published npm installation path.
+Execute native Python suites through \`focused-spec-scenarios\`. Install Node.js 22.16.0+, Python 3.11+, this runner and its format package from npm, and the independent SDK from PyPI in the interpreter environment.
 
 \`\`\`sh
-# in /path/to/focused-spec, prepare the checkout once
-npm ci
-npm run build
-# then in the consuming project, install the built local packages
-npm install --save-dev /path/to/focused-spec/packages/core /path/to/focused-spec/packages/formats/scenarios-python /path/to/focused-spec/packages/runners/scenarios-python
+npm install --save-dev focused-spec @focused-spec/format-scenarios-python @focused-spec/runner-scenarios-python
 # use the same selected Python 3.11+ environment for native execution
-python3 -m pip install /path/to/focused-spec/packages/sdk/python
+python3 -m pip install focused-spec-scenarios
 \`\`\`
 
 Register \`scenarios-python\`. Selectors are JSON tuples such as \`scenarios-python::["specifications/account_scenarios.py","account.withdraw.entire-balance"]\`.
@@ -126,15 +122,10 @@ See the [native format](${publicBase}packages/formats/scenarios-python/README.md
 `,
   'runners/scenarios-dotnet': `# @focused-spec/runner-scenarios-dotnet
 
-Execute native .NET suites through \`FocusedSpec.Scenarios\`. Install Node.js 22.16.0+, .NET SDK 9+, this runner, its format package, and the SDK from the [GitHub Release/local NuGet guide](${publicBase}docs/guides/install.md#net-sdk-from-github-releases). These plugins are prepared in this checkout and are not a published npm installation path.
+Execute native .NET suites through \`FocusedSpec.Scenarios\`. Install Node.js 22.16.0+, .NET SDK 9+, this runner and its format package from npm, and the independent SDK from the [GitHub Release/local NuGet guide](${publicBase}docs/guides/install.md#net-sdk-from-github-releases). The format tarball includes its prebuilt parser.
 
 \`\`\`sh
-# in /path/to/focused-spec, prepare the checkout once (.NET SDK 9+ required)
-npm ci
-npm run build
-npm run build:dotnet
-# then in the consuming project, install the built local packages
-npm install --save-dev /path/to/focused-spec/packages/core /path/to/focused-spec/packages/formats/scenarios-dotnet /path/to/focused-spec/packages/runners/scenarios-dotnet
+npm install --save-dev focused-spec @focused-spec/format-scenarios-dotnet @focused-spec/runner-scenarios-dotnet
 \`\`\`
 
 Register \`scenarios-dotnet\` with one contained project and framework. Selectors are JSON tuples such as \`scenarios-dotnet::["Bank/AccountScenarios.cs","account.withdraw.entire-balance"]\`.

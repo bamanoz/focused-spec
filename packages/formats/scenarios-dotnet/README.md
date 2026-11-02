@@ -4,13 +4,13 @@ Optional syntax-only .NET scenario discovery for focused-spec Format API 2. It r
 
 ## Installation and registration
 
-These CLI plugin packages are source-checkout-only, not an npm registry installation path. First run `npm ci`, `npm run build`, and `npm run build:dotnet` in `/path/to/focused-spec` with .NET SDK 9+ installed. The separate `build:dotnet` step prepares the distributed parser asset. Then, from the consuming project:
+Install the selected CLI packages from npm in the consuming project. The format tarball includes its prebuilt parser; consumers do not build or restore that parser:
 
 ```sh
-npm install --save-dev /path/to/focused-spec/packages/core /path/to/focused-spec/packages/formats/scenarios-dotnet /path/to/focused-spec/packages/runners/scenarios-dotnet
+npm install --save-dev focused-spec @focused-spec/format-scenarios-dotnet @focused-spec/runner-scenarios-dotnet
 ```
 
-Replace `/path/to/focused-spec` with the actual checkout path. Install the independent `FocusedSpec.Scenarios` SDK using its [GitHub Release/local feed procedure](https://github.com/bamanoz/focused-spec/blob/v0.11.0/docs/guides/install.md#net-sdk-from-github-releases), not NuGet.org. Building local plugins does not publish them.
+Install the independent `FocusedSpec.Scenarios` SDK using its [GitHub Release/local feed procedure](https://github.com/bamanoz/focused-spec/blob/v0.11.0/docs/guides/install.md#net-sdk-from-github-releases), not NuGet.org. For source development, the installation guide documents building local plugins with .NET SDK 9+ and the separate `build:dotnet` parser step.
 
 ```yaml
 version: 5

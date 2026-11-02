@@ -26,7 +26,16 @@ For executable JS/TS scenarios without focused-spec, install only `@focused-spec
 
 For independent Go scenarios, use the standard-library-only [Go SDK module](../../packages/sdk/go/README.md) with Go 1.23+; no Node.js or npm installation is needed. Install the coordinated release with `go get github.com/bamanoz/focused-spec/packages/sdk/go@v0.11.0` inside a Go module. Checkout examples retain an explicit local module replacement to exercise repository source. Optional focused-spec integration additionally installs `focused-spec`, `@focused-spec/format-scenarios-go` and `@focused-spec/runner-scenarios-go` from npm.
 
-Python and .NET also have optional direct native pairs: `@focused-spec/format-scenarios-python` / `@focused-spec/runner-scenarios-python` and `@focused-spec/format-scenarios-dotnet` / `@focused-spec/runner-scenarios-dotnet`. These CLI plugins are prepared in this checkout but are not published to npm, so there is no registry installation path. To use them, build the workspace from this checkout and install the local packages as described below; package READMEs show the specific commands. Install their native SDKs independently. Python requires Python 3.11+ with the SDK in the explicitly selected interpreter environment. The standalone .NET SDK targets `net8.0` and `net10.0`, has no runtime dependencies, and supports .NET 9 consumer projects through its compatible `net8.0` asset. The .NET format's parser build has its own .NET 9+ prerequisite. See the [format contracts](configuration.md#public-format-contracts), [runner guide](runners.md), and [.NET SDK installation](#net-sdk-from-github-releases).
+Python and .NET also have optional direct native pairs. Install only the selected language's pair from npm:
+
+```sh
+# Native Python scenarios
+npm install --save-dev focused-spec @focused-spec/format-scenarios-python @focused-spec/runner-scenarios-python
+# Native .NET scenarios
+npm install --save-dev focused-spec @focused-spec/format-scenarios-dotnet @focused-spec/runner-scenarios-dotnet
+```
+
+Install their native SDKs independently. Python requires Python 3.11+ with `focused-spec-scenarios` from PyPI in the explicitly selected interpreter environment. The standalone .NET SDK targets `net8.0` and `net10.0`, has no runtime dependencies, and supports .NET 9 consumer projects through its compatible `net8.0` asset. The .NET format tarball ships its prebuilt parser; building that parser from source has its own .NET 9+ prerequisite. See the [format contracts](configuration.md#public-format-contracts), [runner guide](runners.md), and [.NET SDK installation](#net-sdk-from-github-releases).
 
 This installation places an executable with the package. During agent-led specification work, the loader may select this project-pinned executable, a user-supplied path, or a compatible PATH/global installation; users do not need to run CLI commands themselves. For optional manual or CI use after configuring native documents and format-owned evidence, invoke `npx focused-spec validate` from the project root or use `focused-spec` in npm scripts. Run the npx examples here only after installing the project dependency so they select it. Public types are exported from `focused-spec/format` and `focused-spec/runner`. Package installation does not install an agent skill, configure formats, or create evidence integration.
 

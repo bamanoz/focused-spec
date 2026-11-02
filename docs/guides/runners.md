@@ -109,7 +109,7 @@ After installing the selected packages and configuring the format/runner, use th
 
 `@focused-spec/runner-scenarios-python` executes the independent Python SDK's native scenarios, not pytest wrappers. Install Node.js 22.16.0+, Python 3.11+ and `focused-spec-scenarios` in the selected interpreter environment. Its shared [Python format catalog](../../packages/formats/scenarios-python/README.md) owns literal syntax, inert `DriverBinding` metadata and static discovery; the [Python SDK](../../packages/sdk/python/README.md) owns native comparison and cleanup.
 
-The Python format/runner pair is source-checkout-only; it is not an npm registry installation path. Build the checkout first and install its local package directories from the consumer project using the [installation guide](install.md).
+Install the selected Python format/runner pair from npm and the independent SDK from PyPI in the interpreter environment. The [installation guide](install.md) also documents built local package directories for source development.
 
 ```yaml
 runners:
@@ -131,7 +131,7 @@ Cancellation requests cooperative shutdown and SDK cleanup after successful prep
 
 `@focused-spec/runner-scenarios-dotnet` invokes the independent typed SDK, not xUnit/NUnit/MSTest. It needs Node.js 22.16.0+, .NET SDK 9+ and the consumer's separately installed `FocusedSpec.Scenarios` dependency. The [.NET format](../../packages/formats/scenarios-dotnet/README.md) ships its prebuilt Roslyn syntax parser and owns the static declaration grammar; the [.NET SDK](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md) owns typed equality and execution lifecycle.
 
-The .NET format/runner pair is source-checkout-only; it is not an npm registry installation path. Build the checkout first and install its local package directories from the consumer project. This does not alter the independent SDK's [GitHub Release/local feed installation](install.md#net-sdk-from-github-releases).
+Install the selected .NET format/runner pair from npm; its format tarball contains the prebuilt parser. Source development can use built local package directories. The independent SDK still uses its [GitHub Release/local feed installation](install.md#net-sdk-from-github-releases), not NuGet.org.
 
 ```yaml
 runners:
