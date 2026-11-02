@@ -72,7 +72,7 @@ async function prepare(version, packages, temporary) {
   const pythonDir = join(temporary, 'python')
   await mkdir(pythonDir)
   run('uv', ['build', '--out-dir', pythonDir, 'packages/sdk/python'])
-  const pythonFiles = (await readdir(pythonDir)).sort()
+  const pythonFiles = (await readdir(pythonDir)).filter(name => name !== '.gitignore').sort()
   const expectedPython = [`focused_spec_scenarios-${version}-py3-none-any.whl`, `focused_spec_scenarios-${version}.tar.gz`]
   if (pythonFiles.length !== 2 || expectedPython.some(name => !pythonFiles.includes(name))) throw new Error('Python build did not produce the exact coordinated wheel and sdist')
   const pythonArtifacts = await Promise.all(pythonFiles.map(async filename => {
@@ -82,7 +82,7 @@ async function prepare(version, packages, temporary) {
 
   const dotnetDir = join(temporary, 'dotnet')
   await mkdir(dotnetDir)
-  run('dotnet', ['pack', 'packages/sdk/dotnet/FocusedSpec.Scenarios/FocusedSpec.Scenarios.csproj', '--configuration', 'Release', '--output', dotnetDir, '--nologo'])
+  run('dotnet', ['pack', 'packages/sdk/dotnet/FocusedSpec.Scenarios/FocusedSpec.Scenarios.csproj', '--configuration', 'Release', `-p:PackageOutputPath=${dotnetDir}`, '--nologo'])
   const dotnetName = `FocusedSpec.Scenarios.${version}.nupkg`
   const dotnetPath = join(dotnetDir, dotnetName)
   const bytes = await readFile(dotnetPath)
@@ -94,7 +94,7 @@ async function prepare(version, packages, temporary) {
   if (inspect !== 'verified') throw new Error('.NET package identity/framework verification failed')
   const consumer = join(temporary, 'dotnet-consumer')
   await mkdir(consumer)
-  await writeFile(join(consumer, 'NuGet.Config'), `<configuration><packageSources><clear/><add key="verified-local" value="${dotnetDir.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"/></packageSources></configuration>`)
+  await writeFile(join(consumer, 'NuGet.Config'), `<configuration><packageSources><clear/><add key="verified-local" value="${dotnetDir.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources></configuration>`)
   await writeFile(join(consumer, 'Consumer.csproj'), `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFrameworks>net8.0;net10.0</TargetFrameworks></PropertyGroup><ItemGroup><PackageReference Include="FocusedSpec.Scenarios" Version="${version}"/></ItemGroup></Project>`)
   await writeFile(join(consumer, 'Program.cs'), 'System.Console.WriteLine(System.Reflection.Assembly.Load("FocusedSpec.Scenarios").GetName().Name);')
   const consumerEnv = { ...env, NUGET_PACKAGES: join(temporary, 'nuget-cache') }
@@ -118,6 +118,16 @@ async function npmExists(item, version) {
   }
   const remote = JSON.parse(result.stdout)
   if (remote.version !== version || remote['dist.shasum'] !== item.sha1) throw new Error(`Immutable npm artifact differs: ${item.name}@${version}`)
+  return true
+}
+async function verifyRegistryPublication(verify, distribution) {
+  const deadline = Date.now() + 10 * 60_000
+  let delay = 1000
+  while (!await verify()) {
+    if (Date.now() >= deadline) throw new Error(`Registry accepted publication but the exact artifact is still unavailable: ${distribution}; inspect registry processing before retrying publication`)
+    await new Promise(resolve => setTimeout(resolve, delay))
+    delay = Math.min(delay * 2, 10_000)
+  }
   return true
 }
 async function pypiFiles(version, artifacts) {
@@ -192,7 +202,7 @@ async function main() {
     }
 
     const plan = [
-      ...artifacts.npm.map(item => ({ name: item.name, exists: () => npmExists(item, version), publish: () => run('npm', ['publish', item.path, '--ignore-scripts', '--access', 'public']), verify: () => npmExists(item, version) })),
+      ...artifacts.npm.map(item => ({ name: item.name, exists: () => npmExists(item, version), publish: () => run('npm', ['publish', item.path, '--ignore-scripts', '--access', 'public']), verify: () => verifyRegistryPublication(() => npmExists(item, version), item.name) })),
       {
         name: 'pypi:focused-spec-scenarios',
         exists: async () => {
@@ -204,10 +214,10 @@ async function main() {
           const missing = artifacts.python.filter(item => !remote.some(file => file.filename === item.filename))
           run('uv', ['publish', '--publish-url', 'https://upload.pypi.org/legacy/', ...missing.map(item => item.path)])
         },
-        verify: async () => {
+        verify: () => verifyRegistryPublication(async () => {
           const remote = await pypiFiles(version, artifacts.python)
           return artifacts.python.every(item => remote.some(file => file.filename === item.filename && file.digests.sha256 === item.sha256))
-        },
+        }, 'pypi:focused-spec-scenarios'),
       },
       {
         name: 'github:FocusedSpec.Scenarios',

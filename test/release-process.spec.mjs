@@ -47,6 +47,7 @@ if (tool === 'git') {
   else if (args[0] === 'view') {
     const name = args[1].slice(0, args[1].lastIndexOf('@'))
     const published = state.npm[name]
+    if (published && state.pendingMetadata?.[name] > 0) { state.pendingMetadata[name]--; fail('npm ERR! code E404') }
     if (args[2] === 'version' && args[3] === '--json' && (published || (!state.firstPublication && state.nativeNames.includes(name)))) out(JSON.stringify(state.version))
     else if (published) out({ version: state.version, 'dist.shasum': published })
     else fail('npm ERR! code E404')
@@ -63,11 +64,13 @@ if (tool === 'git') {
     if (!item) fail('unprepared npm artifact')
     if (state.failAt === 'npm:' + item.name) fail('fake registry refused publication')
     state.npm[item.name] = item.sha1
+    if (state.delayVisibility && item.name === 'focused-spec') { state.pendingMetadata ??= {}; state.pendingMetadata[item.name] = 1 }
     out('')
   } else fail('unexpected npm ' + args.join(' '))
 } else if (tool === 'uv') {
   if (args[0] === 'build') {
     const directory = option('--out-dir')
+    writeFileSync(join(directory, '.gitignore'), '*')
     for (const filename of ['focused_spec_scenarios-' + state.version + '-py3-none-any.whl', 'focused_spec_scenarios-' + state.version + '.tar.gz']) {
       const bytes = Buffer.from(filename)
       writeFileSync(join(directory, filename), bytes)
@@ -81,7 +84,7 @@ if (tool === 'git') {
   } else fail('unexpected uv')
 } else if (tool === 'dotnet') {
   if (args[0] === 'pack') {
-    const directory = option('--output')
+    const directory = args.find(arg => arg.startsWith('-p:PackageOutputPath=')).slice('-p:PackageOutputPath='.length)
     writeFileSync(join(directory, 'FocusedSpec.Scenarios.' + state.version + '.nupkg'), 'fake-net8-net10-package')
     out('')
   } else if (args[0] === 'restore') out('')
@@ -130,7 +133,7 @@ async function fixture(options = {}) {
     await chmod(path, 0o755)
   }
   const hook = join(root, 'fetch-hook.mjs')
-  await writeFile(hook, `import { readFileSync } from 'node:fs'; globalThis.fetch = async url => { if (!String(url).startsWith('https://pypi.org/pypi/focused-spec-scenarios/')) throw new Error('unexpected network '+url); const state=JSON.parse(readFileSync(process.env.RELEASE_FAKE_STATE,'utf8')); const urls=Object.entries(state.python).map(([filename,sha256])=>({filename,digests:{sha256}})); return {status:urls.length?200:404,ok:urls.length>0,json:async()=>({urls})}; };\n`)
+  await writeFile(hook, `import { readFileSync, writeFileSync } from 'node:fs'; globalThis.fetch = async url => { if (!String(url).startsWith('https://pypi.org/pypi/focused-spec-scenarios/')) throw new Error('unexpected network '+url); const state=JSON.parse(readFileSync(process.env.RELEASE_FAKE_STATE,'utf8')); if(state.delayVisibility && Object.keys(state.python).length && !state.pythonVisibilityProbed) {state.pythonVisibilityProbed=true;writeFileSync(process.env.RELEASE_FAKE_STATE,JSON.stringify(state));return {status:404,ok:false};} const urls=Object.entries(state.python).map(([filename,sha256])=>({filename,digests:{sha256}})); return {status:urls.length?200:404,ok:urls.length>0,json:async()=>({urls})}; };\n`)
   const env = {
     PATH: bin,
     HOME: root,
@@ -185,7 +188,7 @@ describe('local release process', () => {
   })
 
   it('publishes approved first-publication fake distributions once and verifies hashes and the remote Go tag', async () => {
-    const test = await fixture({ firstPublication: true })
+    const test = await fixture({ firstPublication: true, delayVisibility: true })
     const result = test.invoke(['--authorize-release'])
     expect(result.status, result.stderr).toBe(0)
     const report = JSON.parse(result.stdout)

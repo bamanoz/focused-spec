@@ -11,7 +11,7 @@ This repository prepares seventeen independently published npm packages from one
 
 The Python and .NET SDKs are framework-independent. Their pytest/xUnit bank consumers are repository verification projects, not runtime dependencies of the SDKs. Publishing each native SDK requires its own authorized registry account and exact package verification.
 
-The CLI, all seventeen npm packages, and the Go, Python, and .NET SDKs share one release version, currently `0.11.0`. SDKs remain runtime-independent; an unchanged package still receives the coordinated release version. Configuration, guidance, format, and runner protocol versions remain separate compatibility contracts. Source versions are not proof of registry publication: source-only or partially published GitHub Releases must identify the exact pending distributions. The four Python/.NET integration packages are prepared locally by this change, not certified as remotely published.
+The CLI, all seventeen npm packages, and the Go, Python, and .NET SDKs share one release version, currently `0.11.0`. SDKs remain runtime-independent; an unchanged package still receives the coordinated release version. Configuration, guidance, format, and runner protocol versions remain separate compatibility contracts. Source versions are not proof of registry publication: source-only or partially published GitHub Releases must identify the exact pending distributions. All coordinated `0.11.0` distributions, including the four Python/.NET integration packages, passed public installation checks.
 
 Local verification is exposed through `npm run test:node`, `npm run test:go`, `npm run test:python`, and `npm run test:dotnet`. `npm run release:prepare-check` is the publisher-aware pre-publication gate; `npm run release:check` additionally requires the exact native CLI package versions to be published and certifies registry availability after publication. The compatible workflow at `.github/workflows/local-verification.yml` is for local `act` plus Docker only, using the `act-local` runner label. No job targets GitHub-hosted runners. Direct npm scripts do not require Docker or `act`.
 
@@ -39,9 +39,13 @@ Before first publication, explicitly approve the native names with `FOCUSED_SPEC
 
 `npm run release:publish` performs a guarded, read-only preparation by default. It requires the same local source, version, registry-name, GitHub-release, and toolchain checks as an authorized run, then prepares and inspects npm tarballs, the Python wheel/sdist, and the .NET `FocusedSpec.Scenarios.<version>.nupkg` plus its `.nupkg.sha256` manifest. For unpublished native package names, preparation requires the explicit maintainer name/access decision and authenticated npm identity/access preflight; it does not require PyPI publication credentials. It prints a JSON report with prepared and pending distributions and performs no publish, upload, tag, push, or registry mutation. This read-only preparation is not publication certification. Preparation may contact read-only registry and GitHub APIs; use `npm run release:versions -- --json` and `npm run release:openspec -- --json` for source-only checks.
 
+Python preparation ignores only uv's generated `.gitignore` and still requires the exact wheel/sdist pair. .NET packing passes an explicit `-p:PackageOutputPath=...` to avoid output-path forwarding failures. The disposable local-feed consumer also configures NuGet.org so a fresh cache can restore framework reference and host packs.
+
 Only an explicit `npm run release:publish -- --authorize-release` opts into publication. That path requires a clean source revision whose root release tag and `origin/main` resolve to `HEAD`, approved native package names and publisher access, usable npm and PyPI credentials supplied to the process, and `gh auth status`. It uploads the verified .NET package and checksum manifest to the existing GitHub Release, publishes missing immutable npm/PyPI artifacts, and pushes the independently tagged Go module only after each prior result is verified. It does not publish to NuGet.org and never reads or stores credentials itself.
 
 Publication is not atomic. A successfully verified immutable package stays published if a later distribution fails; the JSON report identifies `published`, `pending`, and `failed` distributions and stops dependent work. Never retry successful immutable versions under a new version, bump versions, or move tags to mask a partial release. Provenance is reported unavailable unless the selected local publisher verifies it; `act` does not provide GitHub OIDC identity. The .NET package is a GitHub Release/local-feed asset, not a NuGet.org publication. The checksum manifest must match the package bytes before installation.
+
+Successful npm/PyPI upload can precede public metadata availability. Verification waits up to ten minutes, with bounded polling, for the exact version and digest; it does not repeat the upload. A different immutable digest or registry error still fails immediately. If processing exceeds that window, inspect the registry before resuming the same release; absence from metadata alone does not prove that an accepted upload can safely be repeated.
 
 ## Local release automation regression evidence
 
@@ -55,7 +59,7 @@ The native IDs map to these exact test names: `release.ci.preflight` → `releas
 
 The fake process tests cover approved first publication, immutable hash checks, the `.nupkg.sha256` asset, remote Go tag verification, repeat-run skipping, and pending-distribution reporting. They are orchestration evidence only. A real release remains blocked until a maintainer supplies the explicit native-name decision, credentials through the approved local mechanism, a clean tagged source revision, and verified local `act`/Docker prerequisites. Do not run `--authorize-release` during ordinary verification.
 
-Observed implementation acceptance: full `npm test` passed 520 tests, direct Go SDK/bank checks passed, Python SDK/bank checks passed 16/6 tests, and .NET SDK/bank checks passed 13/6 tests. `smoke` and `release:specs` exercised real framework evidence and all four ordinary/CLI bank suites. The exact release scope passed nine occurrences and sixteen targets. These are source verification results, not publication certification. The actual nonpublishing `release:publish` command stopped before preparing artifacts because the checkout was not clean; the complete real release-preparation path remains unverified until a clean exact tagged revision is available. Fake-client dry-run and partial-publication checks passed independently. No publishing authorization was supplied and no registry, tag or GitHub asset was mutated.
+The `0.11.0` release source is `147b6df39d353c2d897adb26cba014f209e6062c`; its root and Go module tags remain fixed. The complete post-publication `release:check` passed 520 tests, CLI smoke, all four ordinary/CLI bank suites, and exact published native-plugin versions. Clean public consumers installed all seventeen npm packages, ran the README example and all four CLI banks, exercised Go without a local replacement, passed all sixteen Python SDK contracts from both PyPI wheel and sdist, and passed thirteen .NET SDK contracts plus net8/net10 standalone execution from the public package/checksum assets. Publisher corrections discovered during real preparation are maintained separately from that immutable package source. The temporary npm publishing token was revoked and subsequently returned HTTP 401. Local token publication supplies no verified OIDC provenance; Windows-specific process-tree behavior remains uncertified.
 
 ## Prepare one coordinated version
 
@@ -191,9 +195,9 @@ npm view @focused-spec/format-scenarios-dotnet@X.Y.Z version
 npm view @focused-spec/runner-scenarios-dotnet@X.Y.Z version
 ```
 
-If one publication fails, do not claim a suite release or create the tag. Already published versions cannot be rolled back or overwritten; diagnose the failure, publish only the still-missing packages from the same committed revision, and recheck the complete version set. Never bump or move successful packages merely to hide a partial publication.
+If one publication fails, do not claim a suite release. Already published versions cannot be rolled back or overwritten; diagnose the failure, publish only the still-missing packages from the same committed revision, and recheck the complete version set. Keep the source tag and existing GitHub Release fixed and identify pending distributions in its notes. Never bump or move successful packages merely to hide a partial publication.
 
-After all seventeen registry checks succeed, tag the npm release commit and push that tag explicitly:
+Before invoking the guarded publisher, create the source tag and push it explicitly after the pre-publication gate succeeds:
 
 ```sh
 git tag vX.Y.Z
@@ -201,7 +205,7 @@ git push origin vX.Y.Z
 git ls-remote --tags origin refs/tags/vX.Y.Z
 ```
 
-Confirm the remote tag resolves to the release commit and every package reports `X.Y.Z`. If tag push fails, retry the same tag; do not bump the suite just to repair it. Existing tags must never be silently moved. Write release notes covering consumer-visible changes and migration, then create and verify the GitHub Release separately:
+Confirm the remote tag resolves to the release commit. If tag push fails, retry the same tag; do not bump the suite just to repair it. Existing tags must never be silently moved. Create the source-checkpoint GitHub Release with reviewed notes identifying every pending distribution; the guarded publisher requires this existing stable release:
 
 ```sh
 gh release create vX.Y.Z --verify-tag --title "focused-spec vX.Y.Z" --notes-file release-notes.txt
