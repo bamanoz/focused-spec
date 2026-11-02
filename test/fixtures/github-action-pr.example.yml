@@ -1,0 +1,20 @@
+name: focused-spec PR example
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  focused-spec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+      - run: npm ci
+      - run: echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Run focused-spec
+        uses: ./.github/actions/focused-spec-run
+        with:
+          report-path: focused-spec-report.xml
+          args: '["--scope", "example"]'

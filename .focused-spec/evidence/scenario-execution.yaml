@@ -2,19 +2,19 @@ scopes:
   current:
     execution.selection.current:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > runs all scopes and disambiguates repeated scenario IDs
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > runs all scopes and disambiguates repeated scenario IDs
     execution.selection.change-scenario:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > reports selected scope and scenario execution independently
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > reports selected scope and scenario execution independently
     execution.selection.shared-id:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > validates and runs every matching scope for a selected scenario ID
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > validates and runs every matching scope for a selected scenario ID
     execution.selection.missing-scenario:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid or missing selected scenarios before execution
     execution.selection.missing-scope:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > rejects a selected scope with no documents
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > rejects a selected scope with no documents
     execution.targets.shared:
       evidence:
         - vitest::test/integration.spec.ts::project-local TypeScript runners > runs one shared target once for two scenarios
@@ -32,28 +32,28 @@ scopes:
         - vitest::test/cli.spec.ts::focused-spec CLI > preserves successful validation and execution for an empty registry
     execution.resolution.reuse:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > resolves a shared target once for scoped execution
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > resolves a shared target once for scoped execution
     execution.resolution.scoped-id:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > executes only selected-scope evidence for the same scenario ID
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > executes only selected-scope evidence for the same scenario ID
     execution.resolution.strict-unselected:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > runs a selected scenario despite unrelated entry binding and evidence failures
     execution.timings.opt-in:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > reports phase timings only when requested
+        - vitest::test/cli-timings.spec.ts::focused-spec CLI > reports phase timings only when requested
     execution.timings.failure:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > reports reached timings on unresolved evidence without starting execution
+        - vitest::test/cli-timings.spec.ts::focused-spec CLI > reports reached timings on unresolved evidence without starting execution
     execution.timings.runner-attribution:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > attributes timed runner operations to selected unique workloads
+        - vitest::test/cli-timings.spec.ts::focused-spec CLI > attributes timed runner operations to selected unique workloads
     execution.timings.format-attribution:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > attributes document parsing to configured formats and reused hosts
+        - vitest::test/cli-timings.spec.ts::focused-spec CLI > attributes document parsing to configured formats and reused hosts
     execution.timings.operation-errors:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > retains attempted plugin timings across errors and negative results
+        - vitest::test/cli-timings.spec.ts::focused-spec CLI > retains attempted plugin timings across errors and negative results
     execution.timings.overlap:
       evidence:
         - vitest::test/integration.spec.ts::project-local TypeScript runners > reports overlapping admitted group intervals without summing wall time
@@ -85,3 +85,23 @@ scopes:
     execution.presentation.safe-text:
       evidence:
         - vitest::test/audit-runtime.spec.ts::audit runtime correctness > escapes opaque human output without changing execution or JSON
+
+    execution.report.junit:
+      evidence:
+        - vitest::test/cli-reports-native.spec.ts::focused-spec CLI > writes escaped JUnit cases for PASS FAIL ERROR and SKIP scenarios
+    execution.report.preflight:
+      evidence:
+        - vitest::test/cli-reports.spec.ts::focused-spec CLI > writes a suite-level preflight failure without fabricated cases
+    execution.report.empty:
+      evidence:
+        - vitest::test/cli-reports.spec.ts::focused-spec CLI > writes an empty suite for a valid empty execution and fails clearly on report output errors
+    execution.report.output-errors:
+      evidence:
+        - vitest::test/cli-reports.spec.ts::focused-spec CLI > writes a suite-level preflight failure without fabricated cases
+        - vitest::test/cli-reports.spec.ts::focused-spec CLI > writes an empty suite for a valid empty execution and fails clearly on report output errors
+    execution.report.github-action:
+      evidence:
+        - vitest::test/github-action.spec.ts::composite GitHub Action contract > executes the Action script against an installed CLI and preserves report/output status
+    execution.report.untrusted-pr:
+      evidence:
+        - vitest::test/github-action.spec.ts::composite GitHub Action contract > provides a read-only pull_request example with no credential or privileged publishing flow

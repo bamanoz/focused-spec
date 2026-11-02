@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import process from 'node:process'
+import { randomUUID } from 'node:crypto'
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { performance } from 'node:perf_hooks'
-import { isAbsolute, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { instructions, INSTRUCTIONS_HELP } from './instructions.js'
 import { initialize, INIT_HELP } from './init.js'
 import { loadConfig } from './config.js'
@@ -10,15 +12,17 @@ import type { PluginDocumentationSelection } from './plugin-docs.js'
 import { executePlan } from './executor.js'
 import type { ExecutionPlan, ExecutionResult, SpecDocument, Violation } from './model.js'
 import { parseEvidenceReference } from './parser.js'
-import { planEvidence, projectExecutionPlan } from './planner.js'
+import { planEvidence } from './planner.js'
 import { validateFocusedSpecs } from './validate.js'
 import { OperationTimings } from './timings.js'
 import { argumentError, jsonRequested, printCliError } from './cli-error.js'
 import { readVersion, displayVersion } from './cli-version.js'
 import { inspectEnrollments, displayInspection } from './inspection.js'
 import type { ExecutionEvent } from './runner-api.js'
+import { renderJUnit } from './junit.js'
 import { safeText } from './terminal-text.js'
 
+import { isValueOption } from './cli-options.js'
 type InspectionCommand = 'list' | 'show'
 
 interface CliOptions {
@@ -33,6 +37,7 @@ interface CliOptions {
   readonly scenarioId?: string
   readonly timings: boolean
   readonly details: boolean
+  readonly junitPath?: string
 }
 
 interface PluginDocsOptions {
@@ -120,8 +125,8 @@ Options:
   --scenario <id>   Narrow validation and execution to matching enrolled items
                     within the selected scope(s)
   --allow-skip      Allow an overall successful exit with SKIP; never relabel SKIP as PASS
-  --json            Print the execution result as JSON
-  --timings         Include elapsed validation, resolution and execution phase timings
+  --junit <path>   Write a JUnit XML report relative to --root; does not rerun evidence
+  --timings        Include elapsed validation, resolution and execution phase timings
   --details         Show retained execution events for passing evidence too
   -h, --help        Show this help
 
@@ -269,7 +274,7 @@ function parsePluginDocsArguments(argumentsList: readonly string[]): PluginDocsO
       seen.add(argument)
     }
     if (argument === '--json') json = true
-    else if (argument === '--root' || argument === '--config' || argument === '--format' || argument === '--runner' || argument === '--package') {
+    else if (argument !== undefined && isValueOption('plugin-docs', argument)) {
       const value = argumentsList[index + 1]
       if (value === undefined || value.startsWith('-')) throw argumentError(`missing value for ${argument}`, 'plugin-docs')
       index += 1
@@ -326,7 +331,7 @@ function parseInspectionArguments(argumentsList: readonly string[], command: Ins
       seen.add(argument)
     }
     if (argument === '--json') json = true
-    else if (argument === '--root' || argument === '--config' || argument === '--scope' || (command === 'list' && argument === '--scenario')) {
+    else if (isValueOption(command, argument)) {
       const value = argumentsList[index + 1]
       if (value === undefined || (argument !== '--scenario' && value.startsWith('-'))) throw argumentError(`missing value for ${argument}`, command)
       index += 1
@@ -356,6 +361,7 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
   let scenarioId: string | undefined
   let timings = false
   let details = false
+  let junitPath: string | undefined
   const seen = new Set<string>()
 
   for (let index = 1; index < argumentsList.length; index += 1) {
@@ -370,14 +376,15 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
     else if (argument === '--timings') timings = true
     else if (argument === '--details') details = true
     else if (argument === '--allow-skip') allowSkip = true
-    else if (argument === '--root' || argument === '--config' || argument === '--scope' || argument === '--scenario') {
+    else if (argument !== undefined && isValueOption(command, argument)) {
       const value = argumentsList[index + 1]
       if (value === undefined || (argument !== '--scenario' && value.startsWith('--'))) throw argumentError(`missing value for ${argument}`, command)
-      index += 1
       if (argument === '--root') root = resolve(value)
       else if (argument === '--config') configPath = value
+      else if (argument === '--junit') junitPath = value
       else if (argument === '--scope') scopeName = value
       else scenarioId = value
+      index += 1
     } else {
       throw argumentError(`unknown argument ${String(argument)}`, command)
     }
@@ -401,6 +408,7 @@ function parseArguments(argumentsList: readonly string[]): CliOptions {
     allowSkip,
     timings,
     details,
+    ...(junitPath === undefined ? {} : { junitPath }),
     ...(scenarioId === undefined ? {} : { scenarioId }),
   }
 }
@@ -487,8 +495,35 @@ function displayTimings(timings: PhaseTimings): string {
     `total ${timings.totalMs.toFixed(2)} ms`,
   ]
   const runners = timings.runnerOperations.map(row => `  runner ${row.runnerId} ${row.operation}: ${row.durationMs.toFixed(2)} ms, start ${row.startedMs.toFixed(2)} ms, ${row.operation === 'resolve' ? `selectors ${row.selectorCount}` : `targets ${row.targetCount}`}, ${row.outcome}\n`)
+
   const formats = timings.formatOperations.map(row => `  format ${safeText(row.formatId)} [${safeText(row.scope)}] ${safeText(row.path)}: ${row.durationMs.toFixed(2)} ms, start ${row.startedMs.toFixed(2)} ms, ${row.coldStart ? 'cold-start' : 'reused-host'}, ${row.outcome}\n`)
   return `timings: ${phases.join(', ')}\n${runners.join('')}${formats.join('')}`
+}
+async function writeJUnitReport(root: string, destination: string, content: string): Promise<void> {
+  const path = resolve(root, destination)
+  try {
+    await mkdir(dirname(path), { recursive: true })
+    const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`)
+    try {
+      await writeFile(temporary, content, { encoding: 'utf8', flag: 'wx' })
+      await rename(temporary, path)
+    } catch (error) {
+      await rm(temporary, { force: true }).catch(() => undefined)
+      throw error
+    }
+  } catch (error) {
+    throw new Error(`cannot write JUnit report ${destination}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+async function emitJUnit(root: string, options: CliOptions, result: ExecutionResult, violations: readonly Violation[] = []): Promise<boolean> {
+  if (options.command !== 'run' || options.junitPath === undefined) return true
+  try {
+    await writeJUnitReport(root, options.junitPath, renderJUnit(result, violations))
+    return true
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+    return false
+  }
 }
 
 function printViolations(
@@ -597,6 +632,7 @@ async function main(argumentsList: readonly string[]): Promise<number> {
     : { ...phases, ...operationTimings.snapshot(), totalMs: elapsed(totalStarted) }
   const loaded = await loadConfig(projectRoot, options.configPath)
   if (loaded.config === undefined) {
+    await emitJUnit(projectRoot, options, { success: false, scenarios: [], targetCount: 0 }, loaded.violations)
     printViolations(loaded.violations, options.json, context, reportedTimings())
     return 1
   }
@@ -609,6 +645,7 @@ async function main(argumentsList: readonly string[]): Promise<number> {
   }, operationTimings)
   phases.validationMs = elapsed(validationStarted)
   if (validation.violations.length > 0) {
+    await emitJUnit(projectRoot, options, { success: false, scenarios: [], targetCount: 0 }, validation.violations)
     printViolations(validation.violations, options.json, context, reportedTimings())
     return 1
   }
@@ -621,37 +658,33 @@ async function main(argumentsList: readonly string[]): Promise<number> {
   }
 
   const resolutionStarted = performance.now()
-  const resolution = await planEvidence(projectRoot, loaded.config, validation.resolutionDocuments, {}, operationTimings)
+  const resolution = await planEvidence(projectRoot, loaded.config, validation.targetDocuments, {
+    ...(options.scenarioId === undefined ? {} : { scenarioId: options.scenarioId }),
+  }, operationTimings)
   phases.resolutionMs = elapsed(resolutionStarted)
   if (resolution.violations.length > 0) {
+    await emitJUnit(projectRoot, options, { success: false, scenarios: [], targetCount: 0 }, resolution.violations)
     printViolations(resolution.violations, options.json, context, reportedTimings())
     return 1
   }
   if (resolution.plan === undefined) throw new Error('evidence validation did not produce a resolution plan')
-
   if (options.command === 'validate') {
-    const counts = validationCounts(validation.resolutionDocuments, resolution.plan)
+    const counts = validationCounts(validation.targetDocuments, resolution.plan)
     const timings = reportedTimings()
     if (options.json) process.stdout.write(`${JSON.stringify({ valid: true, ...counts, ...context, ...(timings === undefined ? {} : { timings }) }, null, 2)}\n`)
     else process.stdout.write(`${displayValidationContext(context)}focused specifications are valid: ${counts.scenarios} enrolled items, ${counts.plannedEvidence} planned evidence, ${counts.targets} unique targets\n${timings === undefined ? '' : displayTimings(timings)}`)
     return 0
   }
 
-  const planned = projectExecutionPlan(resolution.plan, validation.targetDocuments, {
-    ...(options.scenarioId === undefined ? {} : { scenarioId: options.scenarioId }),
-  })
-  if (planned.violations.length > 0 || planned.plan === undefined) {
-    printViolations(planned.violations, options.json, context, reportedTimings())
-    return 1
-  }
   const executionStarted = performance.now()
-  const result = await executePlan(planned.plan, {
+  const result = await executePlan(resolution.plan, {
     allowSkip: options.allowSkip,
     maxConcurrentGroups: loaded.config.execution?.maxConcurrentGroups ?? 1,
   }, operationTimings)
   phases.executionMs = elapsed(executionStarted)
+  const reportWritten = await emitJUnit(projectRoot, options, result)
   printExecution(result, options.json, context as RunContext, reportedTimings(), options.details)
-  return result.success ? 0 : 1
+  return result.success && reportWritten ? 0 : 1
 }
 
 const argumentsList = process.argv.slice(2)

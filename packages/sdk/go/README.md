@@ -4,16 +4,16 @@ Typed, dependency-free Given/When/Expect scenarios for Go 1.23 and later. This m
 
 ## Install the module
 
-Create a Go consumer and install the SDK at the coordinated CLI/SDK release version:
+Create a Go consumer and install the SDK using the exact coordinated CLI/SDK release version:
 
 ```sh
 mkdir scenario-consumer
 cd scenario-consumer
 go mod init example.com/scenario-consumer
-go get github.com/bamanoz/focused-spec/packages/sdk/go@latest
+go get github.com/bamanoz/focused-spec/packages/sdk/go@vX.Y.Z
 ```
 
-The Go module has its own `packages/sdk/go/vX.Y.Z` tag, with the same version as the CLI and other SDKs. Repository examples retain an explicit repository-relative replacement to test checkout source without requiring a registry release.
+Replace `vX.Y.Z` with the release's published Go module tag. The module has its own `packages/sdk/go/vX.Y.Z` tag, with the same version as the CLI and other SDKs. Repository examples retain an explicit local `replace` to test checkout source without requiring a registry release.
 
 ## Runnable standalone example
 
@@ -180,7 +180,7 @@ actual, err := scenarios.VerifySpecification(ctx, driver, scenario)
 
 After declaration, driver and cancellation preconditions pass, verification emits isolated `Given`, `When` and `Expect` observations before preparation. A valid value returned by `When` emits `Actual` before exact comparison, so mismatches retain the real observation. An action error, cancellation or invalid result does not invent `Actual`. Drivers and application code may call `Explain(ctx, message, data)`; nil data is omitted. Explanation order follows the real preparation, action and cleanup calls.
 
-Every emitted payload is an independent snapshot. Driver or cleanup mutation cannot rewrite an earlier event, and a sink that mutates its received value cannot rewrite the declaration, comparison value or another event. The SDK does not retain a hidden event list. Without a sink it performs no diagnostic cloning or representation work, `Explain` is a no-op, and no SDK output is written. A nil sink passed to `WithEvents` disables an inherited sink.
+Every emitted payload is an independent snapshot. Driver or cleanup mutation cannot rewrite an earlier event, and a sink that mutates its received value cannot rewrite the declaration, comparison value or another event. The SDK does not retain a hidden event list. `Explain` always validates its nonblank message and supported data, even when no sink is configured; without a sink it performs no event representation or delivery and writes no SDK output. A nil sink passed to `WithEvents` disables an inherited sink.
 
 Observers run synchronously. A panic from a sink follows the ordinary panic and cleanup rules; it is not swallowed. Separate executions need separate sinks. A deliberately shared sink owns its synchronization and retention limits.
 

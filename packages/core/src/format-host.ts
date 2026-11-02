@@ -1,5 +1,5 @@
 import { pluginUrl } from './plugin-module.js'
-import { isJsonValue } from './config.js'
+import { isJsonValue } from './json.js'
 import type { FormatPlugin } from './format-api.js'
 import type { JsonValue } from './runner-api.js'
 
@@ -24,10 +24,10 @@ process.on('message', async message => {
     if (busy) throw new Error('format host received concurrent requests')
     busy = true
     if (plugin === undefined) {
-      const loaded = await import(pluginUrl(request.reference, request.projectRoot))
+      const loaded = await import(await pluginUrl(request.reference, request.projectRoot))
       const candidate: unknown = loaded.default
       if (typeof candidate !== 'object' || candidate === null || !('apiVersion' in candidate) || candidate.apiVersion !== 2 || !('parse' in candidate) || typeof candidate.parse !== 'function') {
-        throw new Error('format module must default-export a FormatPlugin with apiVersion 2; migrate this project format using `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json`')
+        throw new Error('format module must default-export a FormatPlugin with apiVersion 2; load the `upgrade` topic from the selected focused-spec CLI: `focused-spec instructions --protocol 1 --topic upgrade --json`')
       }
       if ('bind' in candidate && candidate.bind !== undefined && typeof candidate.bind !== 'function') throw new Error('format module bind must be a function when provided')
       plugin = candidate as FormatPlugin
@@ -35,7 +35,14 @@ process.on('message', async message => {
     let value: unknown
     if (request.operation === 'parse') {
       if (typeof request.path !== 'string' || typeof request.source !== 'string') throw new Error('format host received an invalid parse request')
-      value = await plugin.parse({ projectRoot: request.projectRoot, path: request.path, source: request.source, options: request.options, signal: AbortSignal.timeout(request.timeoutMs) })
+      const signal = AbortSignal.timeout(request.timeoutMs)
+      try {
+        value = await plugin.parse({ projectRoot: request.projectRoot, path: request.path, source: request.source, options: request.options, signal })
+      } catch (error) {
+        if (signal.aborted) throw error
+        process.send?.({ id: request.id, ok: false, recoverable: true, error: (error instanceof Error ? error.message : String(error)).slice(0, 16_384) })
+        return
+      }
     } else {
       if (plugin.bind === undefined) {
         process.send?.({ id: request.id, ok: true, hasBind: false, json: 'null' })

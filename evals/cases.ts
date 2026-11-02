@@ -215,6 +215,30 @@ export const EVAL_CASES: readonly EvalCase[] = [
     description: 'Discovers focused-spec for ordinary OpenSpec work among a complete external competing skill catalog.',
     skillDiscovery: 'competing',
   },
+  {
+    id: 'guidance-combined-operation',
+    description: 'Acquires one installed operation response containing the complete workflow router and requested operation guidance without project mutation.',
+    source: 'files',
+    guidanceOnly: true,
+    turns: [{ promptPath: 'cases/guidance-combined-operation.md', skills: FOCUSED, guidanceTopic: 'review', requiresFocusedSkill: true }],
+    expectedEvidenceCount: 0,
+    expectedSelectorFragments: [],
+  },
+  {
+    id: 'guidance-skill-trigger-boundaries',
+    description: 'Separately observes editorial-only versus behavioral SDD, standalone SDK scenario, and application-driver activation without prescribing how eligible guidance must be acquired.',
+    source: 'files',
+    guidanceOnly: true,
+    turns: [
+      { promptPath: 'cases/guidance-skill-trigger-boundaries/editorial.md', skills: FOCUSED, requiresFocusedSkill: false },
+      { promptPath: 'cases/guidance-skill-trigger-boundaries/sdd.md', skills: FOCUSED, guidanceTopics: ['workflow', 'author-revise'], requiresFocusedSkill: true },
+      { promptPath: 'cases/guidance-skill-trigger-boundaries/sdk.md', skills: FOCUSED, guidanceTopics: ['workflow', 'author-revise', 'verify'], requiresFocusedSkill: true },
+      { promptPath: 'cases/guidance-skill-trigger-boundaries/driver.md', skills: FOCUSED, guidanceTopics: ['workflow', 'author-revise', 'verify'], requiresFocusedSkill: true },
+    ],
+    editablePaths: ['guidance-task/editorial.md', 'guidance-task/requirement.md', 'guidance-task/sdk/scenarios.mjs', 'guidance-task/driver/driver.mjs'],
+    expectedEvidenceCount: 0,
+    expectedSelectorFragments: [],
+  },
 ]
 
 export function evalCase(id: string): EvalCase | undefined {

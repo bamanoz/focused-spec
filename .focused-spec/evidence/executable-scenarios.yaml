@@ -10,12 +10,10 @@ scopes:
           rejects invalid declarations before execution
     executable-sdk.actual-comparison:
       evidence:
-        - vitest::test/executable-scenarios.spec.ts::executable scenarios > fails
-          when real application events differ
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > fails when real application events differ
     executable-sdk.input-isolation:
       evidence:
-        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
-          preserves expectations when a driver mutates inputs
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > preserves expectations when a driver mutates inputs
     executable-sdk.cleanup:
       evidence:
         - vitest::test/executable-scenarios.spec.ts::executable scenarios > cleans
@@ -81,3 +79,10 @@ scopes:
       evidence:
         - vitest::test/executable-scenarios.spec.ts::executable scenarios >
           rejects a matching action result after cancellation
+    executable-sdk.actual-snapshot-before-cleanup:
+      evidence:
+        - vitest::packages/sdk/typescript/test/index.test.ts::TypeScript executable scenarios > cleanup mutation preserves actual result and mismatch snapshots
+    executable-sdk.mismatch-snapshot:
+      evidence:
+        - vitest::packages/sdk/typescript/test/index.test.ts::TypeScript executable scenarios > cleanup mutation preserves actual result and mismatch snapshots
+        - vitest::packages/sdk/typescript/test/index.test.ts::TypeScript executable scenarios > mismatch exposes typed scenario diagnostics and comparison detail

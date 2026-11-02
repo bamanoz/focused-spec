@@ -11,20 +11,20 @@ scopes:
         - vitest::test/package.spec.ts::package distribution > installs the CLI without creating an agent skill or runner
     distribution.package.agent-guidance:
       evidence:
-        - vitest::test/package.spec.ts::package distribution > serves guidance from a source-independent packed installation
+        - vitest::test/package-guidance.spec.ts::package distribution > serves guidance from a source-independent packed installation
     distribution.adapters.independent:
       evidence:
         - vitest::test/package.spec.ts::package distribution > installs independent core and adapter packages
     distribution.runner.public-contracts:
       evidence:
-        - vitest::test/package.spec.ts::package distribution > executes selectors discovered from packed runner documentation
+        - vitest::test/package-docs-native.spec.ts::package distribution > executes selectors discovered from packed runner documentation
     distribution.package.retired-assets:
       evidence:
         - vitest::test/package.spec.ts::package distribution > omits retired
           generated assets after repeated staging
     distribution.package.retired-runtime:
       evidence:
-        - vitest::test/package.spec.ts::package distribution > omits retired runtime
+        - vitest::test/package-build-native.spec.ts::package distribution > omits retired runtime
           modules from every independently rebuilt package
     distribution.package.format-api-two:
       evidence:
@@ -32,9 +32,45 @@ scopes:
           formats against the storage-independent format API
     distribution.adapters.inline-registry:
       evidence:
-        - vitest::test/package.spec.ts::package distribution > executes
-          independently packed inline and registry formats
+        - vitest::test/package.spec.ts::package distribution > executes independently packed inline and registry formats
     distribution.package.script-free-pack:
       evidence:
         - vitest::test/package.spec.ts::package distribution > packs prepared core
           output without rebuilding it when scripts are disabled
+    distribution.native-sdk-metadata:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > runs the packed SDK without framework dependencies
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > runs the packed SDK without focused-spec
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios > executes the Go SDK without Node dependencies
+    distribution.native-dotnet-targets:
+      evidence:
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > runs the packed SDK without focused-spec
+        - vitest::test/dotnet-native-plugins.spec.ts::dotnet native plugins > preserves standalone suites and optional driver bindings
+    distribution.native-go-version-template:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios > runs distributed Go assets outside the checkout
+    distribution.native-python-install:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > runs the packed SDK without framework dependencies
+    distribution.native-dotnet-install:
+      evidence:
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > runs the packed SDK without focused-spec
+    distribution.native-dotnet-restore:
+      evidence:
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > runs the packed SDK without focused-spec
+    distribution.native-dotnet-reference:
+      evidence:
+        - vitest::test/documentation.spec.ts::public documentation navigation > follows the CLI reference to the current native SDK installation guide
+    distribution.adapters.roslyn-resources:
+      evidence:
+        - vitest::test/dotnet-native-plugins.spec.ts::dotnet native plugins > omits localized Roslyn satellites while retaining static C# discovery
+  repair-runner-process-lifecycle:
+    distribution.adapters.independent:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > installs independent core and adapter packages
+    distribution.adapters.inline-registry:
+      evidence:
+        - vitest::test/package.spec.ts::package distribution > executes independently packed inline and registry formats
+    distribution.adapters.roslyn-resources:
+      evidence:
+        - vitest::test/dotnet-native-plugins.spec.ts::dotnet native plugins > omits localized Roslyn satellites while retaining static C# discovery

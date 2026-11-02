@@ -2,6 +2,7 @@ package scenarios
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"reflect"
@@ -399,5 +400,37 @@ func TestPreparationFailureOwnsCleanup(t *testing.T) {
 	}
 	if cleanupCalls != 0 {
 		t.Fatalf("cleanup calls = %d, want 0", cleanupCalls)
+	}
+}
+
+func TestExplainValidatesWithoutEventSink(t *testing.T) {
+	assertPanics := func(message string, data any) {
+		t.Helper()
+		deferred := false
+		func() {
+			defer func() { deferred = recover() != nil }()
+			Explain(context.Background(), message, data)
+		}()
+		if !deferred {
+			t.Fatalf("Explain(%q, %#v) did not panic", message, data)
+		}
+	}
+
+	assertPanics("  ", nil)
+	assertPanics("invalid data", math.NaN())
+
+	Explain(context.Background(), "valid without observer", map[string]int{"count": 1})
+
+	var events []ExecutionEvent
+	Explain(WithEvents(context.Background(), func(event ExecutionEvent) { events = append(events, event) }), "observed", map[string]int{"count": 2})
+	if len(events) != 1 {
+		t.Fatalf("event count = %d, want 1", len(events))
+	}
+	explanation, ok := events[0].(ExplanationEvent)
+	encoded, marshalErr := json.Marshal(explanation.Data)
+	var portable map[string]any
+	decodeErr := json.Unmarshal(encoded, &portable)
+	if !ok || marshalErr != nil || decodeErr != nil || explanation.Message != "observed" || portable["count"] != float64(2) {
+		t.Fatalf("event = %#v, want observed explanation with data", events[0])
 	}
 }

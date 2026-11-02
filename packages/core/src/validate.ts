@@ -49,12 +49,11 @@ export interface ValidationOptions {
 export interface ValidationOutput {
   readonly violations: readonly Violation[]
   readonly targetDocuments: readonly SpecDocument[]
-  readonly resolutionDocuments: readonly SpecDocument[]
 }
 
 export async function validateFocusedSpecs(projectRoot: string, config: FocusedSpecConfig, options: ValidationOptions = {}, timings?: OperationTimings): Promise<ValidationOutput> {
   if (options.scopeName !== undefined && !isScopeName(options.scopeName)) {
-    return { violations: [{ path: '.focused-spec/config.yaml', message: `invalid scope name ${options.scopeName}` }], targetDocuments: [], resolutionDocuments: [] }
+    return { violations: [{ path: '.focused-spec/config.yaml', message: `invalid scope name ${options.scopeName}` }], targetDocuments: [] }
   }
   const discovery = await discoverDocuments(projectRoot, config, options.scopeName, options.scenarioId, timings)
   const violations = [...discovery.violations]
@@ -73,5 +72,5 @@ export async function validateFocusedSpecs(projectRoot: string, config: FocusedS
   violations.push(...validateDocuments(documents, config, { allowPlanned: !options.strict }).violations)
   const unique = new Map<string, Violation>()
   for (const violation of violations) unique.set(`${violation.path}:${violation.line ?? ''}:${violation.scenarioId ?? ''}:${violation.message}`, violation)
-  return { violations: [...unique.values()].sort((left, right) => left.path.localeCompare(right.path) || (left.line ?? 0) - (right.line ?? 0)), targetDocuments: documents, resolutionDocuments: documents }
+  return { violations: [...unique.values()].sort((left, right) => left.path.localeCompare(right.path) || (left.line ?? 0) - (right.line ?? 0)), targetDocuments: documents }
 }

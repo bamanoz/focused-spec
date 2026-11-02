@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process'
 import { access, realpath } from 'node:fs/promises'
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -112,7 +113,20 @@ function isInside(root: string, path: string): boolean {
 
 async function parserUrl(projectRoot: string, parser: NativeParserOptions): Promise<string> {
   if (parser.package !== undefined) {
-    return import.meta.resolve(parser.package, pathToFileURL(resolve(projectRoot, 'package.json')).href)
+    // A one-argument native resolver in a consumer-cwd eval preserves ESM import
+    // conditions without depending on this adapter's installation directory.
+    const url = await new Promise<string>((resolvePromise, rejectPromise) => {
+      execFile(process.execPath, ['--input-type=module', '--eval', 'process.stdout.write(import.meta.resolve(process.argv[1]))', parser.package!], {
+        cwd: projectRoot,
+        encoding: 'utf8',
+        maxBuffer: 65_536,
+      }, (error, output, diagnostic) => {
+        if (error !== null) rejectPromise(new Error(diagnostic.trim() || error.message))
+        else resolvePromise(output)
+      })
+    })
+    if (!url.startsWith('file:')) throw new Error(`registry parser package ${parser.package} did not resolve to a file`)
+    return url
   }
   const path = resolve(projectRoot, parser.module)
   if (isAbsolute(parser.module) || !isInside(projectRoot, path) || MODULE_EXTENSIONS[extname(path)] !== true) {
@@ -136,7 +150,7 @@ async function loadParser(projectRoot: string, parser: NativeParserOptions): Pro
   const module = record(loaded)
   const candidate = record(module?.default)
   if (candidate === undefined || candidate.apiVersion !== 2 || typeof candidate.parse !== 'function') {
-    throw new Error('registry native parser must default-export a FormatPlugin with apiVersion 2; migrate it using `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json`')
+    throw new Error('registry native parser must default-export a FormatPlugin with apiVersion 2; load the `upgrade` topic from the selected focused-spec CLI with `instructions --protocol 1 --topic upgrade --json`')
   }
   if (candidate.bind !== undefined) {
     throw new Error('registry native parser must be structural and must not define catalog binding')

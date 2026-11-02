@@ -1,0 +1,1 @@
+In `guidance-task/editorial.md`, add the missing period to “The account is active”. Preserve its meaning and heading exactly. This is punctuation cleanup only. Edit no other content and run no tests; report the corrected sentence.

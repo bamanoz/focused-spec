@@ -5,13 +5,13 @@ scopes:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects one marker ID bound to multiple native items
     scenario.identity.independent-scopes:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > accepts the same ID in independent scopes
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > accepts the same ID in independent scopes
     scenario.identity.explicit-evidence:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > does not inherit evidence from another scope with the same ID
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > does not inherit evidence from another scope with the same ID
     scenario.evidence.required:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > does not inherit evidence from another scope with the same ID
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > does not inherit evidence from another scope with the same ID
     scenario.evidence.malformed-row:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects malformed evidence alongside valid evidence before execution

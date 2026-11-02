@@ -24,9 +24,9 @@ For native Markdown with external YAML evidence, choose `@focused-spec/format-re
 
 For executable JS/TS scenarios without focused-spec, install only `@focused-spec/scenarios-typescript`; it has no runtime dependencies or focused-spec peer. For optional native discovery and direct execution, add `focused-spec`, `@focused-spec/format-scenarios-typescript` and `@focused-spec/runner-scenarios-typescript`. The format owns the TypeScript AST parser dependency; neither SDK nor core gains it. The [SDK contract](../../packages/sdk/typescript/README.md), [format contract](../../packages/formats/scenarios-typescript/README.md) and [bank example](configuration.md#standalone-executable-bank-specifications) document both paths.
 
-For independent Go scenarios, use the standard-library-only [Go SDK module](../../packages/sdk/go/README.md) with Go 1.23+; no Node.js or npm installation is needed. Install the coordinated release with `go get github.com/bamanoz/focused-spec/packages/sdk/go@v0.10.2` inside a Go module. Checkout examples retain an explicit local module replacement to exercise repository source. Optional focused-spec integration additionally installs `focused-spec`, `@focused-spec/format-scenarios-go` and `@focused-spec/runner-scenarios-go` as npm development dependencies. Their consumer needs both Node.js 22.16.0+ and Go 1.23+ on PATH. The Go parser helper ships inside the format package; core gains no Go dependency. Read its [format contract](../../packages/formats/scenarios-go/README.md) and [runner contract](runners.md#direct-go-scenarios) before configuring.
+For independent Go scenarios, use the standard-library-only [Go SDK module](../../packages/sdk/go/README.md) with Go 1.23+; no Node.js or npm installation is needed. Install the coordinated release with `go get github.com/bamanoz/focused-spec/packages/sdk/go@v0.11.0` inside a Go module. Checkout examples retain an explicit local module replacement to exercise repository source. Optional focused-spec integration additionally installs `focused-spec`, `@focused-spec/format-scenarios-go` and `@focused-spec/runner-scenarios-go` from npm.
 
-Python and .NET also have optional direct native pairs: `@focused-spec/format-scenarios-python` / `@focused-spec/runner-scenarios-python` and `@focused-spec/format-scenarios-dotnet` / `@focused-spec/runner-scenarios-dotnet`. These packages are prepared in this checkout; publication is separate, so do not infer remote availability. Install their native SDKs independently. Python requires Python 3.11+ with the SDK in the explicitly selected interpreter environment; .NET requires SDK 9+ and an explicitly selected consumer project/framework. The .NET format ships its complete prebuilt syntax parser, so inspection needs no parser restore or application build. See the [format contracts](configuration.md#public-format-contracts), [runner guide](runners.md), and [bank setup](configuration.md#standalone-executable-bank-specifications).
+Python and .NET also have optional direct native pairs: `@focused-spec/format-scenarios-python` / `@focused-spec/runner-scenarios-python` and `@focused-spec/format-scenarios-dotnet` / `@focused-spec/runner-scenarios-dotnet`. These CLI plugins are prepared in this checkout but are not published to npm, so there is no registry installation path. To use them, build the workspace from this checkout and install the local packages as described below; package READMEs show the specific commands. Install their native SDKs independently. Python requires Python 3.11+ with the SDK in the explicitly selected interpreter environment. The standalone .NET SDK targets `net8.0` and `net10.0`, has no runtime dependencies, and supports .NET 9 consumer projects through its compatible `net8.0` asset. The .NET format's parser build has its own .NET 9+ prerequisite. See the [format contracts](configuration.md#public-format-contracts), [runner guide](runners.md), and [.NET SDK installation](#net-sdk-from-github-releases).
 
 This installation places an executable with the package. During agent-led specification work, the loader may select this project-pinned executable, a user-supplied path, or a compatible PATH/global installation; users do not need to run CLI commands themselves. For optional manual or CI use after configuring native documents and format-owned evidence, invoke `npx focused-spec validate` from the project root or use `focused-spec` in npm scripts. Run the npx examples here only after installing the project dependency so they select it. Public types are exported from `focused-spec/format` and `focused-spec/runner`. Package installation does not install an agent skill, configure formats, or create evidence integration.
 
@@ -47,9 +47,11 @@ npm install --save-dev /path/to/focused-spec/packages/core \
   /path/to/focused-spec/packages/runners/vitest
 ```
 
+For the .NET scenario format/runner pair, additionally run `npm run build:dotnet` from the checkout before installing its local package directories. This prepares the parser asset; the general `npm run build` prepares only JavaScript/TypeScript output.
+
 The workspace root is not a published package. Packages are grouped by role: `packages/core`, `packages/sdk/<language>`, `packages/formats/<format>` and `packages/runners/<runner>`. All seventeen npm packages—core, the JS/TS SDK, eight formats and seven runners—pack independently. Go, Python and .NET SDKs are separate native distributions, not npm workspaces. Build core and the JS/TS SDK before their scenario format/runner, and each native format before its runner; building the .NET parser requires SDK 9+ and restore of its pinned Roslyn dependency. Install local tarballs together when verifying a clean consumer. Core source/output live at `packages/core/src` and `packages/core/dist`; root `src`/`dist` are obsolete. The core tarball contains compiled CLI/types plus staged root `README.md`, `LICENSE`, `skills/` and `guidance/`; every other npm package owns its compiled runtime/helpers, declarations, public README and LICENSE.
 
-Official runner tarballs also include a public `README.md`, generated from the [runner guide](runners.md). It documents selector syntax, framework support and command options without requiring plugin implementation inspection.
+Official runner tarballs include a package-specific public `README.md`, staged by `scripts/stage-assets.mjs`. Each describes that runner's framework prerequisites, selector syntax, and options, and links to the shared [runner guide](runners.md).
 
 Node.js 22.16 and 22.17 need the experimental type-stripping flag to load project-relative `.ts`/`.mts` plugins; the CLI supplies that flag to isolated plugin processes automatically. Keep TypeScript plugins erasable and use `import type`; JavaScript plugins need no flag.
 
@@ -57,24 +59,31 @@ Repository verification additionally uses Python 3.11+ (`tomllib`) to parse inst
 
 ## .NET SDK from GitHub Releases
 
-The independent `FocusedSpec.Scenarios` SDK requires .NET 9+. The coordinated `0.10.2` distribution uses a public [GitHub Release asset](https://github.com/bamanoz/focused-spec/releases/download/v0.10.2/FocusedSpec.Scenarios.0.10.2.nupkg), **not nuget.org**. No Microsoft account, GitHub login, Node.js, or focused-spec CLI is required to install it. The asset must be present and match the checksum below before installation; a source version alone does not establish publication.
+The independent `FocusedSpec.Scenarios` SDK targets `net8.0` and `net10.0`; .NET 9 consumer projects use the compatible `net8.0` asset. It is distributed as a `.nupkg` attached to the coordinated [GitHub Release](https://github.com/bamanoz/focused-spec/releases), **not NuGet.org**. Use a version whose release contains both the package and its matching `.nupkg.sha256` manifest; source metadata alone does not establish that an asset was published. No Microsoft account, GitHub login, Node.js, or focused-spec CLI is required.
 
-From your consuming project or solution root, download the exact package into a local feed (macOS/Linux):
+From your consuming project or solution root, set `VERSION` to the coordinated release version and download the exact package and checksum manifest into a local feed (macOS/Linux):
 
 ```sh
+VERSION='<release-version>'
+PACKAGE="FocusedSpec.Scenarios.${VERSION}.nupkg"
 mkdir -p .nuget/local-feed
-curl --fail --location --output .nuget/local-feed/FocusedSpec.Scenarios.0.10.2.nupkg \
-  https://github.com/bamanoz/focused-spec/releases/download/v0.10.2/FocusedSpec.Scenarios.0.10.2.nupkg
+curl --fail --location --output ".nuget/local-feed/${PACKAGE}" \
+  "https://github.com/bamanoz/focused-spec/releases/download/v${VERSION}/${PACKAGE}"
+curl --fail --location --output ".nuget/local-feed/${PACKAGE}.sha256" \
+  "https://github.com/bamanoz/focused-spec/releases/download/v${VERSION}/${PACKAGE}.sha256"
 ```
 
-On Windows PowerShell, use:
+On Windows PowerShell, set `$version` to the same coordinated release version:
 
 ```powershell
+$version = '<release-version>'
+$package = "FocusedSpec.Scenarios.$version.nupkg"
 New-Item -ItemType Directory -Force .nuget/local-feed | Out-Null
-Invoke-WebRequest -Uri 'https://github.com/bamanoz/focused-spec/releases/download/v0.10.2/FocusedSpec.Scenarios.0.10.2.nupkg' -OutFile '.nuget/local-feed/FocusedSpec.Scenarios.0.10.2.nupkg'
+Invoke-WebRequest -Uri "https://github.com/bamanoz/focused-spec/releases/download/v$version/$package" -OutFile ".nuget/local-feed/$package"
+Invoke-WebRequest -Uri "https://github.com/bamanoz/focused-spec/releases/download/v$version/$package.sha256" -OutFile ".nuget/local-feed/$package.sha256"
 ```
 
-The package's SHA-256 is `03e6e38203a27597c3056b55c85d15068c52597fd479d666a2042ff599f4d34b`. Check it with `shasum -a 256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.2.nupkg` on macOS, `sha256sum` on Linux, or `Get-FileHash -Algorithm SHA256 .nuget/local-feed/FocusedSpec.Scenarios.0.10.2.nupkg` in PowerShell. Stop if it differs.
+Verify the manifest's filename and SHA-256 before installation. Its format is `<sha256>  FocusedSpec.Scenarios.<version>.nupkg`; compare it with `shasum -a 256 .nuget/local-feed/${PACKAGE}` on macOS, `sha256sum .nuget/local-feed/${PACKAGE}` on Linux, or `Get-FileHash -Algorithm SHA256 .nuget/local-feed/$package` in PowerShell. Stop if the checksum manifest is absent, names another file/version, or the digest differs.
 
 Create `NuGet.Config` beside `.nuget/` for a new project:
 
@@ -94,15 +103,16 @@ For an existing configuration, merge the local source into its `packageSources`;
 Add the pinned dependency from the directory containing your `.csproj` (or pass the project path explicitly):
 
 ```sh
-dotnet add package FocusedSpec.Scenarios --version 0.10.2
+dotnet add package FocusedSpec.Scenarios --version "$VERSION"
 dotnet restore
 ```
 
-Keep `NuGet.Config` and the generated `PackageReference` in version control. On another machine or in CI, repeat the download into the configured local feed **before** `dotnet restore`; alternatively, commit the `.nupkg` if your repository permits vendored dependencies. A developer's global NuGet cache is not a distribution source. For an upgrade, download the matching versioned asset and update the package reference and checksum together. Do not use the GitHub download URL as a NuGet HTTP feed.
+Keep `NuGet.Config` and the generated `PackageReference` in version control. On another machine or in CI, repeat the versioned package and checksum-manifest download and verification into the configured local feed **before** `dotnet restore`; alternatively, commit the `.nupkg` if your repository permits vendored dependencies. A developer's global NuGet cache is not a distribution source. Do not use the GitHub download URL as a NuGet HTTP feed. .NET 9 consumers use the compatible `net8.0` asset; the SDK targets `net8.0` and `net10.0`.
 
-See the [SDK API and executable example](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md). This delivery path does not imply publication on nuget.org; that remains pending separately.
+See the [SDK API and executable example](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md). This procedure documents the GitHub Release/local-feed distribution only; it does not claim NuGet.org publication.
 
-For coding agents, the same pinned distribution procedure is bundled in the selected CLI's `integration` topic (`instructions --protocol 1 --topic integration --json`); the agent first loads the installed skill and obtains its workflow router. Use `focused-spec@0.10.1` or later for this procedure; older published npm versions are immutable and do not acquire guidance updates from this repository.
+For coding agents, the release-specific distribution procedure is served by the selected CLI's current `integration` topic (`instructions --protocol 1 --topic integration --json`); older npm versions do not acquire guidance updates from this repository.
+
 
 ## Agent skill
 

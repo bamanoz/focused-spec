@@ -17,10 +17,10 @@ scopes:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid invocations without treating them as successful help
     cli.help.init:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > explains initialization without reading or modifying project state
+        - vitest::test/cli-init.spec.ts::focused-spec CLI > explains initialization without reading or modifying project state
     cli.help.agent-guide:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > explains guide compatibility without loading package guidance
+        - vitest::test/cli-guidance.spec.ts::focused-spec CLI > explains guide compatibility without loading package guidance
     cli.help.duplicate-options:
       evidence:
         - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects

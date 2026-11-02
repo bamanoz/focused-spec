@@ -106,18 +106,20 @@ func WithEvents(ctx context.Context, sink func(ExecutionEvent)) context.Context 
 // A nil data value omits structured data. Unsupported data panics before the
 // sink is called, matching the synchronous observer contract.
 func Explain(ctx context.Context, message string, data any) {
-	sink := eventSink(ctx)
-	if sink == nil {
-		return
-	}
 	if strings.TrimSpace(message) == "" {
 		panic("explanation message must be nonblank")
 	}
-	event := ExplanationEvent{Kind: "explanation", Message: message}
 	if data != nil {
 		if err := validateData(data); err != nil {
 			panic(fmt.Sprintf("explanation data: %v", err))
 		}
+	}
+	sink := eventSink(ctx)
+	if sink == nil {
+		return
+	}
+	event := ExplanationEvent{Kind: "explanation", Message: message}
+	if data != nil {
 		if portable, ok := portableData(reflect.ValueOf(data)); ok {
 			event.Data = portable
 		} else {

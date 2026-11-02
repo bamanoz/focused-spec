@@ -78,35 +78,53 @@ export default {
   apiVersion: 1,
   async resolve(request) {
     const options = commandOptions(request.options)
-    const targets: ResolvedTarget[] = []
-    const errors: { selector: string; message: string }[] = []
+    const targetBySelector = new Map<string, ResolvedTarget>()
+    const errorBySelector = new Map<string, { selector: string; message: string }>()
+    const grouped = new Map<string, { readonly selector: string; readonly testName: string }[]>()
     for (const selector of request.selectors) {
       const selected = parseSelector(selector)
       if (selected === undefined) {
-        errors.push({ selector, message: 'expected <go-package>::<top-level TestName>' })
+        errorBySelector.set(selector, { selector, message: 'expected <go-package>::<top-level TestName>' })
         continue
       }
+      const entries = grouped.get(selected.packagePath)
+      if (entries === undefined) grouped.set(selected.packagePath, [{ selector, testName: selected.testName }])
+      else entries.push({ selector, testName: selected.testName })
+    }
+    for (const [packagePath, entries] of grouped) {
+      const names = [...new Set(entries.map(entry => entry.testName))]
+      const pattern = `^(${names.map(exactPattern).map(value => value.slice(1, -1)).join('|')})$`
       const discovery = await runProcess(
         options.command,
-        [...options.commandArgs, 'test', '-list', exactPattern(selected.testName), selected.packagePath],
+        [...options.commandArgs, 'test', '-list', pattern, packagePath],
         request.cwd,
         request.signal,
       )
-      const matches = discovery.stdout.split(/\r?\n/u).filter(line => line.trim() === selected.testName)
-      if (discovery.code !== 0) {
-        errors.push({ selector, message: processDiagnostic(discovery) || `go test could not collect ${selector}` })
-      } else if (matches.length !== 1) {
-        errors.push({
-          selector,
-          message: matches.length === 0
-            ? `Go test not found: ${selector}`
-            : `Go test is ambiguous (${matches.length} matches): ${selector}`,
-        })
-      } else {
-        targets.push({ selector, targetId: selector, displayName: selected.testName, data: { packagePath: selected.packagePath, testName: selected.testName } })
+      const matches = new Map<string, number>()
+      for (const line of discovery.stdout.split(/\r?\n/u)) {
+        const name = line.trim()
+        if (name !== '') matches.set(name, (matches.get(name) ?? 0) + 1)
+      }
+      for (const entry of entries) {
+        const count = matches.get(entry.testName) ?? 0
+        if (discovery.code !== 0) {
+          errorBySelector.set(entry.selector, { selector: entry.selector, message: processDiagnostic(discovery) || `go test could not collect ${entry.selector}` })
+        } else if (count !== 1) {
+          errorBySelector.set(entry.selector, {
+            selector: entry.selector,
+            message: count === 0
+              ? `Go test not found: ${entry.selector}`
+              : `Go test is ambiguous (${count} matches): ${entry.selector}`,
+          })
+        } else {
+          targetBySelector.set(entry.selector, { selector: entry.selector, targetId: entry.selector, displayName: entry.testName, data: { packagePath, testName: entry.testName } })
+        }
       }
     }
-    return { targets, errors }
+    return {
+      targets: request.selectors.flatMap(selector => { const target = targetBySelector.get(selector); return target === undefined ? [] : [target] }),
+      errors: request.selectors.flatMap(selector => { const error = errorBySelector.get(selector); return error === undefined ? [] : [error] }),
+    }
   },
 
   async run(request) {

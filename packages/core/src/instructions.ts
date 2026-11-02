@@ -4,6 +4,7 @@ import { argumentError } from './cli-error.js'
 type GuidanceTopic = 'workflow' | 'review' | 'author-revise' | 'upgrade' | 'verify' | 'integration' | 'formats' | 'runners'
 
 const topics: readonly GuidanceTopic[] = ['workflow', 'review', 'author-revise', 'upgrade', 'verify', 'integration', 'formats', 'runners']
+const operationTopics: readonly GuidanceTopic[] = ['review', 'author-revise', 'upgrade', 'verify']
 
 export const INSTRUCTIONS_HELP = `Read authoritative agent guidance from the installed focused-spec package.
 
@@ -58,12 +59,22 @@ export async function instructions(argumentsList: readonly string[]): Promise<st
   let metadata: unknown
   let content: string
   try {
-    const [packageText, guidance] = await Promise.all([
-      readFile(new URL('../package.json', import.meta.url), 'utf8'),
-      readFile(new URL(`../guidance/${topic}.md`, import.meta.url), 'utf8'),
-    ])
+    const packageText = await readFile(new URL('../package.json', import.meta.url), 'utf8')
+    const guidance = operationTopics.includes(topic)
+      ? await Promise.all([
+        readFile(new URL('../guidance/workflow.md', import.meta.url), 'utf8'),
+        readFile(new URL(`../guidance/${topic}.md`, import.meta.url), 'utf8'),
+      ])
+      : [await readFile(new URL(`../guidance/${topic}.md`, import.meta.url), 'utf8')]
     metadata = JSON.parse(packageText)
-    content = guidance
+    const workflow = guidance[0]
+    const operation = guidance[1]
+    if (typeof workflow !== 'string' || workflow.trim() === '' || (operationTopics.includes(topic) && (typeof operation !== 'string' || operation.trim() === ''))) {
+      throw new Error(`incomplete installed focused-spec package: missing ${topic} guidance. Reinstall the package.`)
+    }
+    content = operationTopics.includes(topic)
+      ? `## Workflow router\n\n${workflow}\n\n## ${topic} guidance\n\n${operation}`
+      : workflow
   } catch (error) {
     throw new Error(`incomplete installed focused-spec package: cannot read ${topic} guidance or package metadata. Reinstall the package.\n${error instanceof Error ? error.message : String(error)}`)
   }

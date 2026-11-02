@@ -11,7 +11,7 @@ scopes:
         - vitest::test/cli.spec.ts::focused-spec CLI > allows planned evidence only during non-strict validation
     validation.identity.independent-scopes:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > accepts the same ID in independent scopes
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > accepts the same ID in independent scopes
     validation.scope.unselected-error:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > runs a selected scenario despite unrelated entry binding and evidence failures
@@ -20,7 +20,7 @@ scopes:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid or missing selected scenarios before execution
     validation.scope.selected-only:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > validates a selected scope independently of another same-ID scope
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > validates a selected scope independently of another same-ID scope
     validation.enrollment.partial-coverage:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > runs marked outcomes beside untouched native content
@@ -39,3 +39,6 @@ scopes:
     validation.planned.runner-id:
       evidence:
         - vitest::test/audit-runtime.spec.ts::audit runtime correctness > executes the planned runner without deferring concrete evidence
+    validation.format.document-failure-isolation:
+      evidence:
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > isolates a format parse failure to its document

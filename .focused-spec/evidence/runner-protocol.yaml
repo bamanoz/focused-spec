@@ -8,7 +8,7 @@ scopes:
         - vitest::test/integration.spec.ts::project-local TypeScript runners > reports an unresponsive runner as an error after timeout
     runner.resolve.unresolved:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > reports reached timings on unresolved evidence without starting execution
+        - vitest::test/cli-timings.spec.ts::focused-spec CLI > reports reached timings on unresolved evidence without starting execution
     runner.resolve.cardinality:
       evidence:
         - vitest::test/integration.spec.ts::project-local TypeScript runners > rejects duplicate missing and unknown selector resolutions
@@ -95,3 +95,56 @@ scopes:
     runner.response.lossless:
       evidence:
         - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects lossy runner responses before transport
+    runner.official.process-tree-cancel:
+      evidence:
+        - vitest::test/runner-lifecycle.spec.ts::runner process lifecycle > terminates the Vitest child and grandchild on abort
+        - vitest::test/runner-lifecycle.spec.ts::runner process lifecycle > terminates the Vitest child and grandchild on overflow
+        - vitest::test/runner-lifecycle.spec.ts::runner process lifecycle > terminates the pytest child and grandchild on abort
+        - vitest::test/runner-lifecycle.spec.ts::runner process lifecycle > terminates the pytest child and grandchild on overflow
+        - vitest::test/runner-lifecycle.spec.ts::runner process lifecycle > terminates the Go child and grandchild on abort
+        - vitest::test/runner-lifecycle.spec.ts::runner process lifecycle > terminates the Go child and grandchild on overflow
+    runner.official.go-discovery-batch:
+      evidence:
+        - vitest::test/runner-lifecycle-go.spec.ts::Go runner lifecycle > batches discovery by package and preserves exact selector cardinality
+        - vitest::test/runner-lifecycle-go.spec.ts::Go runner lifecycle > rejects ambiguous discovery and package failures without losing unique selectors
+    runner.official.pytest-xdist:
+      evidence:
+        - vitest::test/runner-lifecycle-python.spec.ts::pytest runner lifecycle > reports selected outcomes with xdist addopts and leaves an unselected failing test unrun
+    plugin.package.stable-resolver:
+      evidence:
+        - vitest::test/plugins.spec.ts::plugin architecture > resolves an import-only consumer package subpath
+        - vitest::test/plugin-docs.spec.ts::plugin documentation CLI > reads configured plugins using consumer import conditions
+        - vitest::test/plugin-docs.spec.ts::plugin documentation CLI > reads the declared document from a symlinked package
+  repair-runner-process-lifecycle:
+    runner.official.vitest:
+      evidence:
+        - vitest::test/official-runners.spec.ts::official framework runners > reports exact Vitest outcomes
+    runner.official.pytest:
+      evidence:
+        - vitest::test/official-runners.spec.ts::official framework runners > reports exact pytest outcomes
+    runner.official.go:
+      evidence:
+        - vitest::test/official-runners.spec.ts::official framework runners > reports exact Go outcomes
+    runner.official.process-tree-cancel:
+      evidence:
+        - vitest::test/runner-lifecycle.spec.ts::runner process lifecycle > terminates the Vitest child and grandchild on abort
+        - vitest::test/runner-lifecycle.spec.ts::runner process lifecycle > terminates the Vitest child and grandchild on overflow
+        - vitest::test/runner-lifecycle.spec.ts::runner process lifecycle > terminates the pytest child and grandchild on abort
+        - vitest::test/runner-lifecycle.spec.ts::runner process lifecycle > terminates the pytest child and grandchild on overflow
+        - vitest::test/runner-lifecycle.spec.ts::runner process lifecycle > terminates the Go child and grandchild on abort
+        - vitest::test/runner-lifecycle.spec.ts::runner process lifecycle > terminates the Go child and grandchild on overflow
+    runner.official.go-discovery-batch:
+      evidence:
+        - vitest::test/runner-lifecycle-go.spec.ts::Go runner lifecycle > batches discovery by package and preserves exact selector cardinality
+        - vitest::test/runner-lifecycle-go.spec.ts::Go runner lifecycle > rejects ambiguous discovery and package failures without losing unique selectors
+    runner.official.pytest-xdist:
+      evidence:
+        - vitest::test/runner-lifecycle-python.spec.ts::pytest runner lifecycle > reports selected outcomes with xdist addopts and leaves an unselected failing test unrun
+    plugin.package.consumer-local:
+      evidence:
+        - vitest::test/plugins.spec.ts::plugin architecture > resolves an import-only consumer package subpath
+    plugin.package.stable-resolver:
+      evidence:
+        - vitest::test/plugins.spec.ts::plugin architecture > resolves an import-only consumer package subpath
+        - vitest::test/plugin-docs.spec.ts::plugin documentation CLI > reads configured plugins using consumer import conditions
+        - vitest::test/plugin-docs.spec.ts::plugin documentation CLI > reads the declared document from a symlinked package

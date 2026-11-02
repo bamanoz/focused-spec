@@ -23,12 +23,27 @@ A Python scenario SHALL require one exact nonblank control-free ID, a nonblank n
 - **THEN** suite validation reports the invalid declaration before invoking the driver
 
 ### Requirement: Exact Python structural comparison and isolation
-The Python SDK SHALL prepare the application from Given, execute When, and compare the returned actual observation with Expect using exact type-aware structural equality. Mutating driver inputs or actual values SHALL NOT rewrite the reusable declaration or Expected value. A mismatch SHALL retain scenario identity and stable expected and actual snapshots.
+Python SHALL prepare Given, execute When and compare Actual/Expect by exact type-aware structural equality. Mutation SHALL NOT rewrite declarations/Expect. Mismatches SHALL retain identity and stable expected/actual snapshots. Success SHALL return validated Actual snapshotted independently before cleanup. Sync SHALL work in active event loops and reject awaitables with async-use guidance and no coroutine warnings; async SHALL support awaitables.
 
 <!-- focused-spec:id=python-sdk.comparison -->
 #### Scenario: Python application regression fails exact expectation
 - **WHEN** a driver returns an observation whose event field or amount differs from Expect
 - **THEN** verification fails with the scenario identity and both the expected and actual observations
+
+<!-- focused-spec:id=python-sdk.actual-snapshot-before-cleanup -->
+#### Scenario: Cleanup cannot rewrite returned Python actual
+- **WHEN** a valid synchronous or asynchronous action returns its subject or a nested object and cleanup mutates it after a matching comparison
+- **THEN** verification returns the actual values as they existed before cleanup
+
+<!-- focused-spec:id=python-sdk.sync-inside-running-loop -->
+#### Scenario: Synchronous driver works inside a running event loop
+- **WHEN** a caller invokes synchronous verification from within an active asyncio event loop and both driver operations are synchronous
+- **THEN** verification completes synchronously with the actual result and does not create an unawaited coroutine
+
+<!-- focused-spec:id=python-sdk.sync-rejects-awaitable -->
+#### Scenario: Awaitable driver operation directs caller to async API
+- **WHEN** synchronous verification encounters an awaitable driver operation
+- **THEN** it fails with actionable guidance to use asynchronous verification and emits no unawaited-coroutine warning
 
 ### Requirement: Python cleanup preserves primary failures
 After successful preparation, optional cleanup SHALL run exactly once after success or failure. Cleanup failure SHALL prevent success and preserve a simultaneous primary failure. Failed preparation SHALL leave partial-resource cleanup to the driver.
@@ -39,20 +54,30 @@ After successful preparation, optional cleanup SHALL run exactly once after succ
 - **THEN** cleanup runs once, verification remains nonpassing, and both failures remain discoverable
 
 ### Requirement: Python cancellation is nonpassing
-Cancellation SHALL NOT pass merely because the action returns matching data. Cleanup after successful preparation SHALL still run exactly once and be awaited.
+Cancellation SHALL NOT pass merely because the action returns matching data. Cleanup after successful preparation SHALL still run exactly once and be awaited. Cooperative scenario cancellation SHALL be reported as a normal nonpassing scenario error, not as asyncio task cancellation; actual task cancellation SHALL retain asyncio cancellation semantics and remain observable after cleanup.
 
 <!-- focused-spec:id=python-sdk.cancellation -->
 #### Scenario: Cancellation cannot become a matching pass
-- **WHEN** the caller cancels during an action that returns an observation equal to Expect
+- **WHEN** cancellation occurs during an action that returns data matching Expect
 - **THEN** verification reports cancellation as nonpassing and still awaits cleanup
 
+<!-- focused-spec:id=python-sdk.cooperative-cancellation-is-error -->
+#### Scenario: Cooperative cancellation remains visible to task groups
+- **WHEN** the SDK's cooperative cancellation predicate stops a scenario running in an asyncio task group
+- **THEN** the scenario raises a nonpassing ordinary exception and the task group observes the failure, while native task cancellation remains task cancellation
+
 ### Requirement: Execution-local Python observations and explanations
-The SDK SHALL optionally report ordered Given, When, Expect, valid Actual, and application-authored explanation events for one execution. Event payloads SHALL be independent snapshots. Disabling observation SHALL preserve ordinary result and error behavior without SDK output or retained event state. Explanations SHALL NOT determine verification status.
+Python SHALL optionally emit ordered Given/When/Expect, valid Actual and application-authored events as independent snapshots. Explanations SHALL NOT determine status. Disabled observation SHALL preserve results/errors without SDK output or retained event state. Explanation message/data validation SHALL be observer-independent, without event-snapshot allocation/retention solely for disabled delivery. Explanation typing SHALL allow omitted data.
 
 <!-- focused-spec:id=python-sdk.events -->
 #### Scenario: Mismatch retains actual observations and real explanations
 - **WHEN** an application emits an explanation and returns an incorrect valid observation while event capture is enabled
 - **THEN** the caller receives the ordered declarations, explanation, and actual observation, while exact comparison still fails
+
+<!-- focused-spec:id=python-sdk.explain-validation-without-observer -->
+#### Scenario: Invalid explanation is rejected without observation
+- **WHEN** a driver calls explanation with a blank message or unsupported structured data while no observer is configured
+- **THEN** execution rejects the invalid explanation rather than silently accepting it, without retaining or emitting an event
 
 ### Requirement: Python pytest bank consumer remains standalone
 The maintained Python bank example SHALL define its six Given/When/Expect outcomes once, exercise the real Python account implementation, and run through ordinary pytest tests and a readable demo without requiring focused-spec configuration. Optional focused execution SHALL reuse the same declarations and driver without a Markdown companion or registry.

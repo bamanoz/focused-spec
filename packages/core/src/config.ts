@@ -1,11 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
 import { parse } from 'yaml'
+import { expandGlobPattern } from './glob.js'
 import type { DocumentLayout, FocusedSpecConfig, PluginConfig, RunnerConfig, Violation } from './model.js'
 import { isScopeName } from './model.js'
 import type { JsonValue } from './runner-api.js'
 import { isDocumentationPath, isPackageSpecifier } from './plugin-module.js'
 
+import { isJsonValue } from './json.js'
 const RUNNER_ID = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u
 const PARENT_SEGMENT = /(?:^|[\\/])\.\.(?:[\\/]|$)/u
 // The host timer adds a one-second grace period; Node timers cannot exceed 2^31 - 1 ms.
@@ -17,39 +19,6 @@ function object(value: unknown): Record<string, unknown> | undefined {
     : undefined
 }
 
-export function isJsonValue(value: unknown): value is JsonValue {
-  const active = new Set<object>()
-  function visit(candidate: unknown): boolean {
-    if (candidate === null || typeof candidate === 'string' || typeof candidate === 'boolean') return true
-    if (typeof candidate === 'number') return Number.isFinite(candidate)
-    if (typeof candidate !== 'object') return false
-    if (active.has(candidate)) return false
-    active.add(candidate)
-    try {
-      const array = Array.isArray(candidate)
-      const prototype: unknown = Object.getPrototypeOf(candidate)
-      if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) return false
-      const keys = Reflect.ownKeys(candidate)
-      if (array) {
-        if (keys.length !== candidate.length + 1) return false
-        for (let index = 0; index < candidate.length; index += 1) {
-          const property = Object.getOwnPropertyDescriptor(candidate, String(index))
-          if (property === undefined || !property.enumerable || !('value' in property) || !visit(property.value)) return false
-        }
-        return true
-      }
-      for (const key of keys) {
-        if (typeof key !== 'string') return false
-        const property = Object.getOwnPropertyDescriptor(candidate, key)!
-        if (!property.enumerable || !('value' in property) || !visit(property.value)) return false
-      }
-      return true
-    } finally {
-      active.delete(candidate)
-    }
-  }
-  return visit(value)
-}
 const CONFIG_KEYS: Readonly<Record<string, true>> = { version: true, specifications: true, evidence: true, runners: true, execution: true }
 const SPECIFICATION_KEYS: Readonly<Record<string, true>> = { documents: true, formats: true }
 const DOCUMENT_KEYS: Readonly<Record<string, true>> = { match: true, scope: true, exclude: true, format: true }
@@ -74,8 +43,20 @@ function validatePattern(value: unknown, context: string, path: string, violatio
     violations.push({ path, message: `${context} must be a non-empty project-relative path pattern` })
     return false
   }
-  if (isAbsolute(value) || value.startsWith('!') || value.includes('\\') || value.includes('\0') || PARENT_SEGMENT.test(value)) {
+  const unsafe = (pattern: string): boolean => isAbsolute(pattern) || pattern.startsWith('!') || pattern.includes('\\') || pattern.includes('\0') || PARENT_SEGMENT.test(pattern)
+  if (unsafe(value)) {
     violations.push({ path, message: `${context} must be a safe project-relative path pattern` })
+    return false
+  }
+  let alternatives: string[]
+  try {
+    alternatives = expandGlobPattern(value)
+  } catch (error) {
+    violations.push({ path, message: `${context} is not a valid bounded path pattern: ${error instanceof Error ? error.message : String(error)}` })
+    return false
+  }
+  if (alternatives.some(unsafe)) {
+    violations.push({ path, message: `${context} must be a safe project-relative path pattern after brace expansion` })
     return false
   }
   return true
@@ -224,8 +205,8 @@ export async function loadConfig(projectRoot: string, explicitPath?: string): Pr
     return { path, violations: [{ path, message: 'configuration must be an object' }] }
   }
   rejectUnknownKeys(root, CONFIG_KEYS, 'configuration', path, violations)
-  if (root.version !== 5) violations.push({ path, message: 'configuration version must be 5 and evidence storage must be configured through an explicit Format API 2 adapter; migrate with the installed CLI: `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json`' })
-  if (root.evidence !== undefined) violations.push({ path, message: 'top-level evidence is not supported in configuration version 5; configure storage in the selected format adapter options and migrate with `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json`' })
+  if (root.version !== 5) violations.push({ path, message: 'configuration version must be 5 and evidence storage must be configured through an explicit Format API 2 adapter; load the `upgrade` topic from the selected focused-spec CLI: `focused-spec instructions --protocol 1 --topic upgrade --json`' })
+  if (root.evidence !== undefined) violations.push({ path, message: 'top-level evidence is not supported in configuration version 5; configure storage in the selected format adapter options and load the `upgrade` topic from the selected focused-spec CLI: `focused-spec instructions --protocol 1 --topic upgrade --json`' })
 
   const specifications = object(root.specifications)
   let specificationConfig: FocusedSpecConfig['specifications'] | undefined

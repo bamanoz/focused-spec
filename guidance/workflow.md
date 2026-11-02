@@ -1,20 +1,20 @@
 # Focused Spec Workflow
 
-This router covers executable scenarios, drivers and native SDD items. Keep one behavioral source: code-native Given/When/Expect or the host's requirement/acceptance item, never a focused-spec copy.
+Covers executable scenarios, drivers and native SDD items. Keep one behavioral source: code-native Given/When/Expect or the host's requirement/acceptance item, never a focused-spec copy.
 
 ## Preserve the governing boundary
 
-Establish the requested outcome, canonical source, actual permissions, existing composition and operation before acting. Select the host workflow by artifact and operation; existing code/tests or wording-only edits do not create a planning restriction. Preserve host approval, read-only, planning, generated-source and lifecycle boundaries.
+Establish the outcome, canonical source, actual permissions, existing composition and operation before acting. Select the host workflow by artifact and operation; existing code/tests or wording-only edits do not imply planning-only permissions. Preserve host approval, read-only, planning, generated-source and lifecycle boundaries.
 
 Planning records intended identity, exact evidence/selectors, full owning paths and later work; it cannot configure or execute integration or edit tests, runners or product code. Approval must cover the complete native revision and auxiliary integration, not a wording-only substitute. Recommendation-only and installation-only requests stop at that deliverable. Respect explicit exclusions, retain deferred obligations and report incomplete synchronization. SDK-only scenarios need no host framework, focused configuration, CLI plugins or text companion.
 
 ## Keep executable and project root distinct
 
-Use the loader's selected installed CLI (local, global or explicit path) throughout this step. If it is upgraded, start again with its fresh workflow. Commands reading project configuration, documents or plugins require `--root <project-root>`: dependencies resolve from that consuming root, never the CLI directory or a global/downloaded fallback. `instructions` reads only package assets and has no `--root` option.
+Use the loader's selected installed CLI (local, global or explicit path) for this step. After an upgrade, reacquire its workflow. Project-reading commands require `--root <project-root>`: dependencies resolve there, never from the CLI directory or a global/downloaded fallback. `instructions` reads package assets and accepts no `--root`.
 
 Guidance acquisition neither installs, writes, validates nor executes evidence, and grants no permissions.
 
-## Acquire one focused topic
+## Acquire focused guidance
 
 Route before acting:
 
@@ -28,15 +28,15 @@ Route before acting:
 
 Inspect manifest, lockfile, native suite and configuration. Preserve compatible established choices: repairing a selected dependency is not first composition. Without an established compatible choice, acquire `integration` before selecting/installing the first SDK or runner, even SDK-only. Missing focused configuration or an existing driver decides neither branch. Incompatible setups route to `upgrade`.
 
-Request each topic from that same CLI as a standalone command:
+For `review`, `author-revise`, `upgrade`, or `verify`, request that operation from the same selected CLI as one standalone command:
 
 ```text
-<focused-spec-cli> instructions --protocol 1 --topic <topic> --json
+<focused-spec-cli> instructions --protocol 1 --topic <operation> --json
 ```
 
-Do not chain it with executable checks, installation, `init`, help, another topic or any command; repeat a combined request by itself. Accept only successful protocol-1 JSON for package `focused-spec`, the selected installed version, the requested topic and nonempty Markdown.
+Validate protocol `1`, package `focused-spec`, the selected installation's version, exact requested topic, and complete nonempty Markdown with separate router and operation sections. Derive identity/version from this response; make no separate `version` or workflow-only call for that operation. Routing-only steps request `workflow` alone. Shared `integration`, `formats`, and `runners` requests stay distinct and append no operation guidance.
 
-Host truncation leaves acquisition unfinished. Recover complete stdout from that successful call's linked full-output artifact before proceeding. A clipped preview, extracted `content`, hidden metadata, unrelated artifact, stale guidance, repository file, README or different installation is not a substitute. Stop if the complete matching response is unrecoverable. Focused topics retain their operation-specific obligations and explicitly route to shared topics/contracts when needed. Change topic when the operation changes; refresh workflow before a later step.
+Recover complete stdout from the successful call's linked full-output artifact when the host clips the preview. A clipped preview, extracted `content`, hidden metadata, unrelated artifact, stale guidance, repository file, or different installation is not a substitute. Stop if complete matching output is unrecoverable. Plugin documentation remains a separate request for each exact selected installed contract.
 
 ## Acquire selected plugin contracts
 

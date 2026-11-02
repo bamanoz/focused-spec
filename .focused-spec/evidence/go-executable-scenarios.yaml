@@ -6,8 +6,7 @@ scopes:
           executes the Go SDK without Node dependencies
     go-sdk.invalid-declaration:
       evidence:
-        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
-          rejects invalid Go declarations before preparation
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios > rejects invalid Go declarations before preparation
     go-sdk.comparison:
       evidence:
         - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
@@ -64,3 +63,6 @@ scopes:
       evidence:
         - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
           detects the Go bank withdrawal boundary regression
+    go-sdk.explain-validation-independent:
+      evidence:
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios > validates Go explanations without an event sink

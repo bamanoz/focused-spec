@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
+import { runBoundedProcess } from 'focused-spec/runner'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -135,70 +135,28 @@ async function invoke(request: Record<string, string>, signal: AbortSignal | und
   const input = JSON.stringify(request)
   if (Buffer.byteLength(input) > LIMIT) throw new Error('.NET catalog helper input exceeds 4000000 bytes')
   const temporary = await mkdtemp(join(tmpdir(), 'focused-spec-dotnet-catalog-'))
-  const grouped = process.platform !== 'win32'
   try {
-    const child = spawn(commandName(command), [HELPER], {
+    const result = await runBoundedProcess(commandName(command), [HELPER], {
       cwd: temporary,
-      shell: false,
-      detached: grouped,
+      signal,
       env: {
         ...process.env,
-        DOTNET_CLI_HOME: temporary,
         DOTNET_NOLOGO: '1',
         DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1',
         DOTNET_CLI_TELEMETRY_OPTOUT: '1',
       },
-      stdio: ['pipe', 'pipe', 'pipe'],
+      input,
+      inputLimit: LIMIT,
+      inputError: '.NET catalog helper input exceeds 4000000 bytes',
+      outputLimit: LIMIT,
+      diagnosticLimit: LIMIT,
+      diagnosticOverflow: true,
+      capture: 'head',
+      outputError: stream => `.NET catalog helper ${stream} exceeds 4000000 bytes`,
+      terminateAfterCompletion: true,
     })
-    const stdout: Buffer[] = []
-    const stderr: Buffer[] = []
-    let stdoutBytes = 0
-    let stderrBytes = 0
-    let overflow: string | undefined
-    let timer: NodeJS.Timeout | undefined
-    const kill = (name: NodeJS.Signals): void => {
-      try {
-        if (grouped && child.pid !== undefined) process.kill(-child.pid, name)
-        else child.kill(name)
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
-      }
-    }
-    const abort = (): void => {
-      kill('SIGTERM')
-      timer ??= setTimeout(() => kill('SIGKILL'), 500)
-      timer.unref()
-    }
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdoutBytes += chunk.length
-      if (stdoutBytes <= LIMIT) stdout.push(chunk)
-      else { overflow = '.NET catalog helper stdout exceeds 4000000 bytes'; kill('SIGKILL') }
-    })
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderrBytes += chunk.length
-      if (stderrBytes <= LIMIT) stderr.push(chunk)
-      else { overflow = '.NET catalog helper stderr exceeds 4000000 bytes'; kill('SIGKILL') }
-    })
-    child.stdin.on('error', error => { if ((error as NodeJS.ErrnoException).code !== 'EPIPE') kill('SIGKILL') })
-    signal?.addEventListener('abort', abort, { once: true })
-    if (signal?.aborted) abort()
-    try {
-      const completion = Promise.withResolvers<number>()
-      child.once('error', completion.reject)
-      child.once('close', value => completion.resolve(value ?? 1))
-      child.stdin.end(input)
-      const code = await completion.promise
-      signal?.throwIfAborted()
-      if (overflow) throw new Error(overflow)
-      const output = Buffer.concat(stdout).toString('utf8')
-      const diagnostic = Buffer.concat(stderr).toString('utf8').slice(-8000)
-      if (code !== 0) throw new Error((diagnostic || output || `.NET catalog helper exited ${code}`).slice(-8000))
-      return helperResponse(output)
-    } finally {
-      signal?.removeEventListener('abort', abort)
-      clearTimeout(timer)
-      kill('SIGKILL')
-    }
+    if (result.code !== 0) throw new Error((result.stderr.trim() || result.stdout.trim() || `.NET catalog helper exited ${result.code}`).slice(-8000))
+    return helperResponse(result.stdout)
   } finally {
     await rm(temporary, { recursive: true, force: true })
   }

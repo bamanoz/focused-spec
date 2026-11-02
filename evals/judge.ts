@@ -217,19 +217,23 @@ function toolText(event: ObjectValue): string | undefined {
 interface PackageIdentity {
   readonly name: 'focused-spec'
   readonly version: string
+  readonly content: string
   readonly workflow: string
+  readonly operation?: string
 }
 
 async function installedPackageIdentity(packageRoot: string, topic: string): Promise<PackageIdentity | undefined> {
   try {
-    const [metadata, workflow] = await Promise.all([
+    const [metadata, workflow, content] = await Promise.all([
       readFile(join(packageRoot, 'package.json'), 'utf8'),
+      readFile(join(packageRoot, 'guidance', 'workflow.md'), 'utf8'),
       readFile(join(packageRoot, 'guidance', `${topic}.md`), 'utf8'),
     ])
     const value: unknown = JSON.parse(metadata)
     if (!object(value) || value.name !== 'focused-spec' || typeof value.version !== 'string' || value.version.trim() === ''
-      || workflow.trim() === '') return undefined
-    return { name: 'focused-spec', version: value.version, workflow }
+      || workflow.trim() === '' || content.trim() === '') return undefined
+    const operation = topic === 'review' || topic === 'author-revise' || topic === 'upgrade' || topic === 'verify' ? content : undefined
+    return { name: 'focused-spec', version: value.version, content, workflow, ...(operation === undefined ? {} : { operation }) }
   } catch {
     return undefined
   }
@@ -244,9 +248,11 @@ function validGuideResponse(output: string, identity: PackageIdentity, topic: st
     return false
   }
   if (!object(value) || Object.keys(value).sort().join(',') !== 'content,package,protocolVersion,topic'
-    || value.protocolVersion !== 1 || value.topic !== topic || value.content !== identity.workflow
+    || value.protocolVersion !== 1 || value.topic !== topic
     || !object(value.package) || Object.keys(value.package).sort().join(',') !== 'name,version') return false
-  return value.package.name === identity.name && value.package.version === identity.version
+  const expected = identity.operation === undefined ? identity.content
+    : `## Workflow router\n\n${identity.workflow}\n\n## ${topic} guidance\n\n${identity.operation}`
+  return value.content === expected && value.package.name === identity.name && value.package.version === identity.version
 }
 
 interface GuidanceAcquisition {
@@ -299,6 +305,48 @@ async function acquiredGuidance(transcript: string, workspace: string, topic: st
   }
   return undefined
 }
+export async function combinedGuidanceGate(workspace: string, transcript: string, topic: 'review' | 'author-revise' | 'upgrade' | 'verify'): Promise<EvalGate> {
+  const events = transcriptEvents(transcript)
+  const acquired = await acquiredGuidance(transcript, workspace, topic)
+  const starts = events.flatMap(event => {
+    if (event.type !== 'tool_execution_start' || event.toolName !== 'bash' || !object(event.args)) return []
+    return typeof event.args.command === 'string' ? [event.args.command] : []
+  })
+  const requests = starts.map(command => {
+    const tokens = shellTokens(command)
+    if (tokens === undefined || tokens[0] === undefined) return undefined
+    const localNpx = basename(tokens[0]) === 'npx' && tokens[1] === '--no-install' && tokens[2] === 'focused-spec'
+    const node = /^(?:node|node\.exe)$/u.test(basename(tokens[0]))
+    const offset = localNpx ? 3 : node ? 2 : 1
+    const args = tokens.slice(offset)
+    if (args[0] === 'version') return args.length === 1 || args.length === 2 && args[1] === '--json'
+      ? { versionCommand: true as const } : undefined
+    if (args[0] !== 'instructions') return undefined
+    let protocol: string | undefined
+    let topic: string | undefined
+    let json = false
+    for (let index = 1; index < args.length; index += 1) {
+      const argument = args[index]
+      if (argument === '--json' && !json) json = true
+      else if (argument === '--protocol' && protocol === undefined && args[index + 1] !== undefined) protocol = args[++index]
+      else if (argument === '--topic' && topic === undefined && args[index + 1] !== undefined) topic = args[++index]
+      else return undefined
+    }
+    if (!json) return undefined
+    return { protocol, topic: topic ?? 'workflow', versionCommand: false as const }
+  })
+  const redundant = requests.some(request => request?.versionCommand === true
+    || (request?.versionCommand === false && request.topic === 'workflow'))
+  const operationCalls = requests.filter(request => request?.versionCommand === false
+    && request.protocol === '1' && request.topic === topic).length
+  const passed = acquired !== undefined && !redundant && operationCalls === 1
+  return gate('focused-combined-operation', passed, passed
+    ? `completed one valid ${topic} response with router and operation guidance from the selected installation`
+    : acquired === undefined ? `did not complete a valid combined ${topic} response`
+      : redundant ? 'operation acquisition included a redundant version or workflow-only request'
+        : `expected one standalone ${topic} request, observed ${operationCalls}`)
+}
+
 
 export async function guidanceActivationGate(workspace: string, workflowSteps: readonly string[], topic = 'workflow'): Promise<EvalGate> {
   let failedStep = -1

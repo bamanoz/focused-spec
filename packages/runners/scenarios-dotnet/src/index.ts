@@ -80,10 +80,11 @@ function bridgeProject(project: string, framework: string): string {
     <AssemblyName>FocusedSpec.Bridge</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <UseAppHost>false</UseAppHost>
+    <RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Bridge.cs" />
-    <ProjectReference Include="${reference}" />
+    <ProjectReference Include="${reference}" ReferenceOutputAssembly="true" />
   </ItemGroup>
 </Project>
 `
@@ -154,7 +155,6 @@ async function runSuite(value: Selected, targets: readonly ResolvedTarget[], con
     await writeFile(requestPath, request, { flag: 'wx' })
     const environment = {
       ...process.env,
-      DOTNET_CLI_HOME: temporary,
       DOTNET_NOLOGO: '1',
       DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1',
       DOTNET_CLI_TELEMETRY_OPTOUT: '1',

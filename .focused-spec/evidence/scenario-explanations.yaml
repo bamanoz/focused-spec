@@ -8,10 +8,8 @@ scopes:
           explains the actual Go bank withdrawal decision
     scenario-explanations.isolation:
       evidence:
-        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
-          isolates explanations across concurrent executions
-        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
-          isolates Go explanations across concurrent executions
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > isolates explanations across concurrent executions
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios > isolates Go explanations across concurrent executions
     scenario-explanations.failure:
       evidence:
         - vitest::test/executable-scenarios.spec.ts::executable scenarios >
@@ -24,3 +22,10 @@ scopes:
           packed SDK scenario without focused-spec
         - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
           executes the Go SDK without Node dependencies
+    scenario-explanations.validation-independent:
+      evidence:
+        - vitest::packages/sdk/typescript/test/index.test.ts::TypeScript executable scenarios > validates invalid explanations with observer=false
+        - vitest::packages/sdk/typescript/test/index.test.ts::TypeScript executable scenarios > validates invalid explanations with observer=true
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > validates explanations independently of observation
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios > validates Go explanations without an event sink
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > validates .NET explanations with and without an observer

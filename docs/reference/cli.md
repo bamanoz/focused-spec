@@ -9,7 +9,7 @@ focused-spec version [--json]
 focused-spec --version
 focused-spec -V
 focused-spec validate [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--strict] [--syntax-only] [--json] [--timings]
-focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--details] [--json] [--timings]
+focused-spec run [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--allow-skip] [--details] [--junit <path>] [--json] [--timings]
 focused-spec list [--root <path>] [--config <path>] [--scope <name>] [--scenario <id>] [--json]
 focused-spec show <id> [--root <path>] [--config <path>] [--scope <name>] [--json]
 focused-spec plugin-docs (--format <id> | --runner <id> | --package <specifier>) [--root <path>] [--config <path>] [--json]
@@ -211,7 +211,7 @@ The workflow routes each operation to its focused topic, absent or explicitly re
 
 The router owns the common plugin-document acquisition and provenance procedure. `author-revise` owns complete authoring approval and identity/evidence reconciliation; `verify` owns application-observation, sensitivity/restoration and executed lifecycle procedures. Other topics retain their operation-specific checks and request `verify` only when authorized execution is needed; read-only review does not acquire it merely to finish a review. The eight-topic interface and verification policy are unchanged.
 
-The `integration` topic also carries the pinned .NET SDK `0.10.1` GitHub Release installation procedure: public artifact URL, SHA-256, project-local NuGet feed, preserved custom sources/mapping, and repeatable CI restore. The procedure is served offline without a checkout; performing the download and installation requires network access and authorization. It does not claim nuget.org publication or add a .NET CLI runner. See the human-facing [installation guide](../guides/install.md#net-sdk-from-github-releases).
+For .NET SDK distribution, including the GitHub Release asset, SHA-256 verification, project-local NuGet feed, custom-source/source-mapping safeguards, and repeatable restore procedure, see the [installation guide](../guides/install.md#net-sdk-from-github-releases). The SDK is not published on NuGet.org. Core bundles no .NET runner; the optional .NET scenario plugins have separate source-checkout installation instructions in that guide.
 
 Loader protocol defaults to 1; it is independent of package versions, configuration version 5, Format API version 2, and Runner API version 1. The loader requests it explicitly. Protocol-1 JSON is:
 
@@ -356,6 +356,10 @@ Human execution, validation, inspection and command-error output applies the sam
 If configuration, format parsing or binding, selected evidence resolution, or strict validation fails before execution, text says `execution did not start`. JSON reports `valid: false`, `executionStarted: false`, actual selection context, and `violations`, and omits execution result fields. A scenario ID absent from the selected scope or scopes follows this failure contract. Scope-wide validation is not implied by a successful scenario-only run.
 
 `--allow-skip` applies only to `run`. It permits a skipped scenario to produce a successful process exit without relabelling it as passed. Scenario and target statuses are `PASS`, `FAIL`, `SKIP`, and `ERROR`; only `PASS` succeeds by default. The CLI exits nonzero on invalid configuration, discovery, format enrollment, unresolved evidence, failed execution, errors, or disallowed skips.
+
+`run --junit <path>` writes an opt-in JUnit XML report from the same result; it never reruns evidence. Relative destinations resolve against `--root` and the report is written atomically. Each selected scenario occurrence becomes one testcase with a stable scope/ID identity, native name/source properties, exact evidence references, and its actual status: `PASS` has no outcome element, `FAIL` uses `<failure>`, `ERROR` uses `<error>`, and `SKIP` uses `<skipped>`. Nonpassing evidence diagnostics are retained. XML-invalid control characters are replaced deterministically.
+
+When strict preflight fails, the report contains a suite-level diagnostic and no fabricated testcases. A valid execution selecting no scenarios writes an empty suite. A report-write failure emits an actionable stderr diagnostic and makes the command fail; `--json` stdout still contains the ordinary CLI execution result. Without `--junit`, output and JSON are unchanged.
 
 ## Timing output
 

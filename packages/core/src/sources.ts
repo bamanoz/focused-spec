@@ -1,7 +1,8 @@
+import { minimatch } from 'minimatch'
 import { readFile, realpath } from 'node:fs/promises'
 import { isAbsolute, relative, sep } from 'node:path'
 import type { CatalogDocument, SourceLocation } from './format-api.js'
-import { FormatClient } from './format-client.js'
+import { FormatClient, FormatParseError } from './format-client.js'
 import { expandGlobPattern, globFiles } from './glob.js'
 import type { DocumentLayout, FocusedSpecConfig, NativeDocument, NativeItem, Scenario, SpecDocument, Violation } from './model.js'
 import { isScopeName } from './model.js'
@@ -16,7 +17,6 @@ interface Claim {
   readonly scope: string
 }
 
-export { isScopeName } from './model.js'
 
 function portable(path: string): string {
   return path.split('\\').join('/')
@@ -27,22 +27,30 @@ function compareText(left: string, right: string): number {
 }
 
 
-function capturedScope(layout: DocumentLayout, path: string): string | undefined {
-  const segments = layout.match.replace(/^(?:\.\/)+/u, '').split('/')
-  const captureIndex = segments.findIndex(segment => segment.includes(SCOPE_TOKEN))
-  const captureSegment = segments[captureIndex]
-  if (captureIndex < 0 || captureSegment === undefined) return undefined
+const CAPTURE_MARKER = '__FOCUSED_SPEC_SCOPE_CAPTURE__'
+
+function capturedScope(patterns: readonly string[], path: string): string | undefined {
   const pathSegments = path.split('/')
-  const actualIndex = segments.slice(captureIndex + 1).includes('**')
-    ? captureIndex
-    : pathSegments.length - (segments.length - captureIndex)
-  const actual = pathSegments[actualIndex]
-  if (actual === undefined) return undefined
-  const [prefix = '', suffix = ''] = captureSegment.split(SCOPE_TOKEN)
-  if (!actual.startsWith(prefix) || !actual.endsWith(suffix)) return undefined
-  const end = actual.length - suffix.length
-  const name = actual.slice(prefix.length, end)
-  return isScopeName(name) ? name : undefined
+  const scopes = new Set<string>()
+  for (const pattern of patterns) {
+    const normalizedPattern = pattern.replace(/^(?:\.\/)+/u, '')
+    const segments = normalizedPattern.split('/')
+    const captureIndex = segments.findIndex(segment => segment.includes(CAPTURE_MARKER))
+    const captureSegment = segments[captureIndex]
+    if (captureIndex < 0 || captureSegment === undefined) continue
+    const globPattern = normalizedPattern.replace(CAPTURE_MARKER, '*')
+    if (!minimatch(path, globPattern, { dot: true, nonegate: true, nobrace: true, nocase: false })) continue
+    const actualIndex = segments.slice(captureIndex + 1).includes('**')
+      ? captureIndex
+      : pathSegments.length - (segments.length - captureIndex)
+    const actual = pathSegments[actualIndex]
+    if (actual === undefined) continue
+    const [prefix = '', suffix = ''] = captureSegment.split(CAPTURE_MARKER)
+    if (!actual.startsWith(prefix) || !actual.endsWith(suffix)) continue
+    const name = actual.slice(prefix.length, actual.length - suffix.length)
+    if (isScopeName(name)) scopes.add(name)
+  }
+  return scopes.size === 1 ? scopes.values().next().value : undefined
 }
 
 async function claimsForLayout(
@@ -50,41 +58,32 @@ async function claimsForLayout(
   layout: DocumentLayout,
   layoutIndex: number,
   violations: Violation[],
-  capturedScopeSelection?: string,
 ): Promise<Claim[]> {
   if (layout.scope !== undefined && !isScopeName(layout.scope)) {
-    violations.push({
-      path: '.focused-spec/config.yaml',
-      message: `layout ${layoutIndex + 1} has invalid scope name ${layout.scope}`,
-    })
+    violations.push({ path: '.focused-spec/config.yaml', message: `layout ${layoutIndex + 1} has invalid scope name ${layout.scope}` })
     return []
   }
-  const pattern = layout.scope === undefined
-    ? layout.match.replace(SCOPE_TOKEN, capturedScopeSelection ?? '*')
-    : layout.match
+  const pattern = layout.scope === undefined ? layout.match.replace(SCOPE_TOKEN, CAPTURE_MARKER) : layout.match
+  let expandedPatterns: string[]
   let paths: string[]
   try {
-    paths = await globFiles(expandGlobPattern(pattern), {
+    expandedPatterns = expandGlobPattern(pattern)
+    const discoveryPatterns = expandedPatterns.map(expanded => expanded.replace(CAPTURE_MARKER, '*'))
+    paths = await globFiles(discoveryPatterns, {
       absolute: true,
       cwd: projectRoot,
       ignore: (layout.exclude ?? []).flatMap(expandGlobPattern),
     })
   } catch (error) {
-    violations.push({
-      path: '.focused-spec/config.yaml',
-      message: `cannot discover documents for layout ${layoutIndex + 1} (${layout.match}): ${error instanceof Error ? error.message : String(error)}`,
-    })
+    violations.push({ path: '.focused-spec/config.yaml', message: `cannot discover documents for layout ${layoutIndex + 1} (${layout.match}): ${error instanceof Error ? error.message : String(error)}` })
     return []
   }
 
   return paths.sort(compareText).flatMap(absolutePath => {
     const path = portable(relative(projectRoot, absolutePath))
-    const scope = layout.scope ?? capturedScope(layout, path)
+    const scope = layout.scope ?? capturedScope(expandedPatterns, path)
     if (scope === undefined) {
-      violations.push({
-        path,
-        message: `document matched layout ${layoutIndex + 1} but its scope capture is not a path-safe non-empty fragment`,
-      })
+      violations.push({ path, message: `document matched layout ${layoutIndex + 1} but its scope capture is ambiguous or not a path-safe non-empty fragment` })
       return []
     }
     return [{ absolutePath, path, layoutIndex, scope }]
@@ -122,15 +121,13 @@ export async function discoverDocuments(
   }
 
   const claims = (await Promise.all(config.specifications.documents.map(async (layout, layoutIndex) => {
-    if (selectedScope === undefined) return claimsForLayout(projectRoot, layout, layoutIndex, violations)
-    if (layout.scope !== undefined) {
-      return layout.scope === selectedScope
-        ? claimsForLayout(projectRoot, layout, layoutIndex, violations)
-        : claimsForLayout(projectRoot, layout, layoutIndex, [])
-    }
-    const allClaims = await claimsForLayout(projectRoot, layout, layoutIndex, [])
-    const selectedClaims = await claimsForLayout(projectRoot, layout, layoutIndex, violations, selectedScope)
-    return [...allClaims.filter(claim => claim.scope !== selectedScope), ...selectedClaims]
+    if (selectedScope === undefined || layout.scope !== undefined) return claimsForLayout(projectRoot, layout, layoutIndex, violations)
+    const layoutViolations: Violation[] = []
+    const layoutClaims = await claimsForLayout(projectRoot, layout, layoutIndex, layoutViolations)
+    const selectedClaims = layoutClaims.filter(claim => claim.scope === selectedScope)
+    const selectedPaths = new Set(selectedClaims.map(claim => claim.path))
+    violations.push(...layoutViolations.filter(violation => violation.path === '.focused-spec/config.yaml' || selectedPaths.has(violation.path)))
+    return layoutClaims
   }))).flat().sort((left, right) => compareText(left.path, right.path) || left.layoutIndex - right.layoutIndex)
 
   const claimsByPath = new Map<string, Claim[]>()
@@ -203,7 +200,7 @@ export async function discoverDocuments(
           ? await client.parse(path, source, claim.scope)
           : await timings.format({ formatId: layout.format, path, scope: claim.scope, coldStart }, () => client.parse(path, source, claim.scope))
       } catch (error) {
-        unavailableFormats.add(layout.format)
+        if (!(error instanceof FormatParseError)) unavailableFormats.add(layout.format)
         violations.push({ path, message: `cannot parse native document: ${error instanceof Error ? error.message : String(error)}` })
         continue
       }

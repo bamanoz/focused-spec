@@ -1,5 +1,5 @@
 import type { ExecutionEvent } from './runner-api.js'
-import { isJsonValue } from './config.js'
+import { isJsonValue } from './json.js'
 
 const MAX_EVENTS = 256
 const MAX_BYTES = 65_536

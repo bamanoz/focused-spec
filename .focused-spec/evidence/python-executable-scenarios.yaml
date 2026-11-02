@@ -64,3 +64,19 @@ scopes:
     python-example.cli-bank:
       evidence:
         - vitest::test/python-native-plugins.spec.ts::python native plugins > runs canonical bank through CLI and detects restored regression
+    python-sdk.actual-snapshot-before-cleanup:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > preserves pre-cleanup actual and mismatch snapshots
+    python-sdk.sync-inside-running-loop:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > executes synchronous drivers inside an active loop and rejects awaitables cleanly
+    python-sdk.sync-rejects-awaitable:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > executes synchronous drivers inside an active loop and rejects awaitables cleanly
+    python-sdk.cooperative-cancellation-is-error:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > distinguishes cooperative cancellation from native task cancellation
+    python-sdk.explain-validation-without-observer:
+      evidence:
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > validates explanations independently of observation
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > types the explanation data argument as optional

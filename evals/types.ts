@@ -13,6 +13,9 @@ export interface EvalTurn {
   readonly promptPath: string
   readonly skills: readonly string[]
   readonly checkpoint?: 'proposal' | 'working-evidence'
+  readonly guidanceTopic?: 'workflow' | 'review' | 'author-revise' | 'upgrade' | 'verify' | 'integration' | 'formats' | 'runners'
+  readonly guidanceTopics?: readonly ('workflow' | 'review' | 'author-revise' | 'upgrade' | 'verify' | 'integration' | 'formats' | 'runners')[]
+  readonly requiresFocusedSkill?: boolean
 }
 
 export interface IntegrationCase {
@@ -40,6 +43,7 @@ export interface EvalCase {
   readonly expectedRevisionTerms?: readonly string[]
   readonly integration?: IntegrationCase
   readonly skillDiscovery?: 'competing'
+  readonly guidanceOnly?: boolean
 }
 
 export interface AgentRequest {

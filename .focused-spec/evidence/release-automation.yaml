@@ -1,0 +1,37 @@
+scopes:
+  automate-verification-and-release:
+    release.ci.tiers:
+      evidence:
+        - vitest::test/release-tiers.spec.mjs::executes the Node-only tier without invoking native-toolchain jobs
+    release.ci.preflight:
+      evidence:
+        - vitest::test/release-automation.spec.mjs::release automation > fails the requested native preflight with actionable missing-tool detail
+    release.version-consistency:
+      evidence:
+        - vitest::test/release-versions.spec.mjs::release-versions > reports npm manifest drift with the exact path and observed value
+        - vitest::test/release-versions.spec.mjs::release-versions > compares only the Python project.version value
+        - vitest::test/release-versions.spec.mjs::release-versions > checks effective .NET PackageVersion and distribution identity
+        - vitest::test/release-versions.spec.mjs::release-versions > finds stale staged public URLs and hardcoded .NET test-consumer versions
+    release.go-module-version:
+      evidence:
+        - vitest::test/release-versions.spec.mjs::release-versions > accepts matching structured distribution metadata and orders workspaces by dependencies
+        - vitest::test/release-versions.spec.mjs::release-versions > rejects a noncanonical Go module and a drifted example marker independently
+    release.registry-provenance:
+      evidence:
+        - vitest::test/release-process.spec.mjs::local release process > refuses authorized publication without publisher configuration before any client is called
+        - vitest::test/release-process.spec.mjs::local release process > prepares exact artifacts in dry run without any publication or tag mutation
+        - vitest::test/release-automation.spec.mjs::release automation > keeps published-version certification separate from explicit publisher approval
+    release.partial-publication:
+      evidence:
+        - vitest::test/release-process.spec.mjs::local release process > reports successful npm artifacts and stops dependent registries after a later publication fails
+        - vitest::test/release-automation.spec.mjs::release automation > preserves verified immutable results and leaves dependent distributions pending after failure
+    release.native-cli-plugins:
+      evidence:
+        - vitest::test/release-automation.spec.mjs::release automation > keeps published-version certification separate from explicit publisher approval
+        - vitest::test/release-process.spec.mjs::local release process > publishes approved first-publication fake distributions once and verifies hashes and the remote Go tag
+    release.verification-determinism:
+      evidence:
+        - vitest::test/release-tiers.spec.mjs::release-check pins pytest and executes full repository Vitest evidence exactly once
+    release.openspec-stale-guard:
+      evidence:
+        - vitest::test/release-automation.spec.mjs::release automation > reports checked active changes and leaves every fixture byte unchanged

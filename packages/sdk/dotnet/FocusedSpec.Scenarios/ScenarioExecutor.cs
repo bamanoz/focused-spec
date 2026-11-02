@@ -17,9 +17,12 @@ public static class ScenarioExecutor
         if (driver.Given is null || driver.When is null) throw new ArgumentException("Driver requires Given and When operations.", nameof(driver));
         cancellationToken.ThrowIfCancellationRequested();
         var input = ((TGiven)ScenarioValidation.Clone(scenario.Given)!, (TWhen)ScenarioValidation.Clone(scenario.When)!);
-        Emit(observer, new ExecutionEvent("observation", "Given", ScenarioValidation.Clone(scenario.Given)));
-        Emit(observer, new ExecutionEvent("observation", "When", ScenarioValidation.Clone(scenario.When)));
-        Emit(observer, new ExecutionEvent("observation", "Expect", ScenarioValidation.Clone(scenario.Expect)));
+        if (observer is not null)
+        {
+            Emit(observer, new ExecutionEvent("observation", "Given", ScenarioValidation.Clone(scenario.Given)));
+            Emit(observer, new ExecutionEvent("observation", "When", ScenarioValidation.Clone(scenario.When)));
+            Emit(observer, new ExecutionEvent("observation", "Expect", ScenarioValidation.Clone(scenario.Expect)));
+        }
         var context = new DriverContext(scenario.Id, cancellationToken, observer);
         var subject = await driver.Given(input.Item1, context).ConfigureAwait(false);
 
@@ -31,9 +34,10 @@ public static class ScenarioExecutor
             actual = await driver.When(subject, input.Item2, context).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             ScenarioValidation.ValidateData(actual, "Actual");
-            Emit(observer, new ExecutionEvent("observation", "Actual", ScenarioValidation.Clone(actual)));
+            actual = (TExpect)ScenarioValidation.Clone(actual)!;
+            if (observer is not null) Emit(observer, new ExecutionEvent("observation", "Actual", ScenarioValidation.Clone(actual)));
             if (!StructuralEquals(actual, scenario.Expect, new HashSet<(object, object)>(PairComparer.Instance)))
-                throw new ScenarioMismatchException(scenario.Id, scenario.Name, ScenarioValidation.Clone(scenario.Expect), ScenarioValidation.Clone(actual));
+                throw new ScenarioMismatchException(scenario.Id, scenario.Name, ScenarioValidation.Clone(scenario.Expect), actual);
         }
         catch (Exception error)
         {
@@ -55,7 +59,7 @@ public static class ScenarioExecutor
         if (primary is not null && cleanup is not null) throw new AggregateException($"{scenario.Id}: execution and cleanup failed", primary, cleanup);
         if (primary is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(primary).Throw();
         if (cleanup is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(cleanup).Throw();
-        return (TExpect)ScenarioValidation.Clone(actual)!;
+        return actual;
     }
 
     private static void Emit(Action<ExecutionEvent>? observer, ExecutionEvent value) => observer?.Invoke(value);

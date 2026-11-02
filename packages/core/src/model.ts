@@ -1,5 +1,5 @@
 import type { SourceLocation } from './format-api.js'
-import type { ExecutionEvent, JsonValue, ResolvedTarget, TargetResult } from './runner-api.js'
+import type { ExecutionEvent, JsonValue, ResolvedTarget } from './runner-api.js'
 
 const CONTROL_CHARACTER = /\p{Cc}/u
 const SCOPE_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$/u
@@ -148,8 +148,4 @@ export interface ExecutionResult {
   readonly success: boolean
   readonly scenarios: readonly ScenarioResult[]
   readonly targetCount: number
-}
-
-export interface RunnerRunOutput {
-  readonly results: readonly TargetResult[]
 }

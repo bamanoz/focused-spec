@@ -66,7 +66,7 @@ function parseInline({ path, source }: ParseRequest): ParseResult {
     if (evidenceRows.length === 0) report(line, 'inline scenario requires at least one EVIDENCE row', ids)
     if (name.trim() === '') report(line, 'inline scenario requires a non-empty name', ids)
     for (const row of rows) {
-      if (row.label === 'REVISES') report(row.line, 'REVISES is unsupported; inline identity has no ancestry or evidence inheritance; obtain guidance: `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json`', ids)
+      if (row.label === 'REVISES') report(row.line, 'REVISES is unsupported; inline identity has no ancestry or evidence inheritance; load the `upgrade` topic from the selected focused-spec CLI with `instructions --protocol 1 --topic upgrade --json`', ids)
       else if (!row.valid) report(row.line, `malformed inline ${row.label} metadata`, ids)
     }
     const id = idRows.length === 1 && idRows[0]!.valid ? idRows[0]!.value : undefined

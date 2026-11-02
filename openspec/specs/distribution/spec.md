@@ -52,7 +52,7 @@ The npm package SHALL contain the authoritative focused-spec workflow, format gu
 - **AND** The loader SHALL preserve installer-readable discovery metadata but SHALL NOT embed a second maintained copy of workflow, format, or runner guidance. Consumer guidance access SHALL NOT require this repository's documentation or source. CLI installation SHALL remain separate from skill activation and SHALL NOT rewrite installed agent instructions or local customizations. The package SHALL ship only the loader and CLI-owned guidance format, without legacy full-text skill copies, obsolete config/API readers, implicit format fallbacks, aliases, conversion tooling, or compatibility shims; the explicit supported inline adapter SHALL not be treated as an obsolete reader. Consumer-project migration SHALL remain separately requested agent work rather than an installation side effect.
 
 ### Requirement: Independently installed adapters
-Core SHALL not install native parsers, inline authoring, registry evidence or test-framework implementations. Official Markdown, Gherkin, inline and registry formats and runners SHALL be independently installable compiled ESM packages with declarations. Workspace installs SHALL use local packages without prior publication; core SHALL expose Format API 2 without depending on evidence storage adapters.
+Core SHALL expose Format API 2 without native parsers, inline authoring, evidence-storage adapters or test frameworks. Official Markdown, Gherkin, inline and registry formats and runners SHALL install independently as compiled ESM with declarations. Workspace installs SHALL use local packages without publication. The packed .NET format SHALL omit unused localized Roslyn satellites and retain assemblies required for supported C# parsing.
 
 <!-- focused-spec:id=distribution.adapters.independent -->
 #### Scenario: Core-only and adapter consumer installations
@@ -63,6 +63,11 @@ Core SHALL not install native parsers, inline authoring, registry evidence or te
 #### Scenario: Packed inline and registry consumers are independent
 - **WHEN** disposable consumers install independently packed inline and registry adapters and select their documented formats
 - **THEN** inline evidence executes with no registry and external native evidence executes through the explicit registry adapter, without source-checkout access or implicit core parser dependencies
+
+<!-- focused-spec:id=distribution.adapters.roslyn-resources -->
+#### Scenario: Packed .NET format excludes unused localized compiler resources
+- **WHEN** the .NET scenario format package is built and packed
+- **THEN** it contains the required compiler/runtime assemblies and English resources, but no unused localized Roslyn satellite resource assemblies
 
 ### Requirement: Public installed runner contracts
 
@@ -81,3 +86,44 @@ Packing an already-built core package with `npm pack --ignore-scripts` SHALL pre
 - **WHEN** an already-built core package is packed with scripts disabled on the npm version bundled with the minimum supported Node.js release
 - **THEN** the archive contains the prepared runtime, including a prepared module without a corresponding source file, and packing leaves that output intact
 
+
+### Requirement: Independent native SDK package metadata
+The Python, .NET, and Go SDK distributions SHALL expose the metadata and package contents needed by language-native tooling and consumers, independently of focused-spec CLI plugins.
+
+<!-- focused-spec:id=distribution.native-sdk-metadata -->
+#### Scenario: Python package metadata and typing marker are available
+- **WHEN** a consumer inspects and installs the built Python wheel or source distribution
+- **THEN** it can discover the package license as an SPDX expression, project URLs and relevant classifiers, and the installed SDK includes `py.typed` for PEP 561 typing support
+
+<!-- focused-spec:id=distribution.native-dotnet-targets -->
+#### Scenario: NuGet package supports declared .NET target frameworks
+- **WHEN** a consumer restores the SDK package for `net8.0` or `net10.0`
+- **THEN** NuGet selects a compatible target asset for that framework and the SDK remains usable without focused-spec, parser, or xUnit runtime dependencies
+
+<!-- focused-spec:id=distribution.native-go-version-template -->
+#### Scenario: Go example resolves the coordinated module version
+- **WHEN** release preparation stamps the Go example module version template with the coordinated SDK release version
+- **THEN** a clean Go consumer can resolve that exact immutable module version without a repository-local `replace` directive, while checkout examples may continue using local replacements
+
+### Requirement: Native SDK consumer installation sources are explicit
+Consumer documentation SHALL provide reproducible installation instructions for each native SDK. The .NET SDK SHALL be distributed as a verified `.nupkg` asset on the coordinated GitHub Release and installed through a project-local NuGet feed.
+
+<!-- focused-spec:id=distribution.native-python-install -->
+#### Scenario: Python consumer installs the published SDK
+- **WHEN** a Python consumer follows the SDK installation guide
+- **THEN** the documented command installs the public PyPI distribution and the installed package exposes its declared type information
+
+<!-- focused-spec:id=distribution.native-dotnet-install -->
+#### Scenario: .NET consumer installs the GitHub Release package
+- **WHEN** a consumer follows the .NET SDK installation instructions for a coordinated release
+- **THEN** they can download the matching `.nupkg` from that GitHub Release, verify its SHA-256, and install the pinned package from a project-local NuGet feed
+
+<!-- focused-spec:id=distribution.native-dotnet-restore -->
+#### Scenario: .NET consumer restores reproducibly from the local feed
+- **WHEN** a consumer or CI environment restores a project using the documented GitHub Release package
+- **THEN** the matching package is present in the configured local feed before restore, and the instructions preserve existing NuGet sources and source mappings where applicable without treating the GitHub URL as a NuGet HTTP feed
+
+<!-- focused-spec:id=distribution.native-dotnet-reference -->
+#### Scenario: CLI reference stays current with the install guide
+- **WHEN** a reader follows the CLI reference to .NET SDK installation guidance
+- **THEN** it links to the current GitHub Release/local-feed installation guide without presenting a stale pinned version

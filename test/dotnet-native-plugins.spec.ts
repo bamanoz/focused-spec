@@ -10,7 +10,7 @@ import { decodeSelector, encodeSelector, readCatalog } from '@focused-spec/forma
 import runner from '@focused-spec/runner-scenarios-dotnet'
 
 const repository = fileURLToPath(new URL('..', import.meta.url))
-const sdkProject = join(repository, 'packages/sdk/dotnet/FocusedSpec.Scenarios/FocusedSpec.Scenarios.csproj')
+let sdkProject: string
 const suitePath = 'Suite.cs'
 const runnerOptions = { project: 'Consumer.csproj', framework: 'net9.0' }
 const configuration = {
@@ -36,7 +36,7 @@ function command(root: string, executable: string, args: readonly string[], opti
     encoding: 'utf8',
     timeout: options.timeout ?? 300000,
     maxBuffer: 8_000_000,
-    env: { ...(options.environment ?? process.env), NUGET_PACKAGES: join(temporary, 'nuget-packages') },
+    env: { ...(options.environment ?? process.env), NUGET_PACKAGES: options.environment?.NUGET_PACKAGES ?? join(temporary, 'nuget-packages') },
   })
 }
 
@@ -118,7 +118,7 @@ function context(root: string, signal = new AbortController().signal, options = 
 async function sdkProbe(program: string): Promise<void> {
   const root = await mkdtemp(join(temporary, 'sdk-probe-'))
   await put(root, 'NuGet.config', `<?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear/><add key="local" value="${feed}"/></packageSources></configuration>`)
-  await put(root, 'Probe.csproj', `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net9.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup><ItemGroup><PackageReference Include="FocusedSpec.Scenarios" Version="0.10.2"/></ItemGroup></Project>`)
+  await put(root, 'Probe.csproj', `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net9.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup><ItemGroup><PackageReference Include="FocusedSpec.Scenarios" Version="0.11.0"/></ItemGroup></Project>`)
   await put(root, 'Program.cs', program)
   const result = command(root, 'dotnet', ['run', '--project', 'Probe.csproj', '--nologo'])
   passed(result)
@@ -128,9 +128,15 @@ async function sdkProbe(program: string): Promise<void> {
 
 beforeAll(async () => {
   temporary = await mkdtemp(join(tmpdir(), 'focused-spec-dotnet-native-'))
+  const fixtureSdk = join(temporary, 'sdk')
+  await cp(join(repository, 'packages/sdk/dotnet/FocusedSpec.Scenarios'), fixtureSdk, {
+    recursive: true,
+    filter: path => !['bin', 'obj'].includes(basename(path)),
+  })
+  sdkProject = join(fixtureSdk, 'FocusedSpec.Scenarios.csproj')
   feed = join(temporary, 'feed')
   await mkdir(feed)
-  passed(command(repository, 'dotnet', ['pack', sdkProject, '--configuration', 'Release', '--output', feed, '--nologo']))
+  passed(command(fixtureSdk, 'dotnet', ['pack', sdkProject, '--configuration', 'Release', '--output', feed, '--nologo']))
   for (const directory of ['core', 'formats/scenarios-dotnet', 'runners/scenarios-dotnet']) {
     const root = join(repository, 'packages', directory)
     const packed = command(root, 'npm', ['pack', '--ignore-scripts', '--pack-destination', temporary, '--json'])
@@ -188,12 +194,30 @@ Console.WriteLine("verified");`)
     ])
   }, 300000)
 
+  it('omits localized Roslyn satellites while retaining static C# discovery', async () => {
+    const archive = tarballs.get('@focused-spec/format-scenarios-dotnet')!
+    const listing = command(temporary, 'tar', ['-tzf', archive])
+    passed(listing)
+    const files = listing.stdout.trim().split(/\r?\n/u)
+    expect(files).toEqual(expect.arrayContaining([
+      'package/dist/dotnet/Microsoft.CodeAnalysis.dll',
+      'package/dist/dotnet/Microsoft.CodeAnalysis.CSharp.dll',
+      'package/dist/dotnet/FocusedSpec.Catalog.dll',
+    ]))
+    expect(files.filter(path => /\/[^/]+\/Microsoft\.CodeAnalysis(?:\.CSharp)?\.resources\.dll$/u.test(path))).toEqual([])
+    const source = nativeSource([{ id: 'static-id', given: '1', when: '1', expect: '0' }])
+    const catalog = await readCatalog(suitePath, source)
+    expect(catalog.scenarios).toEqual([
+      { id: 'static-id', name: 'Scenario static-id', line: source.split('\n').findIndex(line => line.includes('new("static-id"')) + 1 },
+    ])
+  }, 300000)
+
   it('runs distributed plugins without checkout access', async () => {
     const root = await mkdtemp(join(temporary, 'distributed-'))
     await put(root, 'package.json', '{"name":"distributed-dotnet","private":true,"type":"module"}\n')
     passed(command(root, 'npm', ['install', '--ignore-scripts', '--prefer-offline', '--no-audit', '--no-fund', ...tarballs.values()]))
     await put(root, 'NuGet.config', `<?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear/><add key="local" value="${feed}"/><add key="nuget" value="https://api.nuget.org/v3/index.json"/></packageSources></configuration>`)
-    await put(root, 'Consumer.csproj', `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net9.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup><ItemGroup><PackageReference Include="FocusedSpec.Scenarios" Version="0.10.2"/></ItemGroup></Project>`)
+    await put(root, 'Consumer.csproj', `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net9.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup><ItemGroup><PackageReference Include="FocusedSpec.Scenarios" Version="0.11.0"/></ItemGroup></Project>`)
     await put(root, suitePath, nativeSource([{ id: 'account', given: '5', when: '5', expect: '0' }]))
     await put(root, '.focused-spec/config.yaml', JSON.stringify(configuration))
     passed(command(root, 'dotnet', ['restore', 'Consumer.csproj', '--nologo']))
@@ -214,6 +238,28 @@ Console.WriteLine("verified");`)
     }
     const lock = await readFile(join(root, 'package-lock.json'), 'utf8')
     expect(lock).not.toContain(repository)
+  }, 300000)
+
+  it('preserves restored consumer NuGet assets after bridge execution', async () => {
+    const root = await mkdtemp(join(temporary, 'nuget-assets-preserved-'))
+    await put(root, 'package.json', '{"name":"nuget-assets-consumer","private":true,"type":"module"}\n')
+    await symlink(join(repository, 'node_modules'), join(root, 'node_modules'), 'dir')
+    await put(root, 'NuGet.config', `<?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear/><add key="local" value="${feed}"/><add key="nuget" value="https://api.nuget.org/v3/index.json"/></packageSources></configuration>`)
+    await put(root, 'Consumer.csproj', `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net9.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup><ItemGroup><Compile Include="${suitePath}"/><PackageReference Include="Humanizer.Core" Version="2.14.1"/><ProjectReference Include="${sdkProject.replaceAll('&', '&amp;')}"/></ItemGroup></Project>`)
+    await put(root, suitePath, nativeSource([{ id: 'account', given: '5', when: '5', expect: '0' }]))
+    await put(root, '.focused-spec/config.yaml', JSON.stringify(configuration))
+    const nugetPackages = join(root, '.nuget', 'packages')
+    const environment = { ...process.env, NUGET_PACKAGES: nugetPackages }
+    passed(command(root, 'dotnet', ['restore', 'Consumer.csproj', '--nologo'], { environment }))
+    const assetsPath = join(root, 'obj', 'project.assets.json')
+    const before = JSON.parse(await readFile(assetsPath, 'utf8')) as { packageFolders: Record<string, unknown> }
+    const nugetConfiguration = await readFile(join(root, 'NuGet.config'), 'utf8')
+    passed(cli(root, ['run', '--scenario', 'account'], environment))
+    const after = JSON.parse(await readFile(assetsPath, 'utf8')) as { packageFolders: Record<string, unknown> }
+    expect(after.packageFolders).toEqual(before.packageFolders)
+    expect(await readFile(join(root, 'NuGet.config'), 'utf8')).toBe(nugetConfiguration)
+    expect((await readdir(join(root, 'obj'))).filter(name => name.startsWith('focused-spec-dotnet-bridge-'))).toEqual([])
+    passed(command(root, 'dotnet', ['build', 'Consumer.csproj', '--no-restore', '--nologo'], { environment }))
   }, 300000)
 
   it('executes only the exact selected native scenario', async () => {
@@ -244,10 +290,10 @@ Console.WriteLine("verified");`)
     const resolved = await runner.resolve({ ...context(root), selectors: scenarios.map(item => encodeSelector(suitePath, item.id)) })
     expect(resolved.errors).toEqual([])
     const result = await runner.run({ ...context(root), targets: resolved.targets })
-    expect(result.results).toEqual(expect.arrayContaining([
-      expect.objectContaining({ status: 'fail', diagnostic: expect.stringContaining('expected 1, actual 1') }),
-      expect.objectContaining({ status: 'fail', diagnostic: expect.stringContaining('actual System.Int32[]') }),
-    ]))
+    expect(result.results.map(item => ({ targetId: item.targetId, status: item.status }))).toEqual(
+      resolved.targets.map(target => ({ targetId: target.targetId, status: 'fail' })),
+    )
+    expect((await readFile(join(root, 'actions'), 'utf8')).trim().split('\n')).toEqual(['int-long', 'null-empty'])
   }, 300000)
 
   it('rejects a selected identity changed after resolution', async () => {

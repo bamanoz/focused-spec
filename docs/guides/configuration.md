@@ -192,10 +192,9 @@ npx focused-spec run --root examples/openspec
 | --- | --- | --- |
 | [OpenSpec](../../examples/openspec/) | Marker on the existing Scenario through the registry adapter | The commands above |
 | [Spec Kit](../../examples/spec-kit/) | Marker on the existing numbered acceptance item | `npx focused-spec validate --root examples/spec-kit --scope 001-blocked-account --strict` then `npx focused-spec run --root examples/spec-kit --scope 001-blocked-account` |
-| [BMad](../../examples/bmad/) | Registry `source` binding to generated `SPEC.md` ID `CAP-1` | `npx focused-spec validate --root examples/bmad --scope order-limit --strict` then `npx focused-spec run --root examples/bmad --scope order-limit` |
-| [Standalone worktree consumer](../../examples/worktree-consumer/) | Marker on its native scenario through the registry adapter | Commit the example as a separate Git repository, add a worktree, then run `npm ci` and `npm run evidence` there |
+| [Standalone worktree consumer](../../examples/worktree-consumer/) | Marker on its native scenario through the registry adapter | Checkout-bound example: keep this directory at `examples/worktree-consumer/` inside the focused-spec checkout, then run `npm ci` and `npm run evidence` from that directory. Its `file:../../packages/...` dependencies are intentionally relative to that location. |
 
-The examples retain real tests and explicitly installed adapters/runners. Each fresh standalone worktree needs its own `npm ci`.
+The worktree consumer is not a general external package example: its `file:` dependencies point two levels up to this checkout's `packages/` directories. To reproduce it, use the stated checkout path (or update every `file:` dependency to an absolute/local path for another checkout) before running `npm ci`.
 
 ### Standalone executable bank specifications
 
@@ -263,9 +262,9 @@ dotnet run --project examples/scenarios/dotnet/ScenarioBank.Demo/ScenarioBank.De
 For Python CLI execution, prepare one explicit environment and use its interpreter for both inspection and execution. The example selects `python3` from `PATH`; no global SDK installation is assumed:
 
 ```sh
-uv venv --python 3.11 .eval-cache/python-bank-env
-uv pip install --python .eval-cache/python-bank-env/bin/python3 pytest ./packages/sdk/python
-export PATH="$PWD/.eval-cache/python-bank-env/bin:$PATH"
+uv venv --python 3.11 .python-bank-env
+uv pip install --python .python-bank-env/bin/python3 pytest ./packages/sdk/python
+export PATH="$PWD/.python-bank-env/bin:$PATH"
 python3 -m pytest examples/scenarios/python/tests -q
 python3 examples/scenarios/python/demo.py
 ./node_modules/.bin/focused-spec list --root examples/scenarios/python
@@ -282,6 +281,7 @@ These environment commands use POSIX paths; on Windows select the environment's 
 The .NET example explicitly selects `Bank/ScenarioBank.Bank.csproj` and `net9.0`; install .NET SDK 9+ and restore the ordinary consumer project before execution. Static inspection uses the plugin's distributed parser without consumer MSBuild, application loading or parser restore:
 
 ```sh
+npm run build:dotnet
 dotnet restore examples/scenarios/dotnet/Bank/ScenarioBank.Bank.csproj
 ./node_modules/.bin/focused-spec list --root examples/scenarios/dotnet
 ./node_modules/.bin/focused-spec show account.withdraw.entire-balance --root examples/scenarios/dotnet

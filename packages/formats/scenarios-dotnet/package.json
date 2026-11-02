@@ -1,6 +1,6 @@
 {
   "name": "@focused-spec/format-scenarios-dotnet",
-  "version": "0.10.2",
+  "version": "0.11.0",
   "description": "Static native .NET scenario format for focused-spec",
   "repository": {
     "type": "git",
@@ -18,11 +18,19 @@
       "import": "./dist/catalog.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "node ../../../scripts/build-package.mjs && node build.mjs"
   },
-  "engines": {"node": ">=22.16.0"},
-  "peerDependencies": {"focused-spec": "^0.10.2"},
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "peerDependencies": {
+    "focused-spec": "^0.11.0"
+  },
   "license": "MIT"
 }

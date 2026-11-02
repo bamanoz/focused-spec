@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { cp, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -63,7 +64,11 @@ function activatedTranscript(workspace: string): string {
 }
 
 function alive(pid: number): boolean {
-  try { process.kill(pid, 0); return true } catch { return false }
+  try {
+    process.kill(pid, 0)
+    if (process.platform === 'linux') return !readFileSync(`/proc/${pid}/stat`, 'utf8').includes(') Z ')
+    return true
+  } catch { return false }
 }
 
 async function eventuallyDead(pid: number): Promise<boolean> {

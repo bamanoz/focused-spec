@@ -1,5 +1,5 @@
 import { pluginUrl } from './plugin-module.js'
-import { isJsonValue } from './config.js'
+import { isJsonValue } from './json.js'
 import type { JsonValue, ResolvedTarget, RunnerPlugin } from './runner-api.js'
 
 interface HostRequestBase {
@@ -41,7 +41,7 @@ process.on('message', async message => {
   const request = message as HostRequest
   try {
     // The module path is selected by the repository configuration, so a static import cannot represent it.
-    const loaded = await import(pluginUrl(request.modulePath, request.projectRoot))
+    const loaded = await import(await pluginUrl(request.modulePath, request.projectRoot))
     const plugin = loaded.default as RunnerPlugin | undefined
     if (plugin === undefined || plugin.apiVersion !== 1 || typeof plugin.resolve !== 'function' || typeof plugin.run !== 'function') {
       throw new Error('runner module must default-export a RunnerPlugin with apiVersion 1')

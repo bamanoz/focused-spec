@@ -1,0 +1,62 @@
+name: focused-spec run
+description: Run focused-spec and write a JUnit report
+inputs:
+  report-path:
+    description: JUnit report destination, relative to the focused-spec project root (the caller working directory by default)
+    required: false
+    default: focused-spec-report.xml
+  args:
+    description: JSON array of additional focused-spec run arguments, for example ["--scope", "payments"]
+    required: false
+    default: "[]"
+outputs:
+  report-path:
+    description: Configured JUnit report destination
+    value: ${{ steps.run.outputs.report-path }}
+  outcome:
+    description: focused-spec CLI outcome (success or failure)
+    value: ${{ steps.run.outputs.outcome }}
+runs:
+  using: composite
+  steps:
+    - id: run
+      name: Run focused-spec
+      shell: node {0}
+      env:
+        INPUT_REPORT_PATH: ${{ inputs.report-path }}
+        INPUT_ARGS: ${{ inputs.args }}
+      run: |
+        "use strict"
+        // The composite action's `node {0}` shell runs scripts in CommonJS mode.
+        const { appendFileSync } = require('node:fs')
+        const { randomUUID } = require('node:crypto')
+        const { spawnSync } = require('node:child_process')
+
+        const reportPath = process.env.INPUT_REPORT_PATH
+        const outputFile = process.env.GITHUB_OUTPUT
+        if (!reportPath || !outputFile) {
+          console.error('report-path and GITHUB_OUTPUT are required')
+          process.exit(1)
+        }
+
+        let args
+        try {
+          args = JSON.parse(process.env.INPUT_ARGS ?? '[]')
+        } catch {
+          console.error('args must be a JSON array of focused-spec run arguments')
+          process.exit(2)
+        }
+        if (!Array.isArray(args) || !args.every((arg) => typeof arg === 'string') || args.some((arg) => arg === '--junit' || arg.startsWith('--junit='))) {
+          console.error('args must be a JSON string array and must not include --junit')
+          process.exit(2)
+        }
+
+        const result = spawnSync('focused-spec', ['run', ...args, '--junit', reportPath], {
+          stdio: 'inherit',
+          shell: false,
+        })
+        const exitCode = result.error ? 1 : (result.status ?? 1)
+        const delimiter = `focused_spec_${randomUUID()}`
+        appendFileSync(outputFile, `report-path<<${delimiter}\n${reportPath}\n${delimiter}\noutcome<<${delimiter}\n${exitCode === 0 ? 'success' : 'failure'}\n${delimiter}\n`)
+        if (result.error) console.error(`Unable to start focused-spec: ${result.error.message}`)
+        process.exit(exitCode)

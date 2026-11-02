@@ -26,8 +26,23 @@ async function put(root: string, path: string, content: string) {
   await mkdir(dirname(join(root, path)), { recursive: true })
   await writeFile(join(root, path), content)
 }
-function command(root: string, executable: string, args: string[], timeout = 120000) {
-  return spawnSync(executable, args, { cwd: root, encoding: 'utf8', timeout, maxBuffer: 8000000, env: { ...process.env, GOWORK: 'off', GOTOOLCHAIN: 'local' } })
+function command(root: string, executable: string, args: string[], timeout = 120000, extraEnv: NodeJS.ProcessEnv = {}) {
+  return spawnSync(executable, args, { cwd: root, encoding: 'utf8', timeout, maxBuffer: 8000000, env: { ...process.env, GOWORK: 'off', GOTOOLCHAIN: 'local', ...extraEnv } })
+}
+async function publishLocalGoProxy(version: string): Promise<string> {
+  const proxy = await mkdtemp(join(temporary, 'go-proxy-'))
+  const module = 'github.com/bamanoz/focused-spec/packages/sdk/go'
+  const moduleRoot = join(proxy, module, '@v')
+  const stage = join(proxy, `${module}@${version}`)
+  await mkdir(moduleRoot, { recursive: true })
+  await cp(join(repository, 'packages/sdk/go'), stage, { recursive: true })
+  const info = JSON.stringify({ Version: version, Time: '2026-01-01T00:00:00Z' })
+  await writeFile(join(moduleRoot, `${version}.info`), info)
+  await writeFile(join(moduleRoot, `${version}.mod`), await readFile(join(repository, 'packages/sdk/go/go.mod')))
+  const archive = join(moduleRoot, `${version}.zip`)
+  const zipped = command(proxy, 'zip', ['-qr', archive, `${module}@${version}`])
+  passed(zipped)
+  return proxy
 }
 function cli(root: string, ...args: string[]) {
   return command(root, process.execPath, [join(root, 'node_modules/focused-spec/dist/cli.js'), ...args, '--json'])
@@ -98,8 +113,8 @@ async function sdkProbe(body: string, declarations = '') {
   await cp(join(repository, 'packages/sdk/go'), join(root, 'sdk'), { recursive: true })
   await put(root, 'go.mod', `module example.com/sdk-only\n\ngo 1.23\nrequire ${sdkModule} v0.0.0\nreplace ${sdkModule} => ./sdk\n`)
   await put(root, 'main.go', `package main
-import("context";"encoding/json";"errors";"fmt";"reflect";"os";"strings";"sync";scenarios "${sdkModule}")
-var _ = json.Marshal; var _ = errors.Is; var _ = reflect.DeepEqual; var _ = os.Exit; var _ = strings.Contains; var _ = sync.WaitGroup{}
+import("context";"encoding/json";"errors";"fmt";"math";"reflect";"os";"strings";"sync";scenarios "${sdkModule}")
+var _ = json.Marshal; var _ = errors.Is; var _ = math.NaN; var _ = reflect.DeepEqual; var _ = os.Exit; var _ = strings.Contains; var _ = sync.WaitGroup{}
 func check(ok bool, message string){if !ok{panic(message)}}
 ${declarations}
 func main(){ctx:=context.Background(); _=ctx; ${body}; fmt.Println("verified")}
@@ -113,6 +128,10 @@ const simple = `s:=scenarios.Scenario[int,int,int]{ID:"account",Name:"subtract",
 
 describe('Go executable scenarios', () => {
   it('executes the Go SDK without Node dependencies', async () => {
+    const metadata = await readFile(join(repository, 'packages/sdk/go/go.mod'), 'utf8')
+    expect(metadata).toMatch(/^module github\.com\/bamanoz\/focused-spec\/packages\/sdk\/go\s+go 1\.23\s*$/u)
+    expect(metadata).not.toMatch(/^require\s/mu)
+    expect(await readFile(join(repository, 'examples/scenarios/go/go.mod'), 'utf8')).toMatch(/^require github\.com\/bamanoz\/focused-spec\/packages\/sdk\/go v0\.0\.0-COORDINATED$/mu)
     await sdkProbe(`${simple} d.When=func(ctx context.Context,s int,v int)(int,error){scenarios.Explain(ctx,"subtracted",map[string]any{"value":v});return s-v,nil}; s.When=3; s.Expect=2; actual,err:=scenarios.VerifySpecification(ctx,d,s); check(err==nil && actual==2,"real subtraction did not pass"); s.Expect=9; _,err=scenarios.VerifySpecification(ctx,d,s); check(err!=nil,"incorrect expectation passed")`)
   }, 120000)
   it('observes actual Go verification through one event channel', async () => {
@@ -153,6 +172,16 @@ plainScenario:=scenarios.Scenario[map[string]any,int,int64]{ID:"plain",Name:"alr
 plainDriver:=scenarios.Driver[map[string]any,map[string]any,int,int64]{Given:func(ctx context.Context,v map[string]any)(map[string]any,error){return v,nil},When:func(ctx context.Context,v map[string]any,_ int)(int64,error){return v["balance"].([]any)[0].(int64),nil}}
 plainContext:=scenarios.WithEvents(context.Background(),func(event scenarios.ExecutionEvent){if observed,ok:=event.(scenarios.ObservationEvent);ok && observed.Name=="Given" {observed.Value.(map[string]any)["balance"].([]any)[0]=int64(99)}})
 _,err=scenarios.VerifySpecification(plainContext,plainDriver,plainScenario);check(err==nil && plain["balance"].([]any)[0]==int64(5),"already-portable graph aliased declaration or driver input")
+`)
+  }, 120000)
+  it('validates Go explanations without an event sink', async () => {
+    await sdkProbe(`
+for _, test := range []struct{ message string; data any }{{" ", nil}, {"invalid data", math.NaN()}} {
+ rejected:=false
+ func(){defer func(){rejected=recover()!=nil}();scenarios.Explain(context.Background(),test.message,test.data)}()
+ check(rejected,"invalid explanation passed without event sink")
+}
+scenarios.Explain(context.Background(),"valid without event sink",map[string]int{"count":1})
 `)
   }, 120000)
   it('preserves exact Go verification outside portable JSON values', async () => {
@@ -433,7 +462,23 @@ var AccountDriver = scenarios.Driver[*bank.Account,[]bank.Event,bank.Command,[]b
     const root = await mkdtemp(join(temporary, 'consumer-'))
     await cp(join(repository, 'examples/scenarios/go'), root, { recursive: true, filter: path => !path.includes('node_modules') })
     await cp(join(repository, 'packages/sdk/go'), join(root, 'sdk'), { recursive: true })
-    await put(root, 'go.mod', `module example.com/scenario-bank\n\ngo 1.23\nrequire ${sdkModule} v0.0.0\nreplace ${sdkModule} => ./sdk\n`)
+    const template = await readFile(join(root, 'go.mod'), 'utf8')
+    const version = 'v0.11.0'
+    const stamped = template.replace('v0.0.0-COORDINATED', version)
+    expect(stamped).not.toBe(template)
+    expect(stamped).toContain(`require ${sdkModule} ${version}`)
+    expect(stamped).toContain(`replace ${sdkModule} => ../../../packages/sdk/go`)
+    const proxy = await publishLocalGoProxy(version)
+    const noReplace = stamped.replace(`replace ${sdkModule} => ../../../packages/sdk/go\n`, '')
+    await put(root, 'go.mod', noReplace)
+    expect(await readFile(join(root, 'go.mod'), 'utf8')).not.toMatch(/^replace\s/mu)
+    const downloadEnv = { GOPROXY: `file://${proxy}`, GOSUMDB: 'off', GONOSUMDB: sdkModule, GOMODCACHE: join(root, '.module-cache'), GOFLAGS: '-modcacherw' }
+    passed(command(root, 'go', ['mod', 'download', `${sdkModule}@${version}`], 120000, downloadEnv))
+    const resolved = command(root, 'go', ['list', '-m', '-f', '{{.Version}}', sdkModule], 120000, downloadEnv)
+    passed(resolved)
+    expect(resolved.stdout.trim()).toBe(version)
+    passed(command(root, 'go', ['test', './...'], 120000, downloadEnv))
+    await put(root, 'go.mod', stamped.replace(`=> ../../../packages/sdk/go`, '=> ./sdk'))
     await put(root, 'package.json', '{"name":"packed-go-bank","private":true,"type":"module"}')
     passed(command(root, 'npm', ['install', '--ignore-scripts', '--prefer-offline', '--no-audit', '--no-fund', ...tarballs.values()]))
     passed(command(root, 'go', ['test', './...']))

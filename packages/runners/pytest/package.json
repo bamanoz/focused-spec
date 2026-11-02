@@ -1,13 +1,32 @@
 {
   "name": "@focused-spec/runner-pytest",
-  "version": "0.10.2",
+  "version": "0.11.0",
   "description": "Exact pytest evidence runner for focused-spec",
-  "repository": {"type": "git", "url": "git+https://github.com/bamanoz/focused-spec.git", "directory": "packages/runners/pytest"},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bamanoz/focused-spec.git",
+    "directory": "packages/runners/pytest"
+  },
   "type": "module",
-  "exports": {".": {"types": "./dist/index.d.ts", "import": "./dist/index.js"}},
-  "files": ["dist", "python/_focused_spec_reporter.py", "README.md"],
-  "scripts": {"build": "node ../../../scripts/build-package.mjs"},
-  "engines": {"node": ">=22.16.0"},
-  "peerDependencies": {"focused-spec": "^0.10.2"},
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "python/_focused_spec_reporter.py",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node ../../../scripts/build-package.mjs"
+  },
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "peerDependencies": {
+    "focused-spec": "^0.11.0"
+  },
   "license": "MIT"
 }

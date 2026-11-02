@@ -53,9 +53,9 @@ public sealed class DriverContext
     public void Explain(string message, object? data = null)
     {
         if (string.IsNullOrWhiteSpace(message)) throw new ArgumentException("Explanation message must be nonblank.", nameof(message));
+        ScenarioValidation.ValidateData(data, "explanation data");
         if (_observer is not null)
         {
-            ScenarioValidation.ValidateData(data, "explanation data");
             _observer(new ExecutionEvent("explanation", Message: message, Data: data is null ? null : ScenarioValidation.Clone(data)));
         }
     }
@@ -73,7 +73,7 @@ public sealed record ExecutionEvent(string Kind, string? Name = null, object? Va
 public sealed class ScenarioMismatchException : Exception
 {
     public ScenarioMismatchException(string scenarioId, string scenarioName, object? expected, object? actual)
-        : base($"{scenarioId}: {scenarioName}: expected {expected}, actual {actual}")
+        : base($"{scenarioId}: {scenarioName}: expected {ScenarioValidation.Format(expected)}, actual {ScenarioValidation.Format(actual)}")
     {
         ScenarioId = scenarioId;
         ScenarioName = scenarioName;
@@ -103,12 +103,115 @@ public static class ScenarioValidation
     {
         ArgumentNullException.ThrowIfNull(suite);
         if (suite.Scenarios.Count == 0) throw new ArgumentException("Suite must contain at least one scenario.", nameof(suite));
+        if (suite.Driver is not null) ValidateBinding(suite.Driver);
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var scenario in suite.Scenarios)
         {
             Validate(scenario);
             if (!ids.Add(scenario.Id)) throw new ArgumentException($"Duplicate scenario ID: {scenario.Id}", nameof(suite));
         }
+    }
+
+    private static void ValidateBinding(ScenarioDriverBinding binding)
+    {
+        var path = binding.Path;
+        if (string.IsNullOrWhiteSpace(path) || path.Any(char.IsControl) || path.Contains('\\') || path.Contains(':') || path.StartsWith('/') ||
+            path.Split('/').Any(segment => segment is "" or "." or ".."))
+            throw new ArgumentException("Driver binding path must be a safe relative source path.", nameof(binding));
+
+        var parts = binding.Export?.Split('.');
+        if (parts is null || parts.Length < 2 || parts.Any(part => !IsIdentifier(part)))
+            throw new ArgumentException("Driver binding export must be a fully qualified public static field or parameterless property name.", nameof(binding));
+    }
+
+    private static bool IsIdentifier(string value) => value.Length > 0 &&
+        (char.IsLetter(value[0]) || value[0] == '_') && value.Skip(1).All(character => char.IsLetterOrDigit(character) || character == '_');
+
+    internal static string Format(object? value)
+    {
+        var builder = new System.Text.StringBuilder();
+        var ancestors = new HashSet<object>(ReferenceComparer.Instance);
+        AppendFormatted(value, builder, ancestors, 0);
+        return builder.ToString();
+    }
+
+    private static void AppendFormatted(object? value, System.Text.StringBuilder builder, HashSet<object> ancestors, int depth)
+    {
+        if (builder.Length >= 4096) return;
+        if (value is null) { builder.Append("null"); return; }
+        var type = value.GetType();
+        if (value is string text) { AppendQuoted(text, builder); return; }
+        if (value is char character) { AppendQuoted(character.ToString(), builder); return; }
+        if (type.IsPrimitive || type.IsEnum || value is decimal or DateTime or DateTimeOffset or TimeSpan or Guid)
+        {
+            builder.Append(value switch
+            {
+                bool boolean => boolean ? "true" : "false",
+                IFormattable scalar when type.IsPrimitive || type.IsEnum || value is decimal or DateTime or DateTimeOffset or TimeSpan or Guid => scalar.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
+                _ => $"<{type.FullName ?? type.Name}>",
+            });
+            return;
+        }
+        if (depth >= 12) { builder.Append($"<{type.Name}:depth-limit>"); return; }
+        if (!type.IsValueType && !ancestors.Add(value)) { builder.Append($"<{type.Name}:cycle>"); return; }
+        try
+        {
+            if (value is IDictionary dictionary)
+            {
+                builder.Append('{');
+                var count = 0;
+                foreach (DictionaryEntry entry in dictionary)
+                {
+                    if (count == 32 || builder.Length >= 4096) { builder.Append("..."); break; }
+                    if (count++ > 0) builder.Append(", ");
+                    AppendFormatted(entry.Key, builder, ancestors, depth + 1);
+                    builder.Append(": ");
+                    AppendFormatted(entry.Value, builder, ancestors, depth + 1);
+                }
+                builder.Append('}');
+            }
+            else if (value is IEnumerable sequence)
+            {
+                builder.Append('[');
+                var count = 0;
+                foreach (var item in sequence)
+                {
+                    if (count == 32 || builder.Length >= 4096) { builder.Append("..."); break; }
+                    if (count++ > 0) builder.Append(", ");
+                    AppendFormatted(item, builder, ancestors, depth + 1);
+                }
+                builder.Append(']');
+            }
+            else
+            {
+                builder.Append(type.Name).Append('{');
+                var count = 0;
+                foreach (var field in DataFields(type))
+                {
+                    if (count == 32 || builder.Length >= 4096) { builder.Append("..."); break; }
+                    if (count++ > 0) builder.Append(", ");
+                    builder.Append(field.Name).Append('=');
+                    try { AppendFormatted(field.GetValue(value), builder, ancestors, depth + 1); }
+                    catch { builder.Append("<unavailable>"); }
+                }
+                builder.Append('}');
+            }
+        }
+        catch { builder.Append($"<{type.Name}:unavailable>"); }
+        finally { if (!type.IsValueType) ancestors.Remove(value); }
+    }
+
+    private static void AppendQuoted(string value, System.Text.StringBuilder builder)
+    {
+        builder.Append('"');
+        foreach (var character in value)
+        {
+            if (builder.Length >= 4090) { builder.Append("..."); break; }
+            if (character is '"' or '\\') builder.Append('\\').Append(character);
+            else if (char.IsControl(character)) builder.Append('?');
+            else builder.Append(character);
+        }
+        builder.Append('"');
     }
 
     internal static bool ValidId(string? id) => !string.IsNullOrWhiteSpace(id) && !id.Any(char.IsControl);
@@ -139,7 +242,7 @@ public static class ScenarioValidation
                 foreach (DictionaryEntry entry in dictionary)
                 {
                     Visit(entry.Key, $"{label}.key", ancestors);
-                    Visit(entry.Value, $"{label}[{entry.Key}]", ancestors);
+                    Visit(entry.Value, $"{label}.value", ancestors);
                 }
                 return;
             }

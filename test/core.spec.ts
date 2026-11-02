@@ -209,7 +209,20 @@ describe('native specification parsing', () => {
     expect(document.items.some(item => item.markerId === 'auth.login.legacy')).toBe(false)
     const messages = document.violations.map(value => value.message).join('\n')
     expect(messages).toContain('@focused-spec/format-inline')
-    expect(messages).toContain('instructions --protocol 1 --topic workflow --json')
+    expect(messages).toContain('instructions --protocol 1 --topic upgrade --json')
+  })
+})
+
+describe('Markdown adapter migration guidance', () => {
+  it('directs inline metadata to the selected CLI upgrade topic', () => {
+    const result = markdownFormat.parse({
+      projectRoot: '/project',
+      path: 'specs/inline.md',
+      source: ['#### Scenario: Legacy', '- **ID**: `legacy.id`', '- **EVIDENCE**: `unit::legacy`'].join('\n'),
+      options: null,
+      signal: new AbortController().signal,
+    })
+    expect(result.diagnostics.map(diagnostic => diagnostic.message).join('\n')).toContain('topic upgrade')
   })
 })
 
@@ -316,6 +329,7 @@ describe('inline specification parsing', () => {
       expect.objectContaining({ focusedId: 'inline.no-ancestry', message: expect.stringMatching(/REVISES.*(?:unsupported|not supported)/iu) }),
     ]))
     expect(parsed.items).toEqual([expect.objectContaining({ markerId: 'inline.no-ancestry', evidence: ['unit::current'] })])
+    expect(parsed.diagnostics.map(diagnostic => diagnostic.message).join('\n')).toContain('topic upgrade')
   })
 })
 

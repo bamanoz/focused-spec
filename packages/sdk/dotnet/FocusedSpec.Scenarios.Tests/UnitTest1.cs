@@ -168,4 +168,105 @@ public sealed class ScenarioTests
         Assert.Equal(new[] { 1 }, ((NestedData)error.Expected!).Values);
         Assert.Equal(new[] { 1, 2 }, ((NestedData)error.Actual!).Values);
     }
-}
+    private sealed class RenderData(int[] values)
+    {
+        public int[] Values = values;
+        public override string ToString() => throw new InvalidOperationException("user ToString must not run");
+    }
+
+    private static class DriverExports
+    {
+        public static bool Accessed;
+        public static object Driver
+        {
+            get
+            {
+                Accessed = true;
+                return new object();
+            }
+        }
+    }
+
+    [Fact]
+    public void ValidateRejectsInvalidDriverBinding()
+    {
+        DriverExports.Accessed = false;
+        var scenario = new Scenario<int, int, int>("binding", "Invalid binding", 1, 1, 2);
+        var invalidBindings = new[]
+        {
+            new ScenarioDriverBinding("../outside.cs", "FocusedSpec.Scenarios.Tests.DriverExports.Driver"),
+            new ScenarioDriverBinding("ScenarioTests.cs", "FocusedSpec.Scenarios.Tests.DriverExports.not-valid"),
+            new ScenarioDriverBinding(" ", "FocusedSpec.Scenarios.Tests.DriverExports.Driver"),
+            new ScenarioDriverBinding("bad\npath.cs", "FocusedSpec.Scenarios.Tests.DriverExports.Driver"),
+            new ScenarioDriverBinding("ScenarioTests.cs", ""),
+            new ScenarioDriverBinding("ScenarioTests.cs", "FocusedSpec.1Invalid.Driver"),
+        };
+
+        foreach (var binding in invalidBindings)
+        {
+            var suite = new ScenarioSuite<int, int, int>([scenario], binding);
+            Assert.Throws<ArgumentException>(() => ScenarioValidation.Validate(suite));
+        }
+        Assert.False(DriverExports.Accessed);
+    }
+    [Fact]
+    public async Task MismatchMessageRendersStructuralValuesWithoutCallingToString()
+    {
+        var scenario = new Scenario<RenderData, int, RenderData>("render", "Structural mismatch", new([1, 2]), 1, new([1, 2]));
+        var driver = new ScenarioDriver<RenderData, RenderData, int, RenderData>
+        {
+            Given = (value, _) => ValueTask.FromResult(value),
+            When = (_, _, _) => ValueTask.FromResult(new RenderData([1, 3])),
+        };
+
+        var error = await Assert.ThrowsAsync<ScenarioMismatchException>(async () => await ScenarioExecutor.VerifyAsync(driver, scenario));
+        Assert.Contains("Values", error.Message);
+        Assert.Contains("[1, 2]", error.Message);
+        Assert.Contains("[1, 3]", error.Message);
+        Assert.Equal(new[] { 1, 2 }, ((RenderData)error.Expected!).Values);
+        Assert.Equal(new[] { 1, 3 }, ((RenderData)error.Actual!).Values);
+    }
+    [Fact]
+    public async Task SuccessfulActualSnapshotPrecedesCleanup()
+    {
+        var scenario = new Scenario<RenderData, int, RenderData>("snapshot", "Successful snapshot", new([1, 2]), 1, new([1, 2]));
+        var driver = new ScenarioDriver<RenderData, RenderData, int, RenderData>
+        {
+            Given = (value, _) => ValueTask.FromResult(value),
+            When = (subject, _, _) => ValueTask.FromResult(subject),
+            Cleanup = (subject, _) => { subject.Values[0] = 99; return ValueTask.CompletedTask; },
+        };
+
+        var actual = await ScenarioExecutor.VerifyAsync(driver, scenario);
+        Assert.Equal(new[] { 1, 2 }, actual.Values);
+        Assert.Equal(new[] { 1, 2 }, scenario.Given.Values);
+    }
+    [Fact]
+    public async Task ExplainValidatesDataWithoutObserver()
+    {
+        var scenario = new Scenario<int, int, int>("explain", "Invalid explanation data", 1, 1, 1);
+        foreach (var observer in new Action<ExecutionEvent>?[] { null, _ => { } })
+        {
+            var driver = new ScenarioDriver<int, int, int, int>
+            {
+                Given = (value, _) => ValueTask.FromResult(value),
+                When = (subject, _, context) =>
+                {
+                    context.Explain("invalid data", new { Unsupported = double.NaN });
+                    return ValueTask.FromResult(subject);
+                },
+            };
+            await Assert.ThrowsAsync<ArgumentException>(async () => await ScenarioExecutor.VerifyAsync(driver, scenario, observer: observer));
+            var blank = new ScenarioDriver<int, int, int, int>
+            {
+                Given = (value, _) => ValueTask.FromResult(value),
+                When = (subject, _, context) =>
+                {
+                    context.Explain(" ");
+                    return ValueTask.FromResult(subject);
+                },
+            };
+            await Assert.ThrowsAsync<ArgumentException>(async () => await ScenarioExecutor.VerifyAsync(blank, scenario, observer: observer));
+        }
+    }
+ }

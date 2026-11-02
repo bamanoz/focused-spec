@@ -1,0 +1,8 @@
+scopes:
+  current:
+    user-docs.onboarding.inline-vitest-example:
+      evidence:
+        - vitest::test/onboarding.spec.ts::README consumer quick start > resolves and runs the exact documented inline Vitest selector
+    user-docs.navigation.progressive-map:
+      evidence:
+        - vitest::test/documentation.spec.ts::public documentation navigation > keeps local documentation navigation reachable from public entry points

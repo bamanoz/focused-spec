@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import copy
+import inspect
 import keyword
 import math
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Protocol, TypeVar
 
 Given = TypeVar("Given")
 When = TypeVar("When")
@@ -46,12 +46,14 @@ class ExecutionEvent:
     message: str | None = None
     data: Any = None
 
+class Explain(Protocol):
+    def __call__(self, message: str, data: Any | None = None) -> None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class DriverContext:
     scenario_id: str
-    explain: Callable[[str, Any], None]
-
+    explain: Explain
 
 @dataclass(frozen=True, slots=True)
 class Driver(Generic[Subject, Given, When, Expect]):
@@ -69,9 +71,8 @@ class ScenarioMismatch(AssertionError):
         super().__init__(f"{scenario.id}: {scenario.name}: expected {self.expected!r}, actual {self.actual!r}")
 
 
-class ScenarioCancelled(asyncio.CancelledError):
-    """Raised when cancellation prevents a scenario from producing a pass."""
-
+class ScenarioCancelled(Exception):
+    """Raised when cooperative cancellation prevents a scenario from passing."""
 
 def _valid_id(value: str) -> bool:
     return bool(value.strip()) and not any(ord(char) < 32 or 127 <= ord(char) < 160 for char in value)
@@ -152,14 +153,93 @@ def _equal(left: Any, right: Any) -> bool:
     return left == right
 
 
-def _await(value: Any) -> Any:
-    if not hasattr(value, "__await__"):
-        return value
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(value)
+def _reject_awaitable(value: Any) -> None:
+    if inspect.iscoroutine(value):
+        value.close()
     raise RuntimeError("async driver operations require verify_specification_async")
+
+
+def _resolve_sync(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        _reject_awaitable(value)
+    return value
+
+
+def _validate_driver(driver: Driver[Any, Any, Any, Any]) -> None:
+    if not callable(driver.given) or not callable(driver.when):
+        raise TypeError("driver requires callable given and when operations")
+    if driver.cleanup is not None and not callable(driver.cleanup):
+        raise TypeError("driver cleanup must be callable")
+
+
+def _scenario_helpers(
+    scenario: Scenario[Any, Any, Any],
+    on_event: Callable[[ExecutionEvent], None] | None,
+    cancelled: Callable[[], bool] | None,
+) -> tuple[Callable[[], None], Callable[[ExecutionEvent], None], Callable[[str, Any | None], None], DriverContext]:
+    def check_cancelled() -> None:
+        if cancelled is not None and cancelled():
+            raise ScenarioCancelled(f"{scenario.id}: execution cancelled")
+
+    def emit(event: ExecutionEvent) -> None:
+        if on_event is not None:
+            on_event(copy.deepcopy(event))
+
+    def explain(message: str, data: Any | None = None) -> None:
+        if not isinstance(message, str) or not message.strip():
+            raise ValueError("explanation message must be nonblank")
+        _validate_data(data, "explanation data")
+        if on_event is not None:
+            emit(ExecutionEvent("explanation", message=message, data=data))
+
+    return check_cancelled, emit, explain, DriverContext(scenario.id, explain)
+
+
+def _verify_sync(
+    driver: Driver[Subject, Given, When, Expect],
+    scenario: Scenario[Given, When, Expect],
+    *,
+    on_event: Callable[[ExecutionEvent], None] | None,
+    cancelled: Callable[[], bool] | None,
+) -> Expect:
+    validate_scenario(scenario)
+    _validate_driver(driver)
+    check_cancelled, emit, _, context = _scenario_helpers(scenario, on_event, cancelled)
+    check_cancelled()
+    inputs = copy.deepcopy((scenario.given, scenario.when))
+    if on_event is not None:
+        emit(ExecutionEvent("observation", name="Given", value=scenario.given))
+        emit(ExecutionEvent("observation", name="When", value=scenario.when))
+        emit(ExecutionEvent("observation", name="Expect", value=scenario.expect))
+    subject = _resolve_sync(driver.given(inputs[0], context))
+    primary: BaseException | None = None
+    actual_snapshot: Any = None
+    try:
+        check_cancelled()
+        actual = _resolve_sync(driver.when(subject, inputs[1], context))
+        check_cancelled()
+        _validate_data(actual, f"{scenario.id} Actual")
+        actual_snapshot = copy.deepcopy(actual)
+        expected_snapshot = copy.deepcopy(scenario.expect)
+        if on_event is not None:
+            emit(ExecutionEvent("observation", name="Actual", value=actual_snapshot))
+        if not _equal(actual, scenario.expect):
+            raise ScenarioMismatch(scenario, expected_snapshot, actual_snapshot)
+    except BaseException as error:
+        primary = error
+    cleanup_error: BaseException | None = None
+    if driver.cleanup is not None:
+        try:
+            _resolve_sync(driver.cleanup(subject, context))
+        except BaseException as error:
+            cleanup_error = error
+    if primary is not None and cleanup_error is not None:
+        raise BaseExceptionGroup(f"{scenario.id}: execution and cleanup failed", [primary, cleanup_error])
+    if primary is not None:
+        raise primary
+    if cleanup_error is not None:
+        raise cleanup_error
+    return actual_snapshot
 
 
 def verify_specification(
@@ -169,7 +249,7 @@ def verify_specification(
     on_event: Callable[[ExecutionEvent], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
 ) -> Expect:
-    return _await(verify_specification_async(driver, scenario, on_event=on_event, cancelled=cancelled))
+    return _verify_sync(driver, scenario, on_event=on_event, cancelled=cancelled)
 
 
 async def verify_specification_async(
@@ -180,44 +260,28 @@ async def verify_specification_async(
     cancelled: Callable[[], bool] | None = None,
 ) -> Expect:
     validate_scenario(scenario)
-    if not callable(driver.given) or not callable(driver.when):
-        raise TypeError("driver requires callable given and when operations")
-    if driver.cleanup is not None and not callable(driver.cleanup):
-        raise TypeError("driver cleanup must be callable")
-
-    def check_cancelled() -> None:
-        if cancelled is not None and cancelled():
-            raise ScenarioCancelled(f"{scenario.id}: execution cancelled")
-
-    def emit(event: ExecutionEvent) -> None:
-        if on_event is not None:
-            on_event(copy.deepcopy(event))
-
-    def explain(message: str, data: Any = None) -> None:
-        if not isinstance(message, str) or not message.strip():
-            raise ValueError("explanation message must be nonblank")
-        if on_event is not None:
-            if data is not None:
-                _validate_data(data, "explanation data")
-            emit(ExecutionEvent("explanation", message=message, data=data))
-
+    _validate_driver(driver)
+    check_cancelled, emit, _, context = _scenario_helpers(scenario, on_event, cancelled)
     check_cancelled()
-    context = DriverContext(scenario.id, explain)
     inputs = copy.deepcopy((scenario.given, scenario.when))
-    emit(ExecutionEvent("observation", name="Given", value=scenario.given))
-    emit(ExecutionEvent("observation", name="When", value=scenario.when))
-    emit(ExecutionEvent("observation", name="Expect", value=scenario.expect))
+    if on_event is not None:
+        emit(ExecutionEvent("observation", name="Given", value=scenario.given))
+        emit(ExecutionEvent("observation", name="When", value=scenario.when))
+        emit(ExecutionEvent("observation", name="Expect", value=scenario.expect))
     subject = await _resolve(driver.given(inputs[0], context))
     primary: BaseException | None = None
-    actual: Any = None
+    actual_snapshot: Any = None
     try:
         check_cancelled()
         actual = await _resolve(driver.when(subject, inputs[1], context))
         check_cancelled()
         _validate_data(actual, f"{scenario.id} Actual")
-        emit(ExecutionEvent("observation", name="Actual", value=actual))
+        actual_snapshot = copy.deepcopy(actual)
+        expected_snapshot = copy.deepcopy(scenario.expect)
+        if on_event is not None:
+            emit(ExecutionEvent("observation", name="Actual", value=actual_snapshot))
         if not _equal(actual, scenario.expect):
-            raise ScenarioMismatch(scenario, scenario.expect, actual)
+            raise ScenarioMismatch(scenario, expected_snapshot, actual_snapshot)
     except BaseException as error:
         primary = error
     cleanup_error: BaseException | None = None
@@ -232,13 +296,14 @@ async def verify_specification_async(
         raise primary
     if cleanup_error is not None:
         raise cleanup_error
-    return copy.deepcopy(actual)
+    return actual_snapshot
 
 
 async def _resolve(value: Any) -> Any:
-    if hasattr(value, "__await__"):
+    if inspect.isawaitable(value):
         return await value
     return value
+
 
 
 __all__ = [

@@ -82,7 +82,7 @@ function parseMarkdown(source: string): { items: ParsedItem[]; diagnostics: Form
         const first = node.children[0]
         if (first?.type === 'paragraph') {
           const firstChild = first.children[0]
-          if (firstChild?.type === 'strong' && /^(?:ID|EVIDENCE|REVISES)$/u.test(text(firstChild))) report(node, 'inline focused rows require the explicitly selected @focused-spec/format-inline adapter; REVISES is unsupported; obtain guidance from the installed CLI: `./node_modules/.bin/focused-spec instructions --protocol 1 --topic workflow --json`')
+          if (firstChild?.type === 'strong' && /^(?:ID|EVIDENCE|REVISES)$/u.test(text(firstChild))) report(node, 'inline focused rows require the explicitly selected @focused-spec/format-inline adapter; REVISES is unsupported; load the `upgrade` topic from the selected focused-spec CLI with `instructions --protocol 1 --topic upgrade --json`')
         }
         visit(node, pending, node)
       } else {

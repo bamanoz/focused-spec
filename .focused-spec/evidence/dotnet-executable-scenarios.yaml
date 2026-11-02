@@ -64,3 +64,22 @@ scopes:
     dotnet-example.cli-bank:
       evidence:
         - vitest::test/dotnet-native-plugins.spec.ts::dotnet native plugins > runs canonical bank through CLI and detects restored regression
+    dotnet-sdk.validate-driver-binding:
+      evidence:
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > validates supplied suite bindings without loading drivers
+    dotnet-sdk.structural-mismatch-rendering:
+      evidence:
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > renders structural mismatch snapshots without user formatting hooks
+    dotnet-runner.nuget-state-preserved:
+      evidence:
+        - vitest::test/dotnet-native-plugins.spec.ts::dotnet native plugins > preserves restored consumer NuGet assets after bridge execution
+  repair-runner-process-lifecycle:
+    dotnet-runner.transport:
+      evidence:
+        - vitest::test/dotnet-native-plugins.spec.ts::dotnet native plugins > rejects missing malformed and forged reports
+    dotnet-runner.cancellation:
+      evidence:
+        - vitest::test/dotnet-native-plugins.spec.ts::dotnet native plugins > bounds cancellation and terminates owned workers
+    dotnet-runner.nuget-state-preserved:
+      evidence:
+        - vitest::test/dotnet-native-plugins.spec.ts::dotnet native plugins > preserves restored consumer NuGet assets after bridge execution

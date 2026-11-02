@@ -4,12 +4,14 @@ Optional native Python scenario discovery for focused-spec Format API 2. The plu
 
 ## Installation and registration
 
-Install the npm core, format, and runner packages. Install `focused-spec-scenarios` separately into the Python environment used for execution.
+These CLI plugin packages are source-checkout-only, not an npm registry installation path. First run `npm ci` and `npm run build` in `/path/to/focused-spec`. Then, from the consuming project:
 
 ```sh
-npm install --save-dev focused-spec @focused-spec/format-scenarios-python @focused-spec/runner-scenarios-python
-python -m pip install focused-spec-scenarios
+npm install --save-dev /path/to/focused-spec/packages/core /path/to/focused-spec/packages/formats/scenarios-python /path/to/focused-spec/packages/runners/scenarios-python
+python3 -m pip install /path/to/focused-spec/packages/sdk/python
 ```
+
+Use the same Python 3.11+ environment for execution. Replace `/path/to/focused-spec` with the actual checkout path. The [installation guide](https://github.com/bamanoz/focused-spec/blob/v0.11.0/docs/guides/install.md) describes this source-checkout constraint; do not replace local paths with registry package names unless those packages are published.
 
 ```yaml
 version: 5

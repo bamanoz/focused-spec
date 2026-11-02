@@ -1,0 +1,52 @@
+name: Local verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    if: ${{ github.actor == 'nektos/act' }}
+    runs-on: [self-hosted, act-local]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+      - run: npm ci --ignore-scripts
+      - run: npm run test:node
+
+  go:
+    if: ${{ github.actor == 'nektos/act' }}
+    runs-on: [self-hosted, act-local]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+      - run: npm ci --ignore-scripts
+      - run: npm run test:go
+
+  python:
+    if: ${{ github.actor == 'nektos/act' }}
+    runs-on: [self-hosted, act-local]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+      - run: npm ci --ignore-scripts
+      - run: npm run test:python
+
+  dotnet:
+    if: ${{ github.actor == 'nektos/act' }}
+    runs-on: [self-hosted, act-local]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+      - run: npm ci --ignore-scripts
+      - run: npm run test:dotnet

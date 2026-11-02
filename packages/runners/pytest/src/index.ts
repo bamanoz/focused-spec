@@ -100,7 +100,11 @@ async function pytest(
     }
     if (!Array.isArray(report.collected) || !report.collected.every(item => typeof item === 'string')
       || !Array.isArray(report.collectionErrors) || !report.collectionErrors.every(item => typeof item === 'string')
-      || !Array.isArray(report.reports) || typeof report.exitStatus !== 'number') {
+      || !Array.isArray(report.reports) || !report.reports.every(item => item !== null && typeof item === 'object'
+        && typeof item.nodeid === 'string' && item.nodeid.length > 0
+        && ['setup', 'call', 'teardown'].includes(item.phase)
+        && ['passed', 'failed', 'skipped'].includes(item.outcome) && typeof item.diagnostic === 'string')
+      || !Number.isInteger(report.exitStatus)) {
       throw new Error('pytest produced a malformed result report')
     }
     return { process: processResult, report }
@@ -161,7 +165,8 @@ export default {
       throw new Error(`pytest collection failed: ${execution.report.collectionErrors.join('\n').slice(-DIAGNOSTIC_LIMIT)}`)
     }
     const collected = new Set(execution.report.collected)
-    if ([...collected].some(nodeid => !nodeids.has(nodeid))) throw new Error('pytest execution collected an unrequested test')
+    if ([...collected].some(nodeid => !nodeids.has(nodeid))
+      || execution.report.reports.some(report => !nodeids.has(report.nodeid))) throw new Error('pytest execution reported an unrequested test')
 
     const results: TargetResult[] = selected.map(({ target, nodeid }) => {
       const phases = execution.report.reports.filter(report => report.nodeid === nodeid)

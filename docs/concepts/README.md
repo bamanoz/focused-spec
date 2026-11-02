@@ -65,4 +65,4 @@ Runner API version 1 is unchanged. Core does not know Vitest, pytest, Go, or ano
 
 Plugins are trusted project code executed in bounded isolated hosts, not security sandboxes. A runner must never return `pass` without executing the selected test; malformed format output, forged catalog targets, overlapping source claims, crashes, and timeouts fail without fallback.
 
-The focused behavioral contract is recorded in the [capability specs](../../openspec/specs/scenario-authoring/spec.md); the [documentation map](../README.md) links every capability.
+The focused behavioral contract is recorded in the [capability specs](../../openspec/specs/scenario-authoring/spec.md); the [documentation map](../README.md) routes readers to user guides, references, SDKs, and development resources.

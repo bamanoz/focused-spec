@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
+import { runBoundedProcess } from 'focused-spec/runner'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -173,11 +173,9 @@ async function invoke(request: Record<string, string>, signal?: AbortSignal): Pr
   const directory = await mkdtemp(join(tmpdir(), 'focused-spec-go-catalog-'))
   try {
     signal?.throwIfAborted()
-    const grouped = process.platform !== 'win32'
-    const child = spawn('go', ['run', HELPER], {
+    const result = await runBoundedProcess('go', ['run', HELPER], {
       cwd: directory,
-      detached: grouped,
-      shell: false,
+      signal,
       env: {
         ...process.env,
         GO111MODULE: 'off',
@@ -189,68 +187,18 @@ async function invoke(request: Record<string, string>, signal?: AbortSignal): Pr
         GOTOOLCHAIN: 'local',
         GOWORK: 'off',
       },
-      stdio: ['pipe', 'pipe', 'pipe'],
+      input,
+      inputLimit: LIMIT,
+      inputError: 'Go catalog helper input exceeds 4000000 bytes',
+      outputLimit: LIMIT,
+      diagnosticLimit: LIMIT,
+      diagnosticOverflow: true,
+      capture: 'head',
+      outputError: () => 'Go catalog helper output exceeds 4000000 bytes',
+      terminateAfterCompletion: true,
     })
-    const stdout: Buffer[] = []
-    const stderr: Buffer[] = []
-    let stdoutBytes = 0
-    let stderrBytes = 0
-    let overflow = false
-    let killTimer: NodeJS.Timeout | undefined
-    let stdinError: Error | undefined
-
-    const kill = (name: NodeJS.Signals): void => {
-      try {
-        if (grouped && child.pid !== undefined) process.kill(-child.pid, name)
-        else child.kill(name)
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
-      }
-    }
-    const abort = (): void => {
-      kill('SIGTERM')
-      killTimer ??= setTimeout(() => kill('SIGKILL'), 500)
-      killTimer.unref()
-    }
-    const failOverflow = (): void => {
-      overflow = true
-      kill('SIGKILL')
-    }
-
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdoutBytes += chunk.length
-      if (stdoutBytes <= LIMIT) stdout.push(chunk)
-      else failOverflow()
-    })
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderrBytes += chunk.length
-      if (stderrBytes <= LIMIT) stderr.push(chunk)
-      else failOverflow()
-    })
-    child.stdin.on('error', error => {
-      if ((error as NodeJS.ErrnoException).code !== 'EPIPE') stdinError = error
-    })
-    signal?.addEventListener('abort', abort, { once: true })
-    if (signal?.aborted) abort()
-
-    try {
-      const code = await new Promise<number>((resolve, reject) => {
-        child.once('error', reject)
-        child.once('close', value => resolve(value ?? 1))
-        child.stdin.end(input)
-      })
-      signal?.throwIfAborted()
-      if (overflow) throw new Error('Go catalog helper output exceeds 4000000 bytes')
-      if (stdinError) throw stdinError
-      const output = Buffer.concat(stdout).toString('utf8')
-      const diagnostic = Buffer.concat(stderr).toString('utf8')
-      if (code !== 0) throw new Error((diagnostic.trim() || output.trim() || `Go catalog helper exited ${code}`).slice(-8_000))
-      return parseResponse(output)
-    } finally {
-      signal?.removeEventListener('abort', abort)
-      clearTimeout(killTimer)
-      kill('SIGKILL')
-    }
+    if (result.code !== 0) throw new Error((result.stderr.trim() || result.stdout.trim() || `Go catalog helper exited ${result.code}`).slice(-8_000))
+    return parseResponse(result.stdout)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

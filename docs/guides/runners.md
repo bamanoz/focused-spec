@@ -2,11 +2,13 @@
 
 Use the public [runner API contract](../reference/runner-api.md), not internal package modules or implementation details. Configuration version 5 loads a runner through exactly one installed `package` or project-relative `module`; both implement unchanged `RunnerPlugin` API version 1. A module registration may additionally name a safe project-relative Markdown `documentation` file for lookup only. Package resolution starts from the consuming project, honors ESM import exports, and never falls back to a global or downloaded package. A runner must distinguish an executed selected test from a skipped, missing, ambiguous, or unreported test; a successful framework exit alone cannot establish `pass`.
 
+Package lookup uses Node's stable ESM resolver in a module-eval subprocess whose working directory is the selected consuming root. This preserves import-only public subpaths and workspace symlinks on Node.js 22.16.0+ without the experimental parent-aware resolver flag or CommonJS `require` conditions. Format hosts, runner hosts and the registry adapter's nested parser use that consumer anchor. `plugin-docs` resolves the entry and its owning manifest with `findPackageJSON`, then reads Markdown without importing the plugin. Missing packages and non-exported subpaths fail; there is no alternate package search or downloaded fallback.
+
 ## Official runners
 
 Official framework runners use IDs `vitest`, `pytest` and `go`; optional direct scenario runners use explicitly registered IDs such as `scenarios` (JS/TS) and `scenarios-go` (Go). Install and register only the selected packages:
 
-Each installed official runner exposes this public guide as its default root `README.md`, staged from this single authored owner. Read the selected installed contract and provenance through `npx focused-spec plugin-docs --runner <id> --json`; the package manifest may instead select another Markdown file with `focusedSpec.documentation`. Before registration, `npx focused-spec plugin-docs --package <specifier> --root <path> --json` performs the same code-free package lookup without loading configuration. Exported declarations supplement that public document; plugin implementation inspection is unnecessary. The installed core's separate `instructions --protocol 1 --topic runners --json` response contains shared Runner API obligations, not these framework-specific selectors or options.
+Each official runner exposes its own package-specific root `README.md` with framework prerequisites, selector syntax, and a link to this shared guide. Read the selected installed contract and provenance through `npx focused-spec plugin-docs --runner <id> --root <path> --json`; package manifests may select another Markdown file with `focusedSpec.documentation`. Before registration, `npx focused-spec plugin-docs --package <specifier> --root <path> --json` performs the same code-free lookup without loading configuration. Exported declarations supplement that document; plugin implementation inspection is unnecessary. The core's separate `instructions --protocol 1 --topic runners --json` response contains shared Runner API obligations, not framework-specific documentation.
 
 ```yaml
 runners:
@@ -107,6 +109,8 @@ After installing the selected packages and configuring the format/runner, use th
 
 `@focused-spec/runner-scenarios-python` executes the independent Python SDK's native scenarios, not pytest wrappers. Install Node.js 22.16.0+, Python 3.11+ and `focused-spec-scenarios` in the selected interpreter environment. Its shared [Python format catalog](../../packages/formats/scenarios-python/README.md) owns literal syntax, inert `DriverBinding` metadata and static discovery; the [Python SDK](../../packages/sdk/python/README.md) owns native comparison and cleanup.
 
+The Python format/runner pair is source-checkout-only; it is not an npm registry installation path. Build the checkout first and install its local package directories from the consumer project using the [installation guide](install.md).
+
 ```yaml
 runners:
   scenarios-python:
@@ -127,6 +131,8 @@ Cancellation requests cooperative shutdown and SDK cleanup after successful prep
 
 `@focused-spec/runner-scenarios-dotnet` invokes the independent typed SDK, not xUnit/NUnit/MSTest. It needs Node.js 22.16.0+, .NET SDK 9+ and the consumer's separately installed `FocusedSpec.Scenarios` dependency. The [.NET format](../../packages/formats/scenarios-dotnet/README.md) ships its prebuilt Roslyn syntax parser and owns the static declaration grammar; the [.NET SDK](../../packages/sdk/dotnet/FocusedSpec.Scenarios/README.md) owns typed equality and execution lifecycle.
 
+The .NET format/runner pair is source-checkout-only; it is not an npm registry installation path. Build the checkout first and install its local package directories from the consumer project. This does not alter the independent SDK's [GitHub Release/local feed installation](install.md#net-sdk-from-github-releases).
+
 ```yaml
 runners:
   scenarios-dotnet:
@@ -144,6 +150,10 @@ Static resolution uses only the shared shipped syntax parser: no consumer build,
 Build success or exit zero cannot replace a unique selected result in the dedicated private report. Missing, duplicate, malformed or unexpected reports, build failures, crashes and cancellation remain nonpassing; application stdout is never parsed as evidence. Input, report and each stdout/stderr stream are bounded to 4,000,000 bytes, diagnostics to 8,000 characters. Ordered observations and explanations retain ordinary mismatch context within 256 records and 65,536 UTF-8 bytes per target; truncation is explicit and projection never changes native status.
 
 Abort propagates cancellation to SDK execution, allows 500 ms for cooperative cleanup, then terminates the owned process tree if needed. Forced termination cannot promise cleanup. Bridge/report directories are removed in finalization; ordinary consumer build caches and outputs may remain. The plugin provides no retries, matcher fallback or parallel partitioning. Use detailed/JSON output and the [canonical bank commands](configuration.md#standalone-executable-bank-specifications) to inspect the same typed scenarios exercised by ordinary xUnit and demo consumers.
+
+## GitHub Action
+
+The [focused-spec run Action](../../.github/actions/focused-spec-run/action.yml) consumes an already-installed CLI, writes the same `run --junit` report, exposes its path and outcome, and preserves CLI failure. It does not install packages, upload artifacts, or request tokens. The [pull-request example](../../test/fixtures/github-action-pr.example.yml) uses only `contents: read`; do not pass secrets or write credentials to untrusted PR code, and keep privileged publishing in a separate trusted workflow that validates reports as untrusted input.
 
 ## Custom runners
 

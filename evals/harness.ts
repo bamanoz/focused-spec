@@ -1,9 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { glob } from 'glob'
-import type { AgentDriver, AgentRequest, EvalGate, EvalResult, EvalRunOptions } from './types.ts'
 import { evalCase } from './cases.ts'
-import { guidanceActivationGate, judgeCompletedWorkspace, judgeProposalCheckpoint, judgeWorkingCheckpoint, skillActivationGate, snapshotProtectedFiles, snapshotProposalFiles } from './judge.ts'
+import type { AgentDriver, AgentRequest, EvalGate, EvalResult, EvalRunOptions } from './types.ts'
+import { guidanceActivationGate, combinedGuidanceGate, integrityGate, judgeCompletedWorkspace, judgeProposalCheckpoint, judgeWorkingCheckpoint, skillActivationGate, snapshotProtectedFiles, snapshotProposalFiles } from './judge.ts'
+import { guidanceBoundaryGate, guidanceEditablePaths, guidanceOutcomeGate, prepareGuidanceFixture } from './guidance.ts'
 import type { WorkingEvidenceCheckpoint } from './judge.ts'
 import { OmpAgentDriver } from './omp-agent.ts'
 import { evalRepositoryRoot, provisionWorkspace, readEvalPrompt } from './provision.ts'
@@ -31,6 +32,7 @@ export async function runEval(
 
   try {
     try {
+    if (selected.id === 'guidance-skill-trigger-boundaries') await prepareGuidanceFixture(workspace.path)
     const snapshots = workspace.integration === undefined ? new Map(await snapshotProtectedFiles(workspace.path, selected.editablePaths)) : new Map<string, string>()
     const proposalBefore = await snapshotProposalFiles(workspace.path)
     if (workspace.skillInventory !== undefined) {
@@ -49,6 +51,7 @@ export async function runEval(
       }
     }
     for (const turn of selected.turns) {
+      const guidanceBefore = selected.guidanceOnly === true ? await snapshotProposalFiles(workspace.path) : undefined
       const prompt = await readEvalPrompt(turn.promptPath)
       const request: AgentRequest = {
         workspace: workspace.path,
@@ -68,7 +71,22 @@ export async function runEval(
         detail: `exit=${String(result.exitCode)} durationMs=${result.durationMs}`,
       })
       if (!result.success) break
-      gates.push(skillActivationGate(result.output), await guidanceActivationGate(workspace.path, [result.output]))
+      if (guidanceBefore !== undefined) gates.push(guidanceBoundaryGate(guidanceBefore, await snapshotProposalFiles(workspace.path), selected.id === 'guidance-skill-trigger-boundaries' ? guidanceEditablePaths[turns.length - 1] : []))
+      if (selected.id === 'guidance-skill-trigger-boundaries') gates.push(await guidanceOutcomeGate(workspace.path, turns.length - 1))
+      if (turn.requiresFocusedSkill === false) {
+        const activated = skillActivationGate(result.output)
+        gates.push({ name: 'focused-skill-not-required', passed: !activated.passed, detail: activated.passed ? 'editorial-only turn loaded focused-spec' : 'editorial-only turn did not load focused-spec' })
+      } else {
+        gates.push(skillActivationGate(result.output))
+        if (turn.guidanceTopics !== undefined) {
+          const acquisition = await Promise.all(turn.guidanceTopics.map(topic => guidanceActivationGate(workspace.path, [result.output], topic)))
+          gates.push({ name: 'focused-routed-guidance-acquired', passed: acquisition.some(item => item.passed), detail: acquisition.filter(item => item.passed).map(item => item.name).join(', ') || `no complete installed response for an eligible router/operation: ${turn.guidanceTopics.join(', ')}` })
+        } else if (turn.guidanceTopic === 'review' || turn.guidanceTopic === 'author-revise' || turn.guidanceTopic === 'upgrade' || turn.guidanceTopic === 'verify') {
+          gates.push(await combinedGuidanceGate(workspace.path, result.output, turn.guidanceTopic))
+        } else {
+          gates.push(await guidanceActivationGate(workspace.path, [result.output], turn.guidanceTopic ?? 'workflow'))
+        }
+      }
       if (gates.some(item => !item.passed)) break
       if (turn.checkpoint === 'proposal') {
         const checkpoint = await judgeProposalCheckpoint(workspace.path, selected, proposalBefore)
@@ -83,8 +101,12 @@ export async function runEval(
       }
       if (gates.some(item => !item.passed)) break
     }
-
-    if (turns.length === selected.turns.length && gates.every(item => item.passed)) {
+    if (selected.guidanceOnly === true) {
+      if (turns.length === selected.turns.length && gates.every(item => item.passed)) {
+        gates.push(await integrityGate(workspace.path, snapshots, transcripts))
+        if (gates.every(item => item.passed)) gates.push({ name: 'guidance-case-complete', passed: true, detail: 'isolated guidance case completed without project mutation judgment' })
+      }
+    } else if (turns.length === selected.turns.length && gates.every(item => item.passed)) {
       try {
         if (workspace.upgrade !== undefined) gates.push(await upgradeArtifactsGate(workspace.path, workspace.upgrade), await upgradePreservationGate(workspace.path, workspace.upgrade))
         if (gates.every(item => item.passed)) {
@@ -100,6 +122,7 @@ export async function runEval(
         gates.push({ name: 'evaluation-error', passed: false, detail: error instanceof Error ? error.message : String(error) })
       }
     }
+
     } catch (error) {
       gates.push({ name: 'evaluation-error', passed: false, detail: error instanceof Error ? error.message : String(error) })
     }

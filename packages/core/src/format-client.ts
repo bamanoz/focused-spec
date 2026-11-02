@@ -111,11 +111,12 @@ export function normalizeBindResult(value: unknown): BindResult {
   })
   return { enrollments, diagnostics, sourceClaims }
 }
-
 interface HostValue {
   readonly value: unknown
   readonly hasBind: boolean
 }
+
+export class FormatParseError extends Error {}
 
 interface Pending {
   readonly id: number
@@ -164,8 +165,19 @@ export class FormatClient {
       try {
         const response = record(message)
         if (response.id !== pending.id || typeof response.ok !== 'boolean') throw new Error('format host returned an invalid response')
-        if (!response.ok) throw new Error(typeof response.error === 'string' ? response.error : 'format plugin failed')
-        if (typeof response.hasBind !== 'boolean' || typeof response.json !== 'string' || response.json.length > 8_000_000) throw new Error('format host returned an invalid or oversized response')
+        if (!response.ok) {
+          if (response.recoverable !== true && response.recoverable !== undefined) throw new Error('format host returned an invalid response')
+          const error = new Error(typeof response.error === 'string' ? response.error : 'format plugin failed')
+          if (response.recoverable === true) {
+            this.pending = undefined
+            clearTimeout(pending.timer)
+            pending.reject(new FormatParseError(error.message))
+          } else {
+            this.fail(error)
+          }
+          return
+        }
+        if (response.recoverable !== undefined || typeof response.hasBind !== 'boolean' || typeof response.json !== 'string' || response.json.length > 8_000_000) throw new Error('format host returned an invalid or oversized response')
         const value: unknown = JSON.parse(response.json)
         this.pending = undefined
         clearTimeout(pending.timer)

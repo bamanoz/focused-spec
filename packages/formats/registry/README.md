@@ -43,7 +43,7 @@ interface RegistryFormatOptions {
 
 `parser` is required and declares exactly one installed package or project-relative module. Packages are resolved from the consuming project. Modules must use `.js`, `.mjs`, `.ts`, or `.mts`, remain inside the project both lexically and after symlink resolution, and export a structural Format API 2 plugin. The parser receives its nested `options` unchanged and runs in the registry adapter's already isolated format host; it may not define a second catalog binder.
 
-An unavailable, escaping, malformed, binding-capable, or API-1 parser fails before registry binding. API-1 rejection includes the project-local protocol-1 workflow command needed to migrate the parser; the adapter has no compatibility path.
+An unavailable, escaping, malformed, binding-capable, or API-1 parser fails before registry binding. API-1 rejection directs users to load the `upgrade` topic from the CLI selected for the project; the adapter has no compatibility path.
 
 `files` is an optional nonempty list of project-relative YAML paths or glob patterns. Omitting it selects the adapter-owned canonical default `.focused-spec/evidence.yaml`. Supplying `files` never falls back to that default and never searches the repository implicitly.
 

@@ -85,3 +85,5 @@ export interface RunnerPlugin {
   run(request: RunRequest): Promise<RunResponse>
   partition?(request: RunRequest): Promise<PartitionResponse>
 }
+export { runBoundedProcess } from './process.js'
+export type { BoundedProcessOptions, BoundedProcessResult } from './process.js'

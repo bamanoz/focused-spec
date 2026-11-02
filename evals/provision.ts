@@ -191,6 +191,11 @@ export async function provisionWorkspace(
     if (evalCase.id === 'project-upgrade') upgrade = await prepareUpgrade(workspace, cache)
     else if (evalCase.integration !== undefined) integration = await prepareIntegration(workspace, cache, evalCase.integration, packLocalPackage)
     else await installPackages(workspace, evalCase.source === 'openspec', cache)
+    if (evalCase.id === 'guidance-skill-trigger-boundaries') {
+      const sdk = await packLocalPackage(join(repositoryRoot, 'packages/sdk/typescript'), cache)
+      const installed = await runNpm(['install', '--ignore-scripts', '--prefer-offline', '--save-dev', sdk], workspace, 180_000)
+      if (installed.code !== 0) throw new Error(`guidance SDK fixture install failed: ${installed.stderr || installed.stdout}`)
+    }
     await installSkills(workspace, skills, openspecSkillsDir ?? '')
     const skillInventory = evalCase.skillDiscovery === 'competing'
       ? await installCompetingSkills(workspace, competingSkillsDir!, skills) : undefined

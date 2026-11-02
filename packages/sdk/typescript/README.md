@@ -40,7 +40,7 @@ Standalone declarations may be programmatically constructed. Static discovery by
 
 ## Driver execution and cleanup
 
-`verifySpecification(driver, scenario, { signal?, onEvent? })` returns the actual result after exact Node strict deep comparison with Expect, or throws. Mismatches identify the scenario and retain expected/actual differences. Invalid actual data fails rather than being silently serialized. Given and When are cloned together once before driver preparation; driver mutation cannot change the reusable declaration or expectation.
+`verifySpecification(driver, scenario, { signal?, onEvent? })` returns an independent snapshot of the validated actual result, taken before cleanup, after exact Node strict deep comparison with Expect; it throws otherwise. Mismatches throw exported `ScenarioMismatchError`, which remains an `AssertionError` and exposes `scenarioId`, `scenarioName`, `expected`, and `actual` snapshots. Its `cause` retains Node's structural comparison error and useful diff detail. Invalid actual data fails rather than being silently serialized. Given and When are cloned together once before driver preparation; driver mutation cannot change the reusable declaration or expectation. TypeScript requires a driver string in suites and uses Promise-based execution with `AbortSignal`; this differs from optional native-language driver metadata and sync/async dual entry points in the other SDKs.
 
 Driver operations may be synchronous or asynchronous:
 
@@ -69,7 +69,7 @@ The observer receives independent snapshots in execution order:
 
 An observation contains either `value: JsonValue` or `text: string`; TypeScript scenario observations use `value`. An explanation has a nonblank `message` and optional JSON-compatible `data`. `truncated` is reserved for bounded collectors outside the SDK. Each observation and explanation payload is cloned separately before delivery. Driver and cleanup mutation cannot rewrite an earlier event, and observer mutation cannot rewrite a declaration, comparison value, or another event.
 
-Collection is disabled when `onEvent` is absent: `context.explain` is a no-op, the SDK allocates no event snapshots or retained event list, and it writes nothing to stdout or stderr. Observers are synchronous and execution-local. A throwing observer follows the ordinary execution and cleanup failure path; it is not swallowed. Separate executions need separate observers, while callers deliberately sharing an observer own its synchronization and retention policy. The SDK does not depend on `focused-spec` or its runner types.
+Collection is disabled when `onEvent` is absent: `context.explain` validates its message and optional JSON data but emits no event, allocates no event snapshots or retained event list, and writes nothing to stdout or stderr. Observers are synchronous and execution-local. A throwing observer follows the ordinary execution and cleanup failure path; it is not swallowed. Separate executions need separate observers, while callers deliberately sharing an observer own its synchronization and retention policy. The SDK does not depend on `focused-spec` or its runner types.
 
 ## Optional focused-spec integration
 

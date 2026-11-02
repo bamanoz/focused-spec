@@ -18,6 +18,16 @@ Missing a redundant read on an eligible unchanged native continuation is saved a
 npm run eval:agent -- --list
 ```
 
+The isolated `guidance-combined-operation` case judges one standalone operation request against the selected installed package assets: complete router and operation sections, exact protocol/package/version/topic, successful full-output recovery, and the read-only review boundary. It rejects redundant `version --json` or workflow-only calls. `guidance-skill-trigger-boundaries` uses separate inert editorial, behavioral SDD, standalone SDK scenario, and application-driver prompts; actual skill/guidance acquisition is checked per turn, while task-specific outcomes remain independently reviewed from the saved transcripts and workspace. Only editorial cleanup may omit loading.
+
+These are live public-harness cases, not deterministic evidence. Run both individually with the same explicit model after rediscovering IDs; save and report the immutable results, actual activation/acquisition evidence, failures, and timeouts. An unrun, unavailable, failed, or timed-out model call is not proof and must not be replaced with mocked transcripts.
+
+```sh
+npm run eval:agent -- --list
+npm run eval:agent -- --case guidance-combined-operation --model <model>
+npm run eval:agent -- --case guidance-skill-trigger-boundaries --model <model>
+```
+
 - `files-source-bootstrap`: bind a native file-backed item using the installed registry-composed Markdown format and official Go/pytest runner packages.
 - `vacuous-evidence`: change Python authentication to reject blocked accounts while keeping its pre-existing evidence selector. The initial product permits blocked accounts, and its falsely green test only checks that the returned value is a boolean. The prompt does not reveal the test defect or prescribe a mutation probe. The agent may change only the relevant Python implementation and test; Go, unrelated Python tests, the preconfigured runner, installed skills, and package files stay protected. Gates independently check all four authentication outcomes, require the repaired selected test and focused evidence to fail when blocked-account protection is removed, verify restoration, and require the agent's own transcript to contain focused PASS → selected assertion FAIL → restored PASS.
 - `spec-evidence-revision`: a blind review/revision request starts with one enrolled blocked-login outcome and exact Go/pytest evidence that passes but covers only invalid credentials. Product and tests are protected; separate existing tests cover rejection with valid credentials. Completion must preserve the enrolled identity, bind both exact valid-credential tests in the same authentication shard, retain the independent active-account registration and revise the bound native behavior. Independent selection and product-regression gates reject old green references. The prompt supplies neither focused-spec nor evidence/selector hints.
@@ -233,7 +243,7 @@ The source audit on 2026-10-26 distinguishes documented capability, installed as
 | BMad | [Pinned commit](https://github.com/bmad-code-org/BMAD-METHOD/tree/48f0ce37e1fc378d6255c90e1b155f2212a6fe33) | Real model-driven memlog regeneration is independently judged. Setup status is installation state, not semantic SPEC validation. |
 | Agent OS | Downloaded [shape-spec command](https://github.com/buildermethods/agent-os/blob/main/commands/agent-os/shape-spec.md), hashed installed asset | Genuine ACP planning/approval is available; no standalone shape validator or publication command is installed. Unpinned source version stays unknown. |
 
-The audit executed `uvx --from specify-cli specify version --json` and `event`, `workflow`, `self` help; `openspec --version`, disposable strict change validation, real archive and strict final validation; and `npm view @opengsd/gsd-core@1.16.0 version dist.tarball gitHead --json`. OpenSpec archive with a placeholder Purpose failed final strict validation; a meaningful delta Purpose passed after real archive. BMad pinned `setup.py --status` reported source module `6.13.0-next` but incomplete installation; no semantic validity is inferred. The [host survey](candidate-improvements.md#sdd-host-extension-points) owns primary-source extension/context-file claims, not execution certification.
+The audit executed `uvx --from specify-cli specify version --json` and `event`, `workflow`, `self` help; `openspec --version`, disposable strict change validation, real archive and strict final validation; and `npm view @opengsd/gsd-core@1.16.0 version dist.tarball gitHead --json`. OpenSpec archive with a placeholder Purpose failed final strict validation; a meaningful delta Purpose passed after real archive. BMad pinned `setup.py --status` reported source module `6.13.0-next` but incomplete installation; no semantic validity is inferred. Primary-source host extension/context-file claims are recorded separately from the native capability table's execution certification.
 
 ### Native OpenSpec publication
 

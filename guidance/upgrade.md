@@ -16,9 +16,15 @@ Use the project's established package manager and dependency owner for a project
 2. Update only the authorized focused-spec installation and selected compatible plugins. Do not alter unrelated dependencies, lockfiles, workspaces, or globally installed tools.
 3. Resolve the replacement executable explicitly and read its `init --help`. Refresh existing package-owned integrations for explicit relevant `--tools` targets, using `--dry-run --json` first. Use `--replace` only for an identified package-owned legacy loader or wrapper within authorized scope. Preserve custom neighbors and unrelated targets. A symlinked destination requires its owning installer or an approved safe cutover, not forced traversal.
 4. Verify the refreshed loader or wrapper comes from the replacement package and reread it. Remove only obsolete full-text copies known to be package-owned and replaced; never delete custom instructions.
-5. Using that replacement executable, request `instructions --protocol 1 --topic workflow --json` as a standalone command. Do not combine it with installation, `init`, help, version checks, another topic, or another command. Follow the new router and acquire this `upgrade` topic from the same executable. Discard the earlier package's procedure as authority.
+5. Using that replacement executable, request the selected operation as one standalone command. For an upgrade operation:
 
-The loader and CLI can reside outside the project. Pass the consuming-project root only to commands that read project state or plugins; `instructions` has no project-root option. A missing or incompatible replacement guidance response blocks migration. Repository source, an old loader, another installed CLI, or downloaded instructions are not fallbacks.
+   ```text
+   <focused-spec-cli> instructions --protocol 1 --topic upgrade --json
+   ```
+
+   Validate the response's protocol, exact package identity/version, requested topic, complete output, and clearly separated workflow-router plus upgrade sections. Do not make separate version or workflow-only requests for the same operation. Shared `formats`, `runners`, and plugin-document requests remain separate. A missing or incompatible replacement guidance response blocks migration.
+
+The loader and CLI can reside outside the project. Pass the consuming-project root only to commands that read project state or plugins; `instructions` has no project-root option. Repository source, an old loader, another installed CLI, or downloaded instructions are not fallbacks.
 
 ## Inventory before migrating
 

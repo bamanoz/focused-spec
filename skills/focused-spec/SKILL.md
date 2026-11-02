@@ -1,6 +1,6 @@
 ---
 name: focused-spec
-description: "MUST LOAD for behavioral specification work: review, create, revise, plan, publish, regenerate, verify, or complete requirements, acceptance criteria, BDD/code scenarios, or their application drivers. Includes wording-only edits and SDK-only projects, even when the user does not mention focused-spec. Load alongside any host workflow and preserve its approval boundaries."
+description: "MUST LOAD for behavioral specification work: review, create, revise, plan, publish, regenerate, verify, or complete requirements, acceptance criteria, executable Given/When/Expect scenarios, application drivers, or associated evidence. A meaning-preserving spelling, punctuation, or formatting edit may proceed without mandatory loading only when behavior, scope, conditions, outcomes, identities, selectors, and evidence remain unchanged; uncertain or semantic edits remain covered. Includes SDK-only projects and standalone BDD work, even when the user does not mention focused-spec. Load alongside any host workflow and preserve its approval boundaries."
 ---
 
 # Focused Spec
@@ -17,26 +17,32 @@ Select one already installed `focused-spec` executable:
 2. Otherwise prefer the consuming project or declared workspace installation when present, so the project can pin its guidance version.
 3. Otherwise use an installed `focused-spec` available on `PATH`, including a global installation.
 
-Do not download a package, invoke remote `npx`, use `latest`, or treat a repository checkout or retained guidance as an installed fallback. A global loader does not require a project-local CLI. Complete executable discovery and selection first, then verify that exact executable's package identity and version in a dedicated invocation:
+Do not download a package, invoke remote `npx`, use `latest`, or treat a repository checkout or retained guidance as an installed fallback. A global loader does not require a project-local CLI. Complete executable discovery and selection first, then use the selected executable for the focused operation.
+
+For `review`, `author-revise`, `upgrade`, or `verify`, make one standalone request for the requested operation:
 
 ```text
-<focused-spec-cli> version --json
+<focused-spec-cli> instructions --protocol 1 --topic <operation> --json
 ```
 
-Keep that exact executable for the whole workflow step. Do not combine discovery or the version check with workflow acquisition in one tool invocation or command chain.
+Validate that response before following it: protocol `1`, package name `focused-spec`, the exact selected installation's nonempty version, the requested operation topic, and complete nonempty Markdown containing clearly separated workflow-router and operation sections. Derive package identity and version from this response; do not make a separate `version` or workflow-only request for the same operation.
+
+Keep that exact executable for the whole workflow step. Do not combine discovery or acquisition with another command or chain.
 
 The CLI installation and consuming project are independent. Project configuration, documents, format/runner packages, and project modules resolve from the explicit project root passed to project-reading commands; they do not resolve from the CLI installation directory.
 
-## Load the workflow router
+## Load workflow-only guidance
 
-After executable selection and the completed version check, make a new standalone tool invocation containing only:
+When no operation topic is needed, make one standalone request containing only:
 
 ```text
 <focused-spec-cli> instructions --protocol 1 --topic workflow --json
 ```
 
-Do not pass a project root to `instructions`. Wait for completion, then follow the returned package-owned workflow router alongside the host workflow when present. The router owns focused-topic selection, response handling, full-output recovery, and downstream plugin-document routing. This loader does not duplicate those contracts.
+Validate the same protocol, package identity/version, exact `workflow` topic, and complete nonempty Markdown. Workflow-only content is router-only. Do not pass a project root to `instructions`; it reads package assets only.
+
+For either request, recover complete stdout from the successful call's linked full-output artifact when the host clips the preview. A clipped preview, extracted `content`, stale guidance, repository file, or different installation is not a substitute. Stop if complete matching output cannot be recovered.
 
 Loading guidance does not authorize writes, installation, configuration, evidence changes, or actions forbidden by the host's current phase. Standalone BDD work needs no SDD host. SDK-only execution needs no focused configuration or CLI plugins.
 
-Use the same selected executable for every focused-spec command in the workflow step. If that installation is upgraded during the step, restart from its fresh loader and workflow. If no compatible installed CLI is available or the workflow request fails, stop focused-spec work and report the missing installation or command failure rather than using downloaded, embedded, stale, or repository guidance.
+If the selected installation is upgraded, reacquire fresh guidance. Missing or failed guidance blocks focused-spec work; report it without downloaded, embedded, stale, or repository fallback.

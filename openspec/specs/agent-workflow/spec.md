@@ -219,7 +219,7 @@ When a task names an OpenSpec change but does not prescribe a focused scope labe
 - **THEN** the pre-transition checkpoint freezes and executes that scope; missing or ambiguous scope fails
 
 ### Requirement: Installed guidance bootstrap
-The focused-spec loader SHALL obtain protocol-1 JSON workflow guidance from a selected installed CLI before each focused-spec workflow step. The selected CLI MAY be project-local, global, or explicitly located. Guidance SHALL belong to that executable's package, while configuration and plugins SHALL resolve from the consuming project root.
+The focused-spec loader SHALL obtain protocol-1 JSON workflow guidance from a selected installed CLI before each focused-spec workflow step. The selected CLI MAY be project-local, global, or explicitly located. Guidance SHALL belong to that executable's package, while configuration and plugins SHALL resolve from the consuming project root. Evaluation SHALL resolve executable selection using the evaluated driver's effective search environment.
 
 <!-- focused-spec:id=agent.guidance.project-local -->
 #### Scenario: A selected installation supplies its own workflow
@@ -241,6 +241,40 @@ The focused-spec loader SHALL obtain protocol-1 JSON workflow guidance from a se
 #### Scenario: A subsequent step reloads an updated package
 - **WHEN** the selected CLI is updated between two focused-spec workflow steps in the same agent session
 - **THEN** the second step reloads the authoritative workflow from that installation rather than relying solely on retained instructions
+
+<!-- focused-spec:id=agent.guidance.effective-path -->
+#### Scenario: Bare executable resolution matches the evaluated driver
+- **WHEN** an evaluated agent successfully requests guidance through a bare executable resolved from the consuming project's executable directory ahead of the supervisor search path
+- **THEN** the acquisition gate compares the response with that serving installation rather than rejecting it or substituting a supervisor-selected installation
+- **AND** An earlier non-focused executable shadow SHALL remain a failure, and an explicitly selected external executable SHALL retain its own identity.
+
+<!-- focused-spec:id=agent.guidance.artifact-recovery -->
+#### Scenario: Complete linked output establishes acquisition
+- **WHEN** a successful standalone guidance response is clipped and a subsequent completed read recovers that call's complete matching response from its linked artifact
+- **THEN** the acquisition gate accepts the valid serving-package protocol response while rejecting missing, failed, incomplete, premature, unrelated, or mismatched recovery.
+<!-- focused-spec:id=agent.guidance.standalone-request -->
+#### Scenario: A chained acquisition requires a fresh standalone request
+- **WHEN** an agent combines a guidance request with executable discovery, version checks, or another command
+- **THEN** it requests that topic again by itself before proceeding; a full artifact from the combined invocation does not certify acquisition.
+
+### Requirement: On-demand integration selection
+The universal workflow SHALL direct first integration and explicitly requested composition changes to the same installation's integration topic before selecting or installing execution dependencies. It SHALL reuse supported established choices for ordinary work instead of selecting a new architecture on every task. Topic responses SHALL receive the same complete-response, package, version and protocol checks as workflow guidance.
+
+<!-- focused-spec:id=agent.integration.preserve-existing -->
+#### Scenario: An ordinary task does not replace the configured composition
+- **WHEN** an agent revises one outcome in an already configured supported inline, registry-backed or executable-scenario project
+- **THEN** it preserves the canonical behavioral source and unaffected configuration, identities and evidence ownership instead of converting to its preferred format or reinstalling a different workflow
+
+<!-- focused-spec:id=agent.integration.route-selection -->
+#### Scenario: Missing integration leads to the package-owned selection procedure
+- **WHEN** an agent is asked to choose a first focused-spec composition or explicitly reconsider an existing one, including adding an independent scenario SDK for SDK-only execution without focused configuration or CLI plugins
+- **THEN** it acquires and validates the selected CLI's complete integration topic before selecting a composition rather than guessing from a host name or requiring every plugin to be installed
+
+<!-- focused-spec:id=agent.integration.missing-dependency -->
+#### Scenario: An absent execution dependency requires a grounded composition decision
+- **WHEN** scenario authoring encounters an absent execution dependency
+- **THEN** the agent checks the manifest, lockfile, existing configuration and suite to distinguish repair of an established compatible composition from first selection, and acquires integration guidance before a first selection or composition change
+- **AND** Reinstalling a dependency already selected by the project SHALL NOT alone imply a new composition; a first SDK-only selection SHALL NOT be exempt merely because no CLI configuration is requested.
 
 ### Requirement: Self-guided authorized project upgrades
 An explicit update SHALL upgrade the local package/integration, load fresh guidance and migrate config/format APIs. It SHALL preserve behavior, exact opaque scope-local IDs, evidence, AND obligations and runner settings. Explicit adapter selection MAY retain inline authoring; REVISES SHALL be removed without inheritance, identity loss or forced YAML conversion. Legacy APIs SHALL NOT remain runtime fallbacks.
@@ -276,18 +310,6 @@ Read-only review SHALL report evidence gaps without writes. Planning-only work S
 - **THEN** the workflow reports or plans those changes without writing registry, inline evidence integration, configuration, tests or product implementation, and does not claim the revised integration complete
 
 
-### Requirement: On-demand integration selection
-The universal workflow SHALL direct first integration and explicitly requested composition changes to the same installation's integration topic. It SHALL reuse supported configured choices for ordinary work instead of selecting a new architecture on every task. Topic responses SHALL receive the same complete-response, package, version and protocol checks as workflow guidance.
-
-<!-- focused-spec:id=agent.integration.preserve-existing -->
-#### Scenario: An ordinary task does not replace the configured composition
-- **WHEN** an agent revises one outcome in an already configured supported inline, registry-backed or executable-scenario project
-- **THEN** it preserves the canonical behavioral source and unaffected configuration, identities and evidence ownership instead of converting to its preferred format or reinstalling a different workflow
-
-<!-- focused-spec:id=agent.integration.route-selection -->
-#### Scenario: Missing integration leads to the package-owned selection procedure
-- **WHEN** an agent is asked to choose a first focused-spec composition or explicitly reconsider an existing one, including adding an independent scenario SDK for SDK-only execution without focused configuration or CLI plugins
-- **THEN** it acquires and validates the local CLI's complete integration topic before selecting a composition rather than guessing from a host name or requiring every plugin to be installed
 
 ### Requirement: Project-grounded composition choices
 Integration guidance SHALL separate host process, canonical behavioral source, evidence ownership and execution runtime. Agents SHALL inspect project context and user intent before recommending the smallest compatible composition. Existing supported registrations take precedence; a host's name SHALL NOT mandate a parser, registry, inline dialect or SDK.
@@ -443,3 +465,96 @@ Evaluation SHALL require valid workflow acquisition per execution context and pe
 #### Scenario: Missing redundant reads remain observations
 - **WHEN** a correctly completed native dialogue retains valid unchanged guidance but does not repeat acquisition after approval
 - **THEN** the saved result retains the missing repeat as a non-gating observation without changing task or lifecycle success, certification, exit status, or triggering a failure interview; a real outcome failure still fails independently, and historical artifacts remain unchanged
+
+### Requirement: Workflow-independent BDD and SDD skill activation
+Agents SHALL load the installed focused-spec skill before reviewing, authoring, revising, or verifying BDD executable scenarios or their application drivers, and before SDD steps concerning behavioral requirements or scenarios. Loading SHALL NOT depend on a named framework, artifact format, explicit skill invocation, or the user mentioning focused-spec. Host procedures SHALL apply when present, without making a host mandatory for BDD work.
+
+<!-- focused-spec:id=agent.activation.bdd-sdk -->
+#### Scenario: Standalone SDK scenarios activate the skill
+- **WHEN** a user asks the agent to make a native code scenario suite independently runnable through its language SDK and ordinary tests, without an SDD host or CLI integration
+- **THEN** the agent reads the installed skill and obtains current workflow guidance from the explicitly resolved project-local installation before performing the authorized scenario work
+- **AND** the agent executes the native suite without adding a Markdown companion, registry, focused-spec configuration, or CLI plugins merely to satisfy loading
+- **AND** the user is not required to invoke focused-spec or the skill manually
+
+<!-- focused-spec:id=agent.activation.bdd-driver -->
+#### Scenario: Application driver repair activates the skill without a product keyword
+- **WHEN** a user asks the agent to repair an executable scenario driver that returns expected results instead of observing the real application, without naming focused-spec or SDD
+- **THEN** the agent loads the skill and acquires current local workflow guidance before changing the driver
+- **AND** it retains independently authored expectations and one native suite, and proves the claimed application outcome through native execution and a reversible product regression rather than accepting an expectation echo
+
+<!-- focused-spec:id=agent.activation.sdd -->
+#### Scenario: Broader activation retains host workflow boundaries
+- **WHEN** an agent reviews or plans behavioral requirements in an existing SDD workflow without the user invoking focused-spec
+- **THEN** it loads focused-spec alongside the applicable host workflow and acquires current project-local guidance
+- **AND** loading does not authorize writes in read-only review or implementation and executable integration during a planning-only phase
+- **AND** the host continues to own its approval and lifecycle operations
+
+### Requirement: Authorization-grounded native enrollment completion
+Before changing a native behavioral item, authoring SHALL establish the requested outcome, actual host phase and permissions, and applicable identity/evidence obligations. It SHALL include required auxiliary integration in a concrete approval proposal when approval is needed. Existing implementation, tests, a wording-only edit, or absent enrollment SHALL NOT by themselves establish a planning-only restriction or remove required work.
+
+<!-- focused-spec:id=agent.author.complete-proposal -->
+#### Scenario: Approval covers the complete discovered revision
+- **WHEN** a requested native revision needs identity or evidence metadata and the host requires confirmation
+- **THEN** the agent proposes the native revision, exact identity, all required evidence members, final selectors and complete affected paths together rather than recommending an unenrolled wording-only substitute as completed integration
+
+<!-- focused-spec:id=agent.author.real-phase-boundary -->
+#### Scenario: A genuine planning boundary defers rather than drops evidence
+- **WHEN** the host explicitly restricts the current operation to planning, or the user explicitly excludes required integration edits
+- **THEN** the agent respects that boundary, records the exact remaining work and missing authorization, and does not write executable integration or claim synchronized completion
+- **AND** Without such a restriction, existing implementation and tests SHALL NOT justify inventing a later permission requirement for otherwise authorized enrollment and verification.
+
+<!-- focused-spec:id=agent.author.enroll-before-completion -->
+#### Scenario: Existing tests do not substitute for enrollment and execution
+- **WHEN** authorized native authoring has suitable existing tests but the changed item is not yet enrolled
+- **THEN** completion requires the documented native binding, every selected evidence member, configured execution, controlled product-regression sensitivity with exact restoration, and completed-scope execution; ordinary test passes or host validation alone do not complete integration
+
+### Requirement: Outcome-preserving evaluation dialogue
+A tool-free evaluation test user SHALL answer from the original task and conversation while preserving the requested outcome. It SHALL NOT select an assistant-offered narrower substitute merely because it is recommended, invent undisclosed integration mechanics, or grant writes through clarification instead of genuine approval.
+
+<!-- focused-spec:id=agent.eval.dialogue-outcome -->
+#### Scenario: A recommended scope reduction is not implied consent
+- **WHEN** an authoring agent offers wording-only completion instead of required auxiliary work it has already identified as part of the requested outcome
+- **THEN** the test user retains that outcome or requests a concrete complete proposal using only disclosed information, without suggesting hidden paths, selectors, skills or commands
+- **AND** Clarification SHALL NOT authorize file writes; genuine plan/path approval and explicit cancellation or refinement SHALL remain independently enforced.
+
+### Requirement: Prerequisite-aware native outcome diagnostics
+Native authoring evaluation SHALL distinguish missing or ambiguous identity/binding from a judged behavioral mismatch. If a unique bound native item is unavailable, its bound-outcome check SHALL be reported as unjudged rather than as evidence that native behavior was lost. Missing enrollment SHALL still fail authoring and prevent unsupported execution claims.
+
+<!-- focused-spec:id=agent.eval.bound-outcome-prerequisite -->
+#### Scenario: Missing enrollment does not imply lost native prose
+- **WHEN** revised native prose expresses the requested outcome but no unique native identity or evidence binding selects it
+- **THEN** authoring fails for the missing binding and reports its bound outcome as unjudged, while selection-dependent execution remains unverified
+- **AND** Once uniquely bound, an incorrect outcome SHALL fail its behavioral check; a correct outcome SHALL NOT by itself certify evidence execution or sensitivity.
+
+### Requirement: Outcome-based integration evaluation
+Integration task success SHALL be determined by the requested composition, authorization boundaries, protected-state integrity, native behavioral source, actual execution and application-regression sensitivity. Integration-topic acquisition SHALL be recorded separately as a procedural observation and SHALL NOT by itself fail a correctly completed task.
+
+<!-- focused-spec:id=agent.eval.integration-outcome -->
+#### Scenario: A correct SDK repair does not fail for an unread integration topic
+- **WHEN** an agent installs the correct execution SDK and repairs the real application driver without acquiring the integration topic
+- **THEN** the task passes only if its composition, boundaries, independent expectations, execution and regression sensitivity pass, while the missing acquisition remains a false observation outside the success gates
+- **AND** Reading the integration topic SHALL NOT rescue a false-green driver, incorrect composition, unauthorized change, failed execution or insensitive assertion. Historical scores SHALL remain immutable.
+
+### Requirement: Research and interaction failures retain diagnostic evidence
+Evaluation results SHALL retain completed failure-interview replies in order and the available output of unsuccessful or undecodable user responders. Diagnostic collection SHALL NOT grant consent, retry a scored turn, change its verdict, or rewrite historical results.
+
+<!-- focused-spec:id=agent.eval.research-replies -->
+#### Scenario: A continuation follows substantive research recommendations
+- **WHEN** an interview produces recommendations and then a completed runtime continuation about unfinished scored-task work
+- **THEN** the diagnostic answer retains the recommendations and continuation in order without changing scored turns or gates
+
+<!-- focused-spec:id=agent.eval.responder-failure -->
+#### Scenario: A host question receives no usable responder decision
+- **WHEN** a responder exits unsuccessfully, throws a transport error, or produces an undecodable answer
+- **THEN** the planning result retains the unanswered question and available responder output with no decoded decision, and does not authorize execution
+
+### Requirement: Editorial-only cleanup is outside mandatory activation
+Mandatory focused-spec skill loading SHALL NOT be required for editorial-only changes that preserve behavioral meaning, scope, conditions, outcomes, identities, selectors, and evidence. Uncertain or semantic edits SHALL remain governed by the existing BDD/SDD activation requirements.
+
+<!-- focused-spec:id=agent.activation.editorial-only -->
+#### Scenario: Meaning-preserving editorial cleanup does not activate the skill
+- **WHEN** a user requests only spelling, punctuation, or formatting cleanup of a behavioral item and the edit leaves all behavioral meaning, scope, conditions, outcomes, identities, selectors, and evidence unchanged
+- **THEN** the agent may perform that editorial change without mandatory focused-spec skill loading
+- **AND** any edit that changes or may change a behavioral claim or its executable association remains covered by the established activation rules
+
+

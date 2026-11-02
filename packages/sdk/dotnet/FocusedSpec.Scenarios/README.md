@@ -1,10 +1,10 @@
 # FocusedSpec.Scenarios
 
-Independent typed Given/When/Expect scenario execution for .NET 9 and later. The SDK has no focused-spec, OpenSpec, or xUnit runtime dependency.
+Independent typed Given/When/Expect scenario execution for .NET 8, .NET 9, and .NET 10 consumers. The package targets `net8.0` and `net10.0`; NuGet selects the compatible `net8.0` asset for .NET 9 consumers. It has no focused-spec, OpenSpec, xUnit, or other runtime dependency.
 
 ## Install
 
-Download the SDK `.nupkg` from the [GitHub Releases](https://github.com/bamanoz/focused-spec/releases/latest), add it to a project-local NuGet feed, and pin the matching package version in your project. It is not published on nuget.org; no Microsoft account is needed. Follow the [installation guide](../../../../docs/guides/install.md#net-sdk-from-github-releases) for download commands, checksum verification, configuration, and repeatable restore on other machines or CI.
+Download the versioned SDK `.nupkg` from the matching [GitHub Release](https://github.com/bamanoz/focused-spec/releases), verify it against that release's SHA-256 checksum, and place the unchanged package in a project-local NuGet feed. Pin the same package version in `PackageReference` and restore only after the asset is present. It is not published on nuget.org; no Microsoft account, GitHub login, Node.js, or focused-spec CLI is needed. Follow the [installation guide](../../../../docs/guides/install.md#net-sdk-from-github-releases) for exact download, checksum, feed configuration, source-mapping safeguards, and repeatable restore commands.
 
 ## Declare and execute a scenario
 
@@ -35,15 +35,15 @@ var suite = new ScenarioSuite<int, int, int>(
     new ScenarioDriverBinding("AccountScenarios.cs", "Example.AccountScenarios.Driver"));
 ```
 
-`Path` is relative to the suite source. `Export` names a fully qualified public static field or parameterless property returning the suite's typed driver. The binding is optional; SDK-only callers continue to pass drivers directly to `ScenarioExecutor.VerifyAsync`.
+`Path` must be a non-rooted, project-relative path without parent segments or control characters. `Export` must be a fully qualified C# namespace/type path naming a public static field or parameterless property returning the suite's typed driver. `ScenarioValidation.Validate` checks this lexical metadata without resolving or invoking it. The binding is optional; SDK-only callers continue to pass drivers directly to `ScenarioExecutor.VerifyAsync`.
 
 ## Public API
 
 - `Scenario<TGiven,TWhen,TExpect>` stores exact `Id`, `Name`, `Given`, `When`, and `Expect` values.
 - `ScenarioSuite<TGiven,TWhen,TExpect>` groups scenarios and optionally exposes inert `ScenarioDriverBinding` metadata. `ScenarioValidation.Validate` rejects empty suites, invalid identities/data, and duplicate IDs.
 - `ScenarioDriver<TSubject,TGiven,TWhen,TExpect>` supplies asynchronous `Given` and `When` operations and optional asynchronous `Cleanup`.
-- `ScenarioExecutor.VerifyAsync` validates before preparation, clones Given/When inputs, executes the driver, compares the actual result, and returns a snapshot. `ScenarioMismatchException` exposes scenario ID/name and stable Expected/Actual values.
-- `DriverContext` provides scenario identity, the execution cancellation token, and `Explain(message, data?)`.
+- `ScenarioExecutor.VerifyAsync` validates before preparation, clones Given/When inputs, executes the driver, compares the actual result, and returns a snapshot. `ScenarioMismatchException` exposes scenario ID/name and stable Expected/Actual values; its message includes bounded structural values without calling user `ToString` or serializer hooks.
+- `DriverContext` provides scenario identity, the execution cancellation token, and `Explain(message, data?)`; message and structured data are validated even when no observer is configured.
 - `ExecutionEvent` records observations and explanations. Supply an observer to `VerifyAsync` to collect an execution-local ordered stream.
 
 Data values are recursively validated before preparation. Comparison is typed and structural: runtime types, event order, nested fields, null and empty collections remain distinct. JSON serialization is not used as an equality oracle. Mutable input values, including nested record fields, are copied before driver calls while preserving their CLR types. Cycles, non-finite numbers, delegates, streams, tasks, and reflection type objects are unsupported.

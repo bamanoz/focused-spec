@@ -1,11 +1,12 @@
 import { spawnSync } from 'node:child_process'
-import { access, mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ExecutionResult, FocusedSpecConfig, Violation } from '../packages/core/src/model.js'
 import { loadConfig } from '../packages/core/src/config.js'
+import { resolvePackageReference } from '../packages/core/src/plugin-module.js'
 
 const cli = fileURLToPath(new URL('../packages/core/dist/cli.js', import.meta.url))
 const modules = fileURLToPath(new URL('../node_modules', import.meta.url))
@@ -197,19 +198,58 @@ describe('plugin architecture', () => {
 
   it('resolves an import-only consumer package subpath', async () => {
     const { root, config } = await fixture()
-    await put(root, 'node_modules/consumer-plugins/package.json', JSON.stringify({ name: 'consumer-plugins', type: 'module', exports: { './format': { import: './format.mjs' }, './runner': { import: './runner.mjs' } } }))
-    await put(root, 'node_modules/consumer-plugins/format.mjs', nativeFormat)
-    await put(root, 'node_modules/consumer-plugins/runner.mjs', runner)
+    await put(root, 'package.json', JSON.stringify({ private: true, type: 'module', workspaces: ['packages/*'] }))
+    const workspace = join(root, 'packages/consumer-plugins')
+    await put(workspace, 'package.json', JSON.stringify({ name: 'consumer-plugins', type: 'module', exports: {
+      '.': { import: './runner.mjs' }, './format': { import: './format.mjs' },
+      './catalog': { import: './catalog.mts' }, './runner': { import: './runner.mjs' },
+    } }))
+    await put(workspace, 'format.mjs', nativeFormat)
+    await put(workspace, 'catalog.mts', 'const markerId: string = "plugin.package.bound"; export default { apiVersion: 2, parse() { return { items: [{ line: 1, name: "Workspace catalog", nativeIds: [], markerId, evidence: ["local::protected"] }], diagnostics: [] }; } };')
+    await put(workspace, 'runner.mjs', runner)
+    await symlink(workspace, join(root, 'node_modules/consumer-plugins'), process.platform === 'win32' ? 'junction' : 'dir')
     await put(root, 'specs/native.records', '{"name":"Import-only consumer format"}')
-    await configure(root, { ...config, specifications: { formats: { native: { package: '@focused-spec/format-registry', options: { parser: { package: 'consumer-plugins/format', options: { nativeId: 'CONSUMER-1' } } } } }, documents: [{ match: 'specs/native.records', format: 'native', scope: 'current' }] }, runners: { local: { package: 'consumer-plugins/runner' } } }, { 'plugin.package.bound': { ...entry(), source: { path: 'specs/native.records', nativeId: 'CONSUMER-1' } } })
-    const passed = run(root)
-    expect(passed.code).toBe(0)
-    expect(passed.result.scenarios).toEqual([expect.objectContaining({ id: 'plugin.package.bound', status: 'PASS' })])
-    await rm(join(root, 'node_modules/consumer-plugins'), { recursive: true })
+
+    const packageRoot = await realpath(workspace)
+    for (const [reference, entry] of [['consumer-plugins', 'runner.mjs'], ['consumer-plugins/format', 'format.mjs'], ['consumer-plugins/catalog', 'catalog.mts']] as const) {
+      const resolved = await resolvePackageReference(reference, root)
+      expect(resolved.entryUrl).toBe(pathToFileURL(join(packageRoot, entry)).href)
+      expect(await realpath(resolved.manifestPath)).toBe(join(packageRoot, 'package.json'))
+    }
+    await expect(resolvePackageReference('consumer-plugins/private', root)).rejects.toThrow(/not defined by "exports"/u)
+    const entries = { 'plugin.package.bound': { ...entry(), source: { path: 'specs/native.records', nativeId: 'CONSUMER-1' } } }
+    const nested = (reference: string) => ({ package: '@focused-spec/format-registry', options: { parser: { package: reference, options: { nativeId: 'CONSUMER-1' } } } })
+    const configurePackage = async (format: unknown, runnerPackage = 'consumer-plugins/runner') => configure(root, {
+      ...config,
+      specifications: { formats: { native: format }, documents: [{ match: 'specs/native.records', format: 'native', scope: 'current' }] },
+      runners: { local: { package: runnerPackage } },
+    }, entries)
+
+    // Exercise direct format and runner hosts plus the registry's nested parser.
+    for (const [format, runnerPackage] of [[nested('consumer-plugins/format'), 'consumer-plugins/runner'], [{ package: 'consumer-plugins/catalog' }, 'consumer-plugins']] as const) {
+      await configurePackage(format, runnerPackage)
+      const passed = run(root)
+      expect(passed.code).toBe(0)
+      expect(passed.result.scenarios).toEqual([expect.objectContaining({ id: 'plugin.package.bound', status: 'PASS' })])
+    }
+
+    await rm(join(root, 'executed'))
+    for (const [format, runnerPackage] of [[nested('consumer-plugins/private'), 'consumer-plugins/runner'], [{ package: 'consumer-plugins/private' }, 'consumer-plugins/runner'], [nested('consumer-plugins/format'), 'consumer-plugins/private']] as const) {
+      await configurePackage(format, runnerPackage)
+      const unavailable = run(root)
+      expect(unavailable.code).toBe(1)
+      expect(unavailable.result.violations).toEqual(expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining('consumer-plugins') })]))
+      await expect(access(join(root, 'executed'))).rejects.toThrow()
+    }
+
+    await configurePackage(nested('consumer-plugins/format'))
+    await rm(join(root, 'node_modules/consumer-plugins'))
+    await expect(resolvePackageReference('consumer-plugins/format', root)).rejects.toThrow(/Cannot find package/u)
     const missing = run(root)
     expect(missing.code).toBe(1)
     expect(missing.result.violations).toEqual(expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining('consumer-plugins') })]))
-  })
+    await expect(access(join(root, 'executed'))).rejects.toThrow()
+  }, 60000)
 
   it('accepts normalized evidence from a storage-independent format', async () => {
     const { root, config } = await fixture()

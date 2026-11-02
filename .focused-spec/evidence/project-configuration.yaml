@@ -11,10 +11,10 @@ scopes:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects invalid runner paths and non-JSON options
     config.layout.invalid:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > rejects unsafe document layouts and escaped specification symlinks
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > rejects unsafe document layouts and escaped specification symlinks
     config.format.version-three:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > advertises executable workflow guidance for obsolete configuration and inline metadata
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > advertises executable workflow guidance for obsolete configuration and inline metadata
     config.registry.required:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects a missing evidence registry
@@ -26,16 +26,16 @@ scopes:
         - vitest::test/cli.spec.ts::focused-spec CLI > reports all scenarios, planned evidence, and unique resolved targets
     config.source.layout-variants:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > discovers fixed and captured scope documents from declared patterns
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > discovers fixed and captured scope documents from declared patterns
     config.source.missing-scope:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > rejects a selected scope with no documents
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > rejects a selected scope with no documents
     config.source.empty-scope-document:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects selections containing only unmarked native content
     config.source.overlap:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > rejects a document claimed by multiple layouts
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > rejects a document claimed by multiple layouts
     config.source.mixed-scope-enrollment:
       evidence:
         - vitest::test/cli.spec.ts::focused-spec CLI > runs marked outcomes beside untouched native content
@@ -44,10 +44,10 @@ scopes:
         - vitest::test/cli.spec.ts::focused-spec CLI > rejects selections containing only unmarked native content
     config.glob.bounds:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > rejects excessive document and exclusion glob complexity
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > rejects excessive document and exclusion glob complexity
     config.glob.compatible:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > preserves padded stepped and hidden document discovery
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > preserves padded stepped and hidden document discovery
     format.selection.explicit:
       evidence:
         - vitest::test/plugins.spec.ts::plugin architecture > selects explicit Markdown and Gherkin formats
@@ -64,9 +64,9 @@ scopes:
           acyclic YAML aliases in format and runner options
     config.source.dot-capture:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > preserves captured scope
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > preserves captured scope
           before a globstar with leading ./ for zero-depth documents
-        - vitest::test/cli.spec.ts::focused-spec CLI > preserves captured scope
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > preserves captured scope
           before a globstar with leading ./ for nested documents
     config.evidence.adapter-owned:
       evidence:
@@ -74,12 +74,24 @@ scopes:
           without any registry file
         - vitest::test/cli.spec.ts::focused-spec CLI > runs registry-backed native
           formats without core evidence configuration
-        - vitest::test/cli.spec.ts::focused-spec CLI > rejects old config and format
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > rejects old config and format
           APIs without fallback
     config.format.api-cutover:
       evidence:
-        - vitest::test/cli.spec.ts::focused-spec CLI > rejects old config and format
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > rejects old config and format
           APIs without fallback
     format.response.lossless:
       evidence:
         - vitest::test/audit-runtime.spec.ts::audit runtime correctness > rejects lossy format responses before transport
+    config.glob.expanded-path-safety:
+      evidence:
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > rejects unsafe brace-expanded document and exclusion paths before discovery
+    config.glob.expanded-absolute-safety:
+      evidence:
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > rejects unsafe brace-expanded document and exclusion paths before discovery
+    config.source.expanded-capture-scope:
+      evidence:
+        - vitest::test/cli-discovery-layouts.spec.ts::focused-spec CLI > captures scope from the matching expanded brace alternative
+    config.migration.selected-cli-upgrade:
+      evidence:
+        - vitest::test/core.spec.ts::Markdown adapter migration guidance > directs inline metadata to the selected CLI upgrade topic

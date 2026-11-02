@@ -23,9 +23,8 @@ function check(command, args) {
 
 try {
   check('uv', ['venv', '--python', '>=3.11', '--no-python-downloads', environment])
-  check('uv', ['pip', 'install', '--python', python, 'pytest', './packages/sdk/python'])
+  check('uv', ['pip', 'install', '--python', python, 'pytest==8.4.2', './packages/sdk/python'])
   const checks = [
-    [process.execPath, [cli, 'run', '--root', '.']],
     [process.execPath, ['--test', '--test-reporter=spec', 'examples/scenarios/typescript/test/account.node.mjs']],
     [process.execPath, [cli, 'run', '--root', 'examples/scenarios/typescript']],
     ['go', ['-C', 'examples/scenarios/go', 'test', '-count=1', './...']],

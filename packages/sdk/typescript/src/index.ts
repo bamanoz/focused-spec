@@ -1,4 +1,4 @@
-import { deepStrictEqual } from 'node:assert/strict'
+import { AssertionError, deepStrictEqual } from 'node:assert/strict'
 
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue }
 
@@ -123,7 +123,14 @@ export interface VerifyOptions {
   readonly onEvent?: (event: ExecutionEvent) => void
 }
 
-const ignoreExplanation = (_message: string, _data?: JsonValue): void => {}
+function validateExplanation(message: string, data: JsonValue | undefined): void {
+  if (typeof message !== 'string' || !message.trim()) throw new TypeError('explanation message must be nonblank')
+  if (data !== undefined) validateJson(data)
+}
+
+const ignoreExplanation: DriverContext['explain'] = (message, data) => {
+  validateExplanation(message, data)
+}
 
 function observation(onEvent: VerifyOptions['onEvent'], name: string, value: JsonValue): void {
   if (onEvent === undefined) return
@@ -132,13 +139,58 @@ function observation(onEvent: VerifyOptions['onEvent'], name: string, value: Jso
 
 function explanation(onEvent: NonNullable<VerifyOptions['onEvent']>): DriverContext['explain'] {
   return (message, data) => {
-    if (typeof message !== 'string' || !message.trim()) throw new TypeError('explanation message must be nonblank')
+    validateExplanation(message, data)
     if (data === undefined) {
       onEvent({ kind: 'explanation', message })
       return
     }
-    validateJson(data)
     onEvent({ kind: 'explanation', message, data: structuredClone(data) })
+  }
+}
+
+interface ComparisonError extends Error {
+  readonly actual: unknown
+  readonly expected: unknown
+  readonly operator: string
+  readonly code: string
+  readonly generatedMessage: boolean
+}
+
+// Keep Node's assertion prototype without requiring Node declarations in SDK consumers.
+const AssertionErrorBase: new (options: {
+  message: string
+  expected: JsonValue
+  actual: JsonValue
+  operator: string
+  diff: 'full'
+  stackStartFn: Function
+}) => ComparisonError = AssertionError
+
+export class ScenarioMismatchError extends AssertionErrorBase {
+  declare readonly expected: JsonValue
+  declare readonly actual: JsonValue
+  declare readonly cause: ComparisonError
+  readonly scenarioId: string
+  readonly scenarioName: string
+
+  constructor(
+    scenarioId: string,
+    scenarioName: string,
+    expected: JsonValue,
+    actual: JsonValue,
+    comparison: ComparisonError,
+  ) {
+    super({
+      message: comparison.message,
+      expected,
+      actual,
+      operator: comparison.operator,
+      diff: 'full',
+      stackStartFn: ScenarioMismatchError,
+    })
+    this.scenarioId = scenarioId
+    this.scenarioName = scenarioName
+    Object.defineProperty(this, 'cause', { value: comparison, configurable: true })
   }
 }
 
@@ -163,16 +215,28 @@ export async function verifySpecification<Subject, Given, When, Expect>(
   observation(options.onEvent, 'When', scenario.when as JsonValue)
   observation(options.onEvent, 'Expect', scenario.expect as JsonValue)
   const subject = await driver.given(input.given, context)
-  let actual: Expect | undefined
+  let actualSnapshot: Expect | undefined
   let failed = false
   let failure: unknown
   try {
     options.signal?.throwIfAborted()
-    actual = await driver.when(subject, input.when, context)
+    const actual = await driver.when(subject, input.when, context)
     options.signal?.throwIfAborted()
     validateJson(actual)
+    actualSnapshot = structuredClone(actual)
     observation(options.onEvent, 'Actual', actual)
-    deepStrictEqual(actual, scenario.expect, `${scenario.id}: ${scenario.name}`)
+    let comparison: AssertionError | undefined
+    try {
+      deepStrictEqual(actual, scenario.expect)
+    } catch (error) {
+      if (!(error instanceof AssertionError)) throw error
+      error.message = `${scenario.id}: ${scenario.name}\n${error.message}`
+      comparison = error
+    }
+    if (comparison !== undefined) {
+      const expectedSnapshot = structuredClone(scenario.expect) as unknown as JsonValue
+      throw new ScenarioMismatchError(scenario.id, scenario.name, expectedSnapshot, actualSnapshot as unknown as JsonValue, comparison)
+    }
   } catch (error) {
     failed = true
     failure = error
@@ -185,5 +249,5 @@ export async function verifySpecification<Subject, Given, When, Expect>(
     throw error
   }
   if (failed) throw failure
-  return actual as Expect
+  return actualSnapshot as Expect
 }

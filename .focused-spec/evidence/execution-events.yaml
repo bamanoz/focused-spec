@@ -2,17 +2,12 @@ scopes:
   current:
     execution-events.sdk-capture:
       evidence:
-        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
-          observes actual verification through one event channel
-        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
-          observes actual Go verification through one event channel
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > observes actual verification through one event channel
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios > observes actual Go verification through one event channel
     execution-events.snapshots:
       evidence:
-        - vitest::test/executable-scenarios.spec.ts::executable scenarios >
-          isolates observation snapshots from driver observer and cleanup mutation
-        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
-          isolates Go observation snapshots from driver observer and cleanup
-          mutation
+        - vitest::test/executable-scenarios.spec.ts::executable scenarios > isolates observation snapshots from driver observer and cleanup mutation
+        - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios > isolates Go observation snapshots from driver observer and cleanup mutation
     execution-events.portable-go:
       evidence:
         - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
@@ -25,3 +20,13 @@ scopes:
         - vitest::test/go-executable-scenarios.spec.ts::Go executable scenarios >
           exposes the real Go bank execution across standalone detailed and JSON
           output
+    execution-events.explain-validation-independent:
+      evidence:
+        - vitest::packages/sdk/typescript/test/index.test.ts::TypeScript executable scenarios > validates invalid explanations with observer=false
+        - vitest::packages/sdk/typescript/test/index.test.ts::TypeScript executable scenarios > validates invalid explanations with observer=true
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > validates explanations independently of observation
+        - vitest::test/dotnet-scenarios.spec.ts::dotnet executable scenarios > validates .NET explanations with and without an observer
+    execution-events.actual-result-snapshot:
+      evidence:
+        - vitest::packages/sdk/typescript/test/index.test.ts::TypeScript executable scenarios > cleanup mutation preserves actual result and mismatch snapshots
+        - vitest::test/python-scenarios.spec.ts::python executable scenarios > preserves pre-cleanup actual and mismatch snapshots

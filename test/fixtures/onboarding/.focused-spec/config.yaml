@@ -1,0 +1,8 @@
+version: 5
+specifications:
+  formats:
+    inline: { package: '@focused-spec/format-inline' }
+  documents:
+    - { match: 'specs/**/*.md', scope: current, format: inline }
+runners:
+  vitest: { package: '@focused-spec/runner-vitest' }

@@ -34,8 +34,16 @@ export async function resolvePackageReference(reference: string, projectRoot: st
   const compiledResolver = fileURLToPath(new URL('./plugin-resolver.js', import.meta.url))
   const sourceResolver = fileURLToPath(new URL('./plugin-resolver.ts', import.meta.url))
   const resolver = existsSync(compiledResolver) ? compiledResolver : sourceResolver
+  // The runtime selects emitted JavaScript or source TypeScript; only the eval's
+  // import.meta.resolve is anchored to the consuming cwd, not this module's URL.
+  const script = [
+    "import { pathToFileURL } from 'node:url'",
+    'const { resolvePackageReference } = await import(pathToFileURL(process.argv[1]).href)',
+    'const value = resolvePackageReference(process.argv[2], process.argv[3], import.meta.resolve)',
+    'process.stdout.write(JSON.stringify(value))',
+  ].join('\n')
   const stdout = await new Promise<string>((resolvePromise, rejectPromise) => {
-    execFile(process.execPath, [...pluginExecArgv(resolver, true), resolver, reference, projectRoot], {
+    execFile(process.execPath, [...pluginExecArgv(resolver), '--input-type=module', '--eval', script, resolver, reference, projectRoot], {
       cwd: projectRoot,
       encoding: 'utf8',
       maxBuffer: 65_536,
@@ -72,16 +80,15 @@ export async function pluginReference(projectRoot: string, config: PluginConfig)
   return path
 }
 
-// Hosts enable Node's parent-aware ESM resolver. Packages are resolved from the
-// consumer, never from this loader's own dependency tree or require conditions.
-export function pluginUrl(reference: string, projectRoot: string): string {
+// Packages use the consumer-anchored resolver; project files retain their URL.
+export async function pluginUrl(reference: string, projectRoot: string): Promise<string> {
   return isAbsolute(reference)
     ? pathToFileURL(reference).href
-    : import.meta.resolve(reference, pathToFileURL(resolve(projectRoot, 'package.json')).href)
+    : (await resolvePackageReference(reference, projectRoot)).entryUrl
 }
 
 export function pluginExecArgv(reference: string, mayLoadTypeScript = false): string[] {
-  const args = ['--experimental-import-meta-resolve']
+  const args: string[] = []
   if ((mayLoadTypeScript || extname(reference) === '.ts' || extname(reference) === '.mts') && !process.features.typescript) args.push('--experimental-strip-types')
   return args
 }

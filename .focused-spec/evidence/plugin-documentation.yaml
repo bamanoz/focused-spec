@@ -30,5 +30,5 @@ scopes:
           invalid requests and serves help without setup
     plugin-docs.distribution.sequential:
       evidence:
-        - vitest::test/package.spec.ts::package distribution > reads composed
+        - vitest::test/package-guidance.spec.ts::package distribution > reads composed
           plugin documentation through separate packed-consumer requests

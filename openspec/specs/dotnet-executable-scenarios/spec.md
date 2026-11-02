@@ -23,12 +23,17 @@ A .NET scenario SHALL require one exact nonblank control-free ID, a nonblank nam
 - **THEN** suite validation reports the invalid declaration before invoking the driver
 
 ### Requirement: Exact typed .NET comparison and isolation
-The .NET SDK SHALL prepare the application from Given, execute When, and compare the actual observation with Expect using exact recursive structural equality that distinguishes runtime types, collection order, and null-versus-empty collections. Mutating driver inputs SHALL NOT rewrite the reusable declaration or expectation. A mismatch SHALL retain scenario identity and expected/actual snapshots.
+.NET SHALL prepare Given, execute When and compare Actual with Expect by exact recursive structural equality, distinguishing runtime types, order and null versus empty collections. Driver mutation SHALL NOT rewrite declarations or expectations. Mismatches SHALL retain identity, expected/actual snapshots and deterministic structural messages, not runtime type names. Diagnostics SHALL NOT invoke serialization hooks or change comparison.
 
 <!-- focused-spec:id=dotnet-sdk.comparison -->
 #### Scenario: Runtime type or event regression fails typed expectation
 - **WHEN** an application returns an event with a different field value or CLR type from Expect
 - **THEN** verification fails with the scenario identity and stable expected and actual observations
+
+<!-- focused-spec:id=dotnet-sdk.structural-mismatch-rendering -->
+#### Scenario: Mismatch message shows observation contents
+- **WHEN** a .NET scenario expects and receives different values inside supported arrays, sequences, dictionaries, or data fields
+- **THEN** the mismatch message visibly distinguishes expected from actual contents, remains stable after cleanup mutation, and retains the typed snapshot properties
 
 ### Requirement: .NET cleanup preserves primary failures
 After successful preparation, optional synchronous or asynchronous cleanup SHALL run exactly once after success or failure. Cleanup failure SHALL prevent success and preserve a simultaneous primary failure. Failed preparation SHALL leave partial-resource cleanup to the driver.
@@ -68,7 +73,7 @@ The maintained C# bank example SHALL define its six Given/When/Expect outcomes o
 - **THEN** all six originally pass, the full-balance outcome fails through both xUnit and focused execution after the regression, and both paths pass after exact restoration
 
 ### Requirement: Optional .NET suite driver binding
-.NET suites SHALL accept optional inert source-path and exported-driver metadata without changing standalone typed verification or adding a CLI dependency. Native CLI discovery SHALL require an explicit binding and SHALL NOT infer it from xUnit wrappers or run application code to find it.
+.NET suites SHALL accept optional inert source-path/exported-driver metadata without changing standalone typed verification or requiring CLI. CLI discovery SHALL require explicit binding, without inferring xUnit wrappers or executing application code. Before driver loading or execution, validation SHALL reject supplied blank/control-containing paths and exports that are not supported C# identifiers.
 
 <!-- focused-spec:id=dotnet-sdk.driver-binding -->
 #### Scenario: Existing typed callers need no binding
@@ -79,6 +84,11 @@ The maintained C# bank example SHALL define its six Given/When/Expect outcomes o
 #### Scenario: Missing binding is not guessed
 - **WHEN** a CLI-selected C# suite omits its driver binding
 - **THEN** discovery diagnoses that source rather than guessing a driver or omitting the suite
+
+<!-- focused-spec:id=dotnet-sdk.validate-driver-binding -->
+#### Scenario: Invalid optional binding fails suite validation
+- **WHEN** a .NET suite supplies a driver binding with an empty or control-containing source path, or an invalid exported symbol
+- **THEN** suite validation rejects the binding before driver resolution or application execution
 
 ### Requirement: Static C# native discovery
 The .NET format SHALL report exact scenario IDs, names, and declaration lines from its documented C# suite grammar without loading consumer assemblies, evaluating MSBuild projects, restoring dependencies, running source generators, or executing initializers and assertions. Unsupported dynamic declarations SHALL produce source diagnostics rather than a misleading empty catalog.
@@ -128,7 +138,7 @@ Suite, driver source, and explicitly selected project paths SHALL remain inside 
 - **THEN** strict validation rejects it without compiling or loading the escaped code
 
 ### Requirement: Bounded .NET execution and trustworthy reports
-.NET helper and execution processes SHALL have bounded input, output, and lifetimes. Cancellation, timeout, build failure, crash, malformed report, duplicate result, or missing selected result SHALL NOT produce pass. Cleanup after successful preparation SHALL be awaited during cooperative termination; forced termination SHALL NOT claim guaranteed cleanup.
+.NET helper/execution input, output and lifetimes SHALL be bounded. Cancellation, timeout, build failure, crash, malformed, duplicate or missing selected results SHALL NOT pass. Cooperative termination SHALL await post-preparation cleanup; forced termination SHALL NOT guarantee it. Bridge builds SHALL preserve consumer NuGet user configuration and global packages location, without restore assets depending on removed temporary directories.
 
 <!-- focused-spec:id=dotnet-runner.transport -->
 #### Scenario: A successful build is not a result
@@ -139,6 +149,11 @@ Suite, driver source, and explicitly selected project paths SHALL remain inside 
 #### Scenario: Cancellation bounds a hanging typed action
 - **WHEN** a prepared .NET action is cancelled but does not finish cooperatively
 - **THEN** execution settles nonpassing within the documented termination bound and owned processes do not remain running
+
+<!-- focused-spec:id=dotnet-runner.nuget-state-preserved -->
+#### Scenario: Bridge execution preserves consumer restore state
+- **WHEN** the bridge runs for a consumer restored with a NuGet package and custom or user-level NuGet configuration
+- **THEN** the consumer's NuGet configuration remains in effect, its assets do not reference a removed temporary package cache, and its subsequent `dotnet build --no-restore` succeeds
 
 ### Requirement: .NET CLI execution context
 .NET CLI results SHALL retain bounded ordered SDK observations and application explanations, including valid Actual on mismatch, through the existing portable event contract. Event projection SHALL NOT become the equality oracle or change status, and unsupported event values SHALL NOT fabricate observations or passing results.

@@ -34,16 +34,29 @@ afterAll(async () => {
 describe('python executable scenarios', () => {
   it('runs the packed SDK without framework dependencies', async () => {
     const dist = join(temporary, 'dist')
-    passed(run(repository, 'uv', ['build', '--wheel', '--out-dir', dist, 'packages/sdk/python']))
-    const wheel = (await readdir(dist)).find(name => name.endsWith('.whl'))!
+    passed(run(repository, 'uv', ['build', '--out-dir', dist, 'packages/sdk/python']))
+    const artifacts = await readdir(dist)
+    const wheel = artifacts.find(name => name.endsWith('.whl'))!
+    const sdist = artifacts.find(name => name.endsWith('.tar.gz'))!
+    expect(wheel).toBeDefined()
+    expect(sdist).toBeDefined()
     const venv = join(temporary, 'venv')
     passed(run(temporary, 'uv', ['venv', venv]))
     const python = process.platform === 'win32' ? join(venv, 'Scripts', 'python.exe') : join(venv, 'bin', 'python')
     passed(run(temporary, 'uv', ['pip', 'install', '--python', python, '--no-deps', join(dist, wheel)]))
     const consumer = join(temporary, 'consumer.py')
-    await writeFile(consumer, `from importlib.metadata import requires
+    await writeFile(consumer, `from importlib.metadata import metadata, requires
+from importlib.resources import files
 from importlib.util import find_spec
 from focused_spec_scenarios import Driver, Scenario, ScenarioMismatch, verify_specification
+package_metadata = metadata('focused-spec-scenarios')
+assert package_metadata['License-Expression'] == 'MIT'
+assert package_metadata['Requires-Python'] == '>=3.11'
+assert 'Typing :: Typed' in package_metadata.get_all('Classifier')
+assert 'Programming Language :: Python :: 3.11' in package_metadata.get_all('Classifier')
+assert 'Repository, https://github.com/bamanoz/focused-spec' in package_metadata.get_all('Project-URL')
+assert 'Issues, https://github.com/bamanoz/focused-spec/issues' in package_metadata.get_all('Project-URL')
+assert files('focused_spec_scenarios').joinpath('py.typed').is_file()
 assert not requires('focused-spec-scenarios')
 assert all(find_spec(name) is None for name in ('pytest', 'focused_spec', 'openspec'))
 scenario = Scenario('deposit', 'Deposit', {'balance': 100}, 25, {'balance': 125})
@@ -57,6 +70,58 @@ else:
     raise AssertionError('incorrect application observation passed')
 `)
     passed(run(temporary, python, ['-I', consumer]))
+    const inspectArtifacts = `import email, sys, tarfile, zipfile
+from pathlib import Path
+wheel, sdist = map(Path, sys.argv[1:])
+with zipfile.ZipFile(wheel) as archive:
+    assert 'focused_spec_scenarios/py.typed' in archive.namelist()
+    wheel_metadata = email.message_from_bytes(archive.read(next(name for name in archive.namelist() if name.endswith('.dist-info/METADATA'))))
+    assert any(name.endswith('/licenses/LICENSE') for name in archive.namelist())
+with tarfile.open(sdist) as archive:
+    assert any(name.endswith('/src/focused_spec_scenarios/py.typed') for name in archive.getnames())
+    assert any(name.endswith('/LICENSE') for name in archive.getnames())
+    member = archive.extractfile(next(name for name in archive.getnames() if name.endswith('/PKG-INFO')))
+    assert member is not None
+    sdist_metadata = email.message_from_bytes(member.read())
+for package_metadata in (wheel_metadata, sdist_metadata):
+    assert package_metadata['License-Expression'] == 'MIT'
+    assert package_metadata['Requires-Python'] == '>=3.11'
+    assert 'Typing :: Typed' in package_metadata.get_all('Classifier')
+    assert 'Repository, https://github.com/bamanoz/focused-spec' in package_metadata.get_all('Project-URL')
+`
+    passed(run(temporary, python, ['-I', '-c', inspectArtifacts, join(dist, wheel), join(dist, sdist)]))
+    const sourceVenv = join(temporary, 'sdist-venv')
+    passed(run(temporary, 'uv', ['venv', sourceVenv]))
+    const sourcePython = process.platform === 'win32' ? join(sourceVenv, 'Scripts', 'python.exe') : join(sourceVenv, 'bin', 'python')
+    passed(run(temporary, 'uv', ['pip', 'install', '--python', sourcePython, '--no-deps', join(dist, sdist)]))
+    passed(run(temporary, sourcePython, ['-I', consumer]))
+  }, 120_000)
+
+  it('preserves pre-cleanup actual and mismatch snapshots', () => {
+    pytest([`${sdkTests}::test_actual_snapshot_precedes_cleanup`, `${sdkTests}::test_async_actual_snapshot_precedes_cleanup`])
+  }, 120_000)
+
+  it('executes synchronous drivers inside an active loop and rejects awaitables cleanly', () => {
+    pytest([`${sdkTests}::test_sync_verification_inside_running_loop`, `${sdkTests}::test_sync_verification_rejects_awaitables_without_warning`])
+  }, 120_000)
+
+  it('distinguishes cooperative cancellation from native task cancellation', () => {
+    pytest([`${sdkTests}::test_cooperative_cancellation_is_task_group_failure`, `${sdkTests}::test_native_task_cancellation_runs_cleanup`])
+  }, 120_000)
+
+  it('validates explanations independently of observation', () => {
+    pytest([`${sdkTests}::test_explain_validates_without_observer`])
+  }, 120_000)
+
+  it('types the explanation data argument as optional', async () => {
+    const typing = join(temporary, 'explain_typing.py')
+    await writeFile(typing, `from focused_spec_scenarios import DriverContext
+def explain_without_data(context: DriverContext) -> None:
+    context.explain("a decision")
+    context.explain("a decision with data", {"count": 1})
+`)
+    const result = run(repository, 'uv', ['run', '--no-project', '--with', 'mypy', '--with-editable', './packages/sdk/python', 'mypy', '--strict', typing])
+    passed(result)
   }, 120_000)
 
   it('rejects invalid declarations before driver execution', () => {

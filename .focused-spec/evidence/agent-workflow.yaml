@@ -2,16 +2,16 @@ scopes:
   current:
     agent.eval.guidance-approval-reuse:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > reuses unchanged guidance across a resumed approval dialogue
+        - vitest::test/evals-activation.spec.ts::agent eval harness > reuses unchanged guidance across a resumed approval dialogue
     agent.eval.guidance-invalidation:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > invalidates retained guidance without retroactively rejecting an acquired version
+        - vitest::test/evals-activation.spec.ts::agent eval harness > invalidates retained guidance without retroactively rejecting an acquired version
     agent.eval.guidance-initial-boundary:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > does not repair missing initial acquisition with a later read
+        - vitest::test/evals-activation.spec.ts::agent eval harness > does not repair missing initial acquisition with a later read
     agent.eval.guidance-context-boundary:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > requires independent acquisition for a fresh execution context
+        - vitest::test/evals-activation.spec.ts::agent eval harness > requires independent acquisition for a fresh execution context
     agent.eval.guidance-repeat-observation:
       evidence:
         - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > keeps missing repeat acquisition outside publication success gates
@@ -50,10 +50,10 @@ scopes:
         - vitest::test/evals.spec.ts::agent eval harness > rejects a proposal that creates configuration or a planned evidence registry
     agent.apply.mutation-sensitive:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects applied evidence that misses a controlled product regression
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > rejects applied evidence that misses a controlled product regression
     agent.evidence.vacuous-repair:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects vacuous evidence even after product repair and requires an agent sensitivity probe
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > rejects vacuous evidence even after product repair and requires an agent sensitivity probe
     agent.eval.failed-turn:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > records a failed agent turn without running downstream judges
@@ -64,33 +64,33 @@ scopes:
         - vitest::test/evals.spec.ts::agent eval harness > rejects protected test and package changes in an evaluated workspace
     agent.eval.skill-activation:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > stops an OpenSpec turn before judging artifacts if the agent skipped the skill
-        - vitest::test/evals.spec.ts::agent eval harness > rejects agent turns that never load the focused-spec skill
+        - vitest::test/evals-activation.spec.ts::agent eval harness > stops an OpenSpec turn before judging artifacts if the agent skipped the skill
+        - vitest::test/evals-activation.spec.ts::agent eval harness > rejects agent turns that never load the focused-spec skill
     agent.eval.native-cli-evidence:
       evidence:
         - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > recognizes completed selected CLI evidence without crediting validation or failed commands
     agent.adoption.preserve-native:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery
     agent.adoption.surviving-evidence:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery
-        - vitest::test/evals.spec.ts::agent eval harness > retains executed checkpoints after working identity and registry retire in place
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > retains checkpointed scope-local evidence after a working document leaves discovery
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > retains executed checkpoints after working identity and registry retire in place
     agent.adoption.evidence-continuity:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > detects lost or altered evidence across document transitions
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > detects lost or altered evidence across document transitions
     agent.eval.scoped-identity:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > judges the selected scope when another scope has the same ID
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > judges the selected scope when another scope has the same ID
     agent.eval.provisioning-isolation:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > provisions parallel workspaces without rebuilding shared distribution
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > provisions parallel workspaces without rebuilding shared distribution
     agent.eval.lifecycle-checkpoint:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > judges working evidence before sync removes its discovery
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > judges working evidence before sync removes its discovery
     agent.eval.lifecycle-stop:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > stops before sync when working evidence fails
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > stops before sync when working evidence fails
     agent.eval.authored-identity:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > accepts a newly authored valid identity when the task prescribes none
@@ -120,32 +120,32 @@ scopes:
         - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > accepts denial wording only for one unmarked atomic BMad CAP-1 outcome
     agent.eval.configured-working-scope:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > executes the named change in its configured scope and rejects ambiguous or foreign bindings
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > executes the named change in its configured scope and rejects ambiguous or foreign bindings
     agent.eval.host-dialogue:
       evidence:
         - vitest::test/dialogue.spec.ts::authoring dialogue consent > permits the confirmed revision without authorizing a different metadata file
         - vitest::test/dialogue.spec.ts::authoring dialogue consent > fails unfinished dialogue at the turn limit instead of claiming completion
     agent.guidance.project-local:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > accepts guidance from the selected installed CLI
+        - vitest::test/evals-activation.spec.ts::agent eval harness > accepts guidance from the selected installed CLI
     agent.guidance.unavailable:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects absent or legacy local guidance activation
+        - vitest::test/evals-activation.spec.ts::agent eval harness > rejects absent or legacy local guidance activation
     agent.guidance.invalid-response:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects completed but unusable guidance responses
+        - vitest::test/evals-activation.spec.ts::agent eval harness > rejects completed but unusable guidance responses
     agent.guidance.session-refresh:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > invalidates retained guidance without retroactively rejecting an acquired version
+        - vitest::test/evals-activation.spec.ts::agent eval harness > invalidates retained guidance without retroactively rejecting an acquired version
     agent.eval.guidance-activation:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > requires completed local workflow guidance after loader activation
+        - vitest::test/evals-activation.spec.ts::agent eval harness > requires completed local workflow guidance after loader activation
     agent.upgrade.preserve-project:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects lost scope-local evidence and tampered upgrade artifacts
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > rejects lost scope-local evidence and tampered upgrade artifacts
     agent.upgrade.reject-loss:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects lost scope-local evidence and tampered upgrade artifacts
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > rejects lost scope-local evidence and tampered upgrade artifacts
     agent.proposal.product-checkpoint:
       evidence:
         - vitest::test/audit-eval-runtime.spec.ts::audit eval runtime boundaries >
@@ -161,17 +161,17 @@ scopes:
           it
     agent.evidence.exact-mutation:
       evidence:
-        - "vitest::test/evals.spec.ts::agent eval harness > requires selected
+        - "vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > requires selected
           behavioral failure and restored pass: selected ERROR"
-        - "vitest::test/evals.spec.ts::agent eval harness > requires selected
+        - "vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > requires selected
           behavioral failure and restored pass: unrelated FAIL"
-        - "vitest::test/evals.spec.ts::agent eval harness > requires selected
+        - "vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > requires selected
           behavioral failure and restored pass: validation error"
-        - "vitest::test/evals.spec.ts::agent eval harness > requires selected
+        - "vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > requires selected
           behavioral failure and restored pass: signal termination"
-        - "vitest::test/evals.spec.ts::agent eval harness > requires selected
+        - "vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > requires selected
           behavioral failure and restored pass: failed restoration"
-        - "vitest::test/evals.spec.ts::agent eval harness > requires selected
+        - "vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > requires selected
           behavioral failure and restored pass: selected FAIL then restored PASS"
     agent.eval.direct-exact:
       evidence:
@@ -212,9 +212,9 @@ scopes:
           session without rescoring (throws=true)
     agent.eval.working-checkpoint-scope:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > checkpoints and publishes
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > checkpoints and publishes
           the configured working scope rather than the change name
-        - vitest::test/evals.spec.ts::agent eval harness > rejects ambiguous
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > rejects ambiguous
           configured working scopes and a changed checkpoint identity
     agent.eval.consent-path-boundaries:
       evidence:
@@ -228,8 +228,8 @@ scopes:
           for a partial proposed path inside agent-os/specs/login/shape.md/child
     agent.review.evidence-sync:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects stale green evidence after native revision and accepts synchronized sensitive evidence
-        - vitest::test/evals.spec.ts::agent eval harness > rejects unchanged native behavior and loss of an independent registry entry during revision
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > rejects stale green evidence after native revision and accepts synchronized sensitive evidence
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > rejects unchanged native behavior and loss of an independent registry entry during revision
     agent.review.phase-boundaries:
       evidence:
         - vitest::test/evals.spec.ts::agent eval harness > rejects a proposal that creates configuration or a planned evidence registry
@@ -240,111 +240,77 @@ scopes:
           inline evidence integration
     agent.adoption.inline-continuity:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > preserves inline evidence
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > preserves inline evidence
           through revision and publication
     agent.integration.preserve-existing:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects unauthorized
+        - vitest::test/evals-integration.spec.ts::agent eval harness > rejects unauthorized
           conversion of an existing integration
-        - vitest::test/evals.spec.ts::agent eval harness > distinguishes retained SDK composition from first selection
+        - vitest::test/evals-integration.spec.ts::agent eval harness > distinguishes retained SDK composition from first selection
     agent.integration.route-selection:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > requires completed local
+        - vitest::test/evals-integration.spec.ts::agent eval harness > requires completed local
           integration guidance for composition selection
     agent.integration.native-source:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects replacement of
+        - vitest::test/evals-integration.spec.ts::agent eval harness > rejects replacement of
           native acceptance items during integration
     agent.integration.standalone-choice:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > judges standalone
+        - vitest::test/evals-integration.spec.ts::agent eval harness > judges standalone
           compositions against the requested canonical source
     agent.integration.phase-boundaries:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects configuration
+        - vitest::test/evals-integration.spec.ts::agent eval harness > rejects configuration
           writes during recommendation or installation only
     agent.integration.selected-contracts:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > requires selected
+        - vitest::test/evals-integration.spec.ts::agent eval harness > requires selected
           installed contracts before integration configuration
-        - vitest::test/evals.spec.ts::agent eval harness > accepts complete selected
+        - vitest::test/evals-integration.spec.ts::agent eval harness > accepts complete selected
           contract artifact recovery before configuration writes
     agent.workflow.single-source:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects duplicate
+        - vitest::test/evals-integration.spec.ts::agent eval harness > rejects duplicate
           behavioral sources beside executable scenarios
     agent.workflow.application-boundary:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects executable
+        - vitest::test/evals-integration.spec.ts::agent eval harness > rejects executable
           evidence disconnected from the mutated application
     agent.workflow.independent-oracle:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects observations that
+        - vitest::test/evals-integration.spec.ts::agent eval harness > rejects observations that
           conceal the claimed application regression
     agent.workflow.proof-not-diagnostics:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects diagnostic
+        - vitest::test/evals-integration.spec.ts::agent eval harness > rejects diagnostic
           success when selected behavioral comparison fails
-  broaden-bdd-skill-activation:
-    agent.activation.bdd-sdk:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects SDK-only BDD turns without skill and local workflow activation
-        - vitest::test/evals.spec.ts::agent eval harness > judges standalone compositions against the requested canonical source
-    agent.activation.bdd-driver:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects SDK-only BDD turns without skill and local workflow activation
-        - vitest::test/evals.spec.ts::agent eval harness > rejects duplicate behavioral sources beside executable scenarios
-        - vitest::test/evals.spec.ts::agent eval harness > rejects executable evidence disconnected from the mutated application
-    agent.activation.sdd:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > stops an OpenSpec turn before judging artifacts if the agent skipped the skill
-        - vitest::test/evals.spec.ts::agent eval harness > rejects a proposal that creates configuration or a planned evidence registry
-  repair-evaluation-completion-handoff:
-    agent.review.missing-enrollment:
-      evidence:
-        - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > judges an external Kiro native-ID binding without requiring a second marker
-        - vitest::test/dialogue.spec.ts::authoring dialogue consent > permits the confirmed revision without authorizing a different metadata file
-    agent.eval.research-replies:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > keeps post-failure recommendations outside scored agent turns
-    agent.eval.responder-failure:
-      evidence:
-        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains completed journal usage while excluding responder waits on partial failure (exit)
-        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains completed journal usage while excluding responder waits on partial failure (malformed)
-        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains completed journal usage while excluding responder waits on partial failure (throw)
-  repair-portable-evidence-completion:
-    agent.guidance.project-local:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > accepts guidance from the selected installed CLI
-    agent.guidance.unavailable:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects absent or legacy local guidance activation
-    agent.guidance.invalid-response:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects completed but unusable guidance responses
-    agent.guidance.session-refresh:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > invalidates retained guidance without retroactively rejecting an acquired version
     agent.guidance.effective-path:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > resolves guidance with the evaluated driver executable search path
+        - vitest::test/evals-activation.spec.ts::agent eval harness > resolves guidance with the evaluated driver executable search path
     agent.guidance.standalone-request:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects chained guidance until a standalone request completes
+        - vitest::test/evals-activation.spec.ts::agent eval harness > rejects chained guidance until a standalone request completes
     agent.guidance.artifact-recovery:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > requires completed local workflow guidance after loader activation
-    agent.integration.preserve-existing:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects unauthorized conversion of an existing integration
-        - vitest::test/evals.spec.ts::agent eval harness > distinguishes retained SDK composition from first selection
-    agent.integration.route-selection:
-      evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > requires completed local integration guidance for composition selection
+        - vitest::test/evals-activation.spec.ts::agent eval harness > requires completed local workflow guidance after loader activation
     agent.integration.missing-dependency:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > requires completed local integration guidance for composition selection
-        - vitest::test/evals.spec.ts::agent eval harness > distinguishes retained SDK composition from first selection
+        - vitest::test/evals-integration.spec.ts::agent eval harness > requires completed local integration guidance for composition selection
+        - vitest::test/evals-integration.spec.ts::agent eval harness > distinguishes retained SDK composition from first selection
+    agent.activation.bdd-sdk:
+      evidence:
+        - vitest::test/evals-activation.spec.ts::agent eval harness > rejects SDK-only BDD turns without skill and local workflow activation
+        - vitest::test/evals-integration.spec.ts::agent eval harness > judges standalone compositions against the requested canonical source
+    agent.activation.bdd-driver:
+      evidence:
+        - vitest::test/evals-activation.spec.ts::agent eval harness > rejects SDK-only BDD turns without skill and local workflow activation
+        - vitest::test/evals-integration.spec.ts::agent eval harness > rejects duplicate behavioral sources beside executable scenarios
+        - vitest::test/evals-integration.spec.ts::agent eval harness > rejects executable evidence disconnected from the mutated application
+    agent.activation.sdd:
+      evidence:
+        - vitest::test/evals-activation.spec.ts::agent eval harness > stops an OpenSpec turn before judging artifacts if the agent skipped the skill
+        - vitest::test/evals.spec.ts::agent eval harness > rejects a proposal that creates configuration or a planned evidence registry
     agent.author.complete-proposal:
       evidence:
         - vitest::test/dialogue.spec.ts::authoring dialogue consent > permits the confirmed revision without authorizing a different metadata file
@@ -354,7 +320,7 @@ scopes:
         - vitest::test/evals.spec.ts::agent eval harness > rejects planning-time inline evidence integration
     agent.author.enroll-before-completion:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > rejects stale green evidence after native revision and accepts synchronized sensitive evidence
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > rejects stale green evidence after native revision and accepts synchronized sensitive evidence
     agent.eval.dialogue-outcome:
       evidence:
         - vitest::test/acp-agent.spec.ts::genuine planning consent > keeps host questions independent from runtime plan approval
@@ -363,4 +329,12 @@ scopes:
         - vitest::test/native-pilot.spec.ts::native pilot evaluation boundaries > distinguishes an unjudged bound outcome from a behavioral mismatch
     agent.eval.integration-outcome:
       evidence:
-        - vitest::test/evals.spec.ts::agent eval harness > recognizes SDK dependency repair without requiring integration reading while rejecting false-green evidence
+        - vitest::test/evals-lifecycle-native.spec.ts::agent eval harness > recognizes SDK dependency repair without requiring integration reading while rejecting false-green evidence
+    agent.eval.research-replies:
+      evidence:
+        - vitest::test/evals.spec.ts::agent eval harness > keeps post-failure recommendations outside scored agent turns
+    agent.eval.responder-failure:
+      evidence:
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains completed journal usage while excluding responder waits on partial failure (exit)
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains completed journal usage while excluding responder waits on partial failure (malformed)
+        - vitest::test/acp-agent.spec.ts::genuine planning consent > retains completed journal usage while excluding responder waits on partial failure (throw)
